@@ -523,6 +523,12 @@
             <button onclick="Multiplayer.closeLobby()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
         <div class="p-4 flex flex-col gap-3">
+            <!-- (nova função) Convites pra salas de amizades — ver Multiplayer.inviteFriend -->
+            <div id="mp-room-invites-wrap" class="hidden flex-col gap-2">
+                <div class="text-zinc-400 text-[10px] font-bold uppercase tracking-wide flex items-center gap-1"><i class="fa-solid fa-envelope-open-text"></i> Convites pra salas</div>
+                <div id="mp-room-invites-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto"></div>
+                <div class="flex items-center gap-2 text-zinc-700 text-[10px]"><div class="flex-1 h-px bg-zinc-700"></div></div>
+            </div>
             <button onclick="Multiplayer.createRoom()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> Criar sala</button>
             <div class="flex items-center gap-2 text-zinc-600 text-[10px]"><div class="flex-1 h-px bg-zinc-700"></div>ou<div class="flex-1 h-px bg-zinc-700"></div></div>
             <input type="text" id="mp-join-code-input" placeholder="Código da sala" maxlength="6" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 uppercase tracking-widest text-center" onkeydown="if(event.key==='Enter') Multiplayer.submitJoin();">
@@ -542,6 +548,13 @@
         <div class="p-3 flex flex-col gap-2">
             <button onclick="navigator.clipboard.writeText(Multiplayer.currentRoomCode()||''); UI.showToast('📋 Código copiado!')" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-copy"></i> Copiar código da sala</button>
             <div id="mp-room-members" class="flex flex-col gap-1 max-h-56 overflow-y-auto"></div>
+
+            <!-- (nova função) Convidar amizade direto pra sala — ver Multiplayer.inviteFriend -->
+            <div class="border-t studio-border pt-2 mt-1">
+                <div class="text-zinc-400 text-[10px] font-bold uppercase tracking-wide mb-1.5 flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Convidar amizade pra sala</div>
+                <div id="mp-room-invite-list" class="flex flex-col gap-1 max-h-40 overflow-y-auto"></div>
+            </div>
+
             <button onclick="Multiplayer.leaveRoom()" class="mt-2 px-3 py-1.5 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-door-open"></i> Sair da sala</button>
         </div>
     </div>
@@ -13269,7 +13282,16 @@ const App = (() => {
     let _dirtySinceAutosave = false;
 
     /** Marca que algo mudou — chamado a cada markDirty() da cena. */
-    function notifyChanged() { _dirtySinceAutosave = true; }
+    function notifyChanged() {
+        _dirtySinceAutosave = true;
+        // (nova função) Se eu estiver numa sala multiplayer, avisa o módulo
+        // Multiplayer pra publicar a cena atualizada — é assim que tudo que
+        // acontece no meu editor passa a acontecer no editor de quem mais
+        // estiver na sala (ver Multiplayer.notifySceneChanged).
+        if (typeof Multiplayer !== "undefined" && Multiplayer.notifySceneChanged) {
+            try { Multiplayer.notifySceneChanged(); } catch (_) {}
+        }
+    }
 
     /** Baixa o projeto atual como arquivo .json de verdade (download nativo) ── função nova */
     function downloadProject() {
@@ -14104,6 +14126,81 @@ const Account = (() => {
         _saveAccounts(Array.from(byId.values()));
     }
 
+    /* ── (nova função) ÍNDICE LEVE DE USUÁRIOS (users_index.json) ──────
+       accounts.json guarda TUDO de cada conta (hash de senha, amizades,
+       pedidos, tema...) — bom pra dados, ruim pra buscar por nome
+       enquanto a pessoa digita, porque baixa o arquivo inteiro (e o hash
+       de senha de todo mundo) a cada letra. users_index.json é só um
+       arquivo pequeno, uma lista com o essencial de cada conta —
+       { id, username } — mantido junto sempre que uma conta é criada ou
+       renomeada. A busca de amizades (Account.searchFriendCandidates)
+       usa esse índice pra filtrar por nome; o status de cada resultado
+       (amigo / pedido pendente / disponível) já vem do cache local
+       (_current), sem precisar reler accounts.json inteiro. */
+    const USERS_INDEX_PATH = "users_index.json";
+    function _idxApiUrl(cfg) {
+        return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${encodeURIComponent(USERS_INDEX_PATH)}`;
+    }
+    /** Lê users_index.json do repositório configurado. */
+    async function _ghGetUsersIndex() {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok:false, error:"GitHub não configurado.", data:null, sha:null };
+        try {
+            const res = await fetch(`${_idxApiUrl(cfg)}?ref=${encodeURIComponent(cfg.branch || "main")}`, {
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" },
+                cache: "no-store",
+            });
+            if (res.status === 404) return { ok:true, data:[], sha:null };
+            if (!res.ok) return { ok:false, error:`Erro HTTP ${res.status} ao ler o índice de usuários.`, data:null, sha:null };
+            const json = await res.json();
+            let parsed = [];
+            try { parsed = JSON.parse(_b64ToUtf8Acc(json.content)); } catch (_) { parsed = []; }
+            return { ok:true, data: Array.isArray(parsed) ? parsed : [], sha: json.sha };
+        } catch (e) {
+            return { ok:false, error:"Falha de rede: " + e.message, data:null, sha:null };
+        }
+    }
+    /** Sobrescreve users_index.json no repositório configurado. */
+    async function _ghPutUsersIndex(list, sha, message) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok:false, error:"GitHub não configurado." };
+        try {
+            const body = { message: message || "Atualiza índice de usuários", content: _utf8ToB64Acc(JSON.stringify(list, null, 2)), branch: cfg.branch || "main" };
+            if (sha) body.sha = sha;
+            const res = await fetch(_idxApiUrl(cfg), {
+                method: "PUT",
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+                keepalive: true,
+            });
+            if (!res.ok) return { ok:false, status: res.status, error: (res.status === 409) ? "Conflito (409)" : `Erro HTTP ${res.status}` };
+            const json = await res.json();
+            return { ok:true, sha: json.content?.sha || null };
+        } catch (e) {
+            return { ok:false, error:"Falha de rede: " + e.message };
+        }
+    }
+    /** Garante que { id, username } estejam certos no índice — chamado ao
+     *  criar conta e ao renomear. Silencioso em caso de erro/conflito: o
+     *  índice é só uma otimização de busca, accounts.json continua sendo
+     *  a fonte de verdade (e o próximo signup/rename tenta corrigir de
+     *  novo se algo ficou desatualizado). */
+    async function _ensureInUsersIndex(id, username) {
+        if (!GithubStorage.hasConfig() || !id || !username) return;
+        for (let tries = 0; tries < 4; tries++) {
+            const fresh = await _ghGetUsersIndex();
+            if (!fresh.ok) return;
+            const list = fresh.data || [];
+            const existing = list.find(u => u.id === id);
+            if (existing && existing.username === username) return; // já está certo, nada a fazer
+            const next = list.filter(u => u.id !== id);
+            next.push({ id, username });
+            const put = await _ghPutUsersIndex(next, fresh.sha, `Atualiza índice de usuários (${username})`);
+            if (put.ok || put.status !== 409) return;
+            // 409 = outra conta sendo criada/renomeada ao mesmo tempo — tenta de novo com dados frescos
+        }
+    }
+
     /* ── Cadastro / Entrar / Sair / Trocar de conta ── */
     async function signup(username, password) {
         username = (username || "").trim();
@@ -14122,6 +14219,7 @@ const Account = (() => {
             if (!res.ok) return { ok:false, error: res.error || "Não consegui criar a conta no repositório." };
             _mergeLocalFromRepo(res.list);
             _activate(acc);
+            _ensureInUsersIndex(acc.id, acc.username).catch(() => {}); // (nova função) mantém users_index.json em dia, não bloqueia o cadastro
             return { ok:true };
         }
 
@@ -14323,6 +14421,7 @@ const Account = (() => {
             // a troca de nome mesmo se der erro de rede no meio do caminho.
             _migrateLocalMessagesOnRename(oldName, newName);
             _migrateRepoMessagesOnRename(oldName, newName, friendsBefore).catch(() => {});
+            _ensureInUsersIndex(_current.id, newName).catch(() => {}); // (nova função) mantém users_index.json em dia
             return;
         }
 
@@ -14986,14 +15085,39 @@ const Account = (() => {
         });
     }
 
-    /* (nova função) Busca ao vivo — qualquer conta que exista no
-       accounts.json do repositório pode ser encontrada, não só um nome
-       exato. Lê o repositório fresco (mesma fonte que addFriend usa pra
-       validar), filtra por trecho do nome digitado, e mostra até 8
-       resultados com o status atual (amigo / pedido pendente / disponível)
-       e um botão de ação pronto pra cada um. Sem repositório configurado,
-       cai pro aviso de sempre em vez de buscar. */
+    /* (otimizado) Busca ao vivo — antes baixava accounts.json INTEIRO
+       (com hash de senha e listas de amizade de todo mundo) a cada letra
+       digitada. Agora usa users_index.json — um arquivo leve, só com
+       { id, username } de cada conta — pra filtrar por nome, e usa o
+       cache local (_current, já mantido fresco pelo poll de pedidos de
+       amizade) pra decidir o status de cada resultado (amigo / pedido
+       pendente / disponível). Mostra até 8 resultados com um botão de
+       ação pronto pra cada um. Sem repositório configurado, cai pro
+       aviso de sempre em vez de buscar. */
     let _friendSearchToken = 0;
+    let _usersIndexCache = null; // cache em memória do índice já buscado nesta sessão (evita rebaixar de novo a cada letra)
+
+    /** Devolve o índice de usuários, buscando do repositório na primeira
+     *  vez (e reaproveitando depois). Se o índice ainda não existir no
+     *  repositório (conta criada antes dessa função existir), monta ele
+     *  uma vez a partir de accounts.json e salva — depois disso as
+     *  buscas seguintes já usam só o arquivo leve. */
+    async function _getUsersIndex(forceRefresh) {
+        if (_usersIndexCache && !forceRefresh) return _usersIndexCache;
+        const idx = await _ghGetUsersIndex();
+        if (!idx.ok) return null;
+        if ((idx.data || []).length) { _usersIndexCache = idx.data; return _usersIndexCache; }
+        // Índice vazio — provavelmente a primeira vez que essa função roda
+        // neste repositório. Monta a partir de accounts.json (já existe) e
+        // publica, uma única vez, em segundo plano.
+        const accs = await _ghGetAccounts();
+        if (!accs.ok) return null;
+        const built = (accs.data || []).map(a => ({ id: a.id, username: a.username }));
+        if (built.length) _ghPutUsersIndex(built, idx.sha, "Cria índice de usuários (primeira vez)").catch(() => {});
+        _usersIndexCache = built;
+        return built;
+    }
+
     async function searchFriendCandidates(query) {
         const box = document.getElementById("account-add-friend-results");
         const hint = document.getElementById("account-add-friend-hint");
@@ -15011,38 +15135,36 @@ const Account = (() => {
             if (hint) hint.textContent = "Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.";
             return;
         }
-        if (hint) hint.textContent = "🔎 Buscando no repositório...";
+        if (hint) hint.textContent = "🔎 Buscando no índice de usuários...";
 
-        const fresh = await _ghGetAccounts();
+        const index = await _getUsersIndex();
         if (myToken !== _friendSearchToken) return; // resposta antiga, digitação já mudou
-        if (!fresh.ok) {
+        if (!index) {
             box.innerHTML = "";
-            if (hint) hint.textContent = "⚠️ " + (fresh.error || "Não consegui buscar no repositório agora.");
+            if (hint) hint.textContent = "⚠️ Não consegui buscar no repositório agora.";
             return;
         }
-        _mergeLocalFromRepo(fresh.data);
-        _current = (fresh.data || []).find(a => a.id === _current.id) || _current;
 
         const qLower = query.toLowerCase();
         const meLower = _current.username.toLowerCase();
-        const matches = (fresh.data || [])
-            .filter(a => a.username.toLowerCase() !== meLower && a.username.toLowerCase().includes(qLower))
+        const matches = index
+            .filter(u => u.username && u.username.toLowerCase() !== meLower && u.username.toLowerCase().includes(qLower))
             .sort((a, b) => a.username.toLowerCase().indexOf(qLower) - b.username.toLowerCase().indexOf(qLower))
             .slice(0, 8);
 
         box.innerHTML = "";
         if (!matches.length) {
-            if (hint) hint.textContent = "Nenhuma conta encontrada com esse nome no repositório.";
+            if (hint) hint.textContent = "Nenhuma conta encontrada com esse nome no índice de usuários.";
             return;
         }
-        if (hint) hint.textContent = `${matches.length} conta(s) encontrada(s) no repositório:`;
+        if (hint) hint.textContent = `${matches.length} conta(s) encontrada(s):`;
 
         const myFriends = new Set((_current.friends || []).map(f => f.toLowerCase()));
         const myOutgoing = new Set((_current.outgoingRequests || []).map(f => f.toLowerCase()));
         const myIncoming = new Set((_current.incomingRequests || []).map(f => f.toLowerCase()));
 
-        matches.forEach(acc => {
-            const uLower = acc.username.toLowerCase();
+        matches.forEach(u => {
+            const uLower = u.username.toLowerCase();
             const row = document.createElement("div");
             row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
             let actionHtml;
@@ -15052,14 +15174,14 @@ const Account = (() => {
             else actionHtml = `<button data-add class="px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white text-[10px] rounded font-bold">Adicionar</button>`;
             row.innerHTML = `
                 <span class="relative inline-block shrink-0">
-                    ${acc.photo ? `<img src="${acc.photo}" class="w-6 h-6 rounded-full object-cover">` : `<i class="fa-solid fa-circle-user text-lg text-zinc-500"></i>`}
+                    <i class="fa-solid fa-circle-user text-lg text-zinc-500"></i>
                 </span>
-                <span class="flex-1 text-zinc-200 text-xs truncate">${acc.username}</span>
+                <span class="flex-1 text-zinc-200 text-xs truncate">${u.username}</span>
                 ${actionHtml}`;
             const addBtn = row.querySelector("[data-add]");
-            if (addBtn) addBtn.onclick = () => addFriend(acc.username);
+            if (addBtn) addBtn.onclick = () => addFriend(u.username);
             const acceptBtn = row.querySelector("[data-accept]");
-            if (acceptBtn) acceptBtn.onclick = () => { acceptFriendRequest(acc.username); UI.closeModal("account-add-friend-modal"); };
+            if (acceptBtn) acceptBtn.onclick = () => { acceptFriendRequest(u.username); UI.closeModal("account-add-friend-modal"); };
             box.appendChild(row);
         });
     }
@@ -15221,6 +15343,24 @@ const Multiplayer = (() => {
     let _presenceTimer = null;
     const _presence = {};     // username-em-minúsculo -> { lastSeen, currentRoom, photo }
     let _myRequests = [];     // pedidos pendentes de amizades pra entrar na MINHA sala atual
+    let _myRoomInvites = [];  // (nova função) convites recebidos pra entrar em salas de amizades
+
+    /* ── (nova função) Sincronização do editor entre todo mundo da sala ──
+       Enquanto a sala em si (rooms/{code}.json) só guardava a lista de
+       membros, o PROJETO (State.tree — Explorer, Workspace, scripts,
+       propriedades, tudo) nunca era compartilhado: cada pessoa via só o
+       que tinha no próprio navegador. Agora, sempre que algo muda no
+       editor (ThreeManager.markDirty → App.notifyChanged → aqui), a cena
+       inteira é publicada em rooms/{code}-scene.json (com debounce, pra
+       não gravar a cada tecla) e todo mundo na sala — inclusive quem só
+       está "acompanhando" em modo visualização — recebe a atualização no
+       próximo poll e vê a mudança no próprio editor. */
+    const SCENE_PATH = (code) => `rooms/${code}-scene.json`;
+    const SCENE_PUSH_DEBOUNCE_MS = 1500;
+    let _scenePushTimer = null;
+    let _lastPushedSceneSig = null;   // último JSON de State.tree que EU enviei
+    let _lastAppliedSceneSig = null;  // último JSON de State.tree aplicado no meu editor (meu ou de outro membro)
+    let _applyingRemoteScene = false; // true enquanto aplico a cena de outro membro — evita eco (reenviar o que acabei de receber)
 
     function _utf8ToB64(str) { return btoa(unescape(encodeURIComponent(str))); }
     function _b64ToUtf8(b64) { return decodeURIComponent(escape(atob(String(b64 || "").replace(/\n/g, "")))); }
@@ -15415,6 +15555,7 @@ const Multiplayer = (() => {
         if (badgeCode) badgeCode.textContent = _code;
         _renderRoomPanel();
         _startLoops();
+        _syncSceneOnEnter();
         UI.showToast(`✅ Você está na sala ${_code}!`);
     }
 
@@ -15458,6 +15599,99 @@ const Multiplayer = (() => {
             return;
         }
         _renderRoomPanel();
+        _pollSceneState();
+    }
+
+    /* ── (nova função) Sincronização do editor entre membros da sala ── */
+
+    /** Verdadeiro se EU sou membro viewOnly da sala atual — quem acompanha
+     *  em modo visualização recebe as mudanças do editor, mas nunca publica
+     *  as próprias (não edita nada mesmo). */
+    function _amIViewOnly() {
+        const me = _me();
+        if (!me || !_room) return false;
+        const mine = (_room.members || []).find(m => m.id === me.id);
+        return !!(mine && mine.viewOnly);
+    }
+
+    /** Chamado (via App.notifyChanged, ligado ao ThreeManager.markDirty)
+     *  toda vez que algo muda no projeto. Agenda o envio da cena pra
+     *  rooms/{code}-scene.json com um pequeno atraso, pra juntar várias
+     *  mudanças seguidas (arrastar um objeto, digitar um script...) numa
+     *  gravação só, em vez de uma por evento. */
+    function notifySceneChanged() {
+        if (!_code || _applyingRemoteScene || _amIViewOnly()) return;
+        if (_scenePushTimer) clearTimeout(_scenePushTimer);
+        _scenePushTimer = setTimeout(_pushSceneState, SCENE_PUSH_DEBOUNCE_MS);
+    }
+
+    async function _pushSceneState() {
+        _scenePushTimer = null;
+        if (!_code || !GithubStorage.hasConfig()) return;
+        const me = _me();
+        if (!me) return;
+        let treeStr;
+        try { treeStr = JSON.stringify(State.tree); } catch (_) { return; }
+        if (treeStr === _lastPushedSceneSig) return; // nada de novo desde o último envio
+        const fresh = await _ghGet(SCENE_PATH(_code));
+        if (!fresh.ok) return; // sem rede agora — a próxima mudança tenta de novo
+        const next = { tree: JSON.parse(treeStr), updatedAt: Date.now(), updatedBy: me.username };
+        const put = await _ghPut(SCENE_PATH(_code), next, fresh.sha, `Atualiza cena da sala ${_code} (${me.username})`);
+        if (put.ok) {
+            _lastPushedSceneSig = treeStr;
+            _lastAppliedSceneSig = treeStr;
+        }
+        // Em caso de conflito (409, outro membro salvou no mesmo instante),
+        // não insiste: o próximo poll traz a versão que "ganhou" e a
+        // próxima mudança local tenta publicar de novo.
+    }
+
+    /** Aplica no editor local a cena que está em rooms/{code}-scene.json,
+     *  se ela for diferente da última que eu já apliquei/publiquei. */
+    async function _pollSceneState() {
+        if (!_code || !GithubStorage.hasConfig()) return;
+        const res = await _ghGet(SCENE_PATH(_code));
+        if (!res.ok || !res.data || !res.data.tree) return;
+        let sig;
+        try { sig = JSON.stringify(res.data.tree); } catch (_) { return; }
+        if (sig === _lastAppliedSceneSig) return; // já está tudo igual
+        const me = _me();
+        if (me && res.data.updatedBy === me.username) { _lastAppliedSceneSig = sig; return; } // fui eu quem publicou
+        _applyRemoteScene(res.data.tree, sig, res.data.updatedBy);
+    }
+
+    function _applyRemoteScene(tree, sig, byUsername) {
+        _applyingRemoteScene = true;
+        try {
+            State.tree = tree;
+            State.sel = [];
+            Explorer.rebuild();
+            ThreeManager.syncNow();
+            if (typeof rebuildHUD === "function") rebuildHUD();
+            if (typeof UI !== "undefined" && UI.buildPropertiesPanel) UI.buildPropertiesPanel();
+            _lastAppliedSceneSig = sig;
+            _lastPushedSceneSig = sig;
+            UI.showToast(`🔄 Editor atualizado por ${byUsername || "outro membro da sala"}`);
+        } finally {
+            _applyingRemoteScene = false;
+        }
+    }
+
+    /** Chamado assim que entro numa sala (criando ou entrando): busca a
+     *  cena atual da sala e substitui o meu editor por ela — assim todo
+     *  mundo começa vendo exatamente a mesma coisa. Se a sala é nova e
+     *  ainda não tem cena salva, publica o meu projeto atual como ponto
+     *  de partida (só quem não é viewOnly faz isso). */
+    async function _syncSceneOnEnter() {
+        if (!_code || !GithubStorage.hasConfig()) return;
+        const res = await _ghGet(SCENE_PATH(_code));
+        if (res.ok && res.data && res.data.tree) {
+            let sig;
+            try { sig = JSON.stringify(res.data.tree); } catch (_) { sig = null; }
+            if (sig) _applyRemoteScene(res.data.tree, sig, res.data.updatedBy);
+        } else if (!_amIViewOnly()) {
+            await _pushSceneState();
+        }
     }
 
     /* ── Coroa / render do painel ── */
@@ -15498,6 +15732,84 @@ const Multiplayer = (() => {
         });
         box.querySelectorAll("[data-kick]").forEach(btn => {
             btn.onclick = () => kickMember(btn.getAttribute("data-kick"));
+        });
+        _renderInviteFriends();
+    }
+
+    /* ── (nova função) Convidar amizade direto pra sala ─────────────────
+       Antes só dava pra chamar alguém pra sala copiando/colando o código
+       manualmente. Agora, dentro do painel da sala, aparece a lista de
+       amizades que ainda não estão nela, cada uma com um botão
+       "Convidar" — a pessoa recebe o convite (mesmo offline, fica
+       esperando no arquivo dela) e pode entrar com 1 clique. */
+    function _renderInviteFriends() {
+        const box = document.getElementById("mp-room-invite-list");
+        if (!box || !_code) return;
+        const friends = (Account.getFriendsList && Account.getFriendsList()) || [];
+        const inRoom = new Set(_activeMembers().map(m => (m.username || "").toLowerCase()));
+        const list = friends.filter(f => !inRoom.has(f.toLowerCase()));
+        box.innerHTML = "";
+        if (!list.length) {
+            box.innerHTML = `<div class="text-zinc-600 text-[10px] text-center py-2">${friends.length ? "Todas as suas amizades já estão na sala." : "Você ainda não tem amizades pra convidar."}</div>`;
+            return;
+        }
+        list.forEach(f => {
+            const pres = (typeof getFriendPresence === "function") ? getFriendPresence(f) : { online: false };
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+            row.innerHTML = `
+                <i class="fa-solid fa-circle text-[6px] ${pres.online ? "text-emerald-400" : "text-zinc-600"}" title="${pres.online ? "Online" : "Offline"}"></i>
+                <span class="flex-1 text-zinc-200 text-xs truncate">${f}</span>
+                <button data-invite class="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white text-[10px] rounded font-bold">Convidar</button>`;
+            row.querySelector("[data-invite]").onclick = () => inviteFriend(f);
+            box.appendChild(row);
+        });
+    }
+
+    /** Manda um convite de sala pra amizade (fica no arquivo users/{nome}.json
+     *  dela, no mesmo esquema dos pedidos de amizade/entrada). */
+    async function inviteFriend(username) {
+        const me = _me();
+        if (!me || !_code) return;
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o repositório do GitHub antes de convidar."); return; }
+        if (_activeMembers().some(m => (m.username || "").toLowerCase() === username.toLowerCase())) {
+            UI.showToast(`${username} já está na sala.`); return;
+        }
+        const res = await _writeUser(username, (current) => {
+            const base = current || _myPresenceBase({ id: null, username });
+            base.inbox = [...(base.inbox || []), { type: "room-invite", roomCode: _code, byUsername: me.username, ts: Date.now() }];
+            return base;
+        }, `Convite pra sala ${_code}`);
+        if (res.ok) UI.showToast(`📨 Convite enviado pra ${username}!`);
+        else UI.showToast("⚠️ " + (res.error || "Não consegui enviar o convite."));
+    }
+
+    /** Lista de convites de sala que EU recebi (renderizada no lobby). */
+    function _renderRoomInvites() {
+        const wrap = document.getElementById("mp-room-invites-wrap");
+        const list = document.getElementById("mp-room-invites-list");
+        if (!wrap || !list) return;
+        list.innerHTML = "";
+        if (!_myRoomInvites.length) { wrap.classList.add("hidden"); wrap.classList.remove("flex"); return; }
+        wrap.classList.remove("hidden"); wrap.classList.add("flex");
+        _myRoomInvites.forEach((inv, idx) => {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+            row.innerHTML = `
+                <i class="fa-solid fa-envelope-open-text text-purple-400"></i>
+                <span class="flex-1 text-zinc-300 text-[10px] leading-tight">${inv.byUsername} te chamou pra sala <b class="text-purple-300 tracking-widest">${inv.roomCode}</b></span>
+                <button data-join class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] rounded font-bold">Entrar</button>
+                <button data-dismiss class="px-1.5 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-[10px] rounded font-bold">&times;</button>`;
+            row.querySelector("[data-join]").onclick = () => {
+                _myRoomInvites = _myRoomInvites.filter((_, i) => i !== idx);
+                _renderRoomInvites();
+                joinRoom(inv.roomCode, false);
+            };
+            row.querySelector("[data-dismiss]").onclick = () => {
+                _myRoomInvites = _myRoomInvites.filter((_, i) => i !== idx);
+                _renderRoomInvites();
+            };
+            list.appendChild(row);
         });
     }
 
@@ -15543,6 +15855,8 @@ const Multiplayer = (() => {
             }
         }
         _room = null; _code = null;
+        if (_scenePushTimer) { clearTimeout(_scenePushTimer); _scenePushTimer = null; }
+        _lastPushedSceneSig = null; _lastAppliedSceneSig = null;
         const badge = document.getElementById("mp-room-badge");
         if (badge) { badge.classList.add("hidden"); badge.classList.remove("flex"); }
         UI.closeModal("mp-room-modal");
@@ -15600,13 +15914,24 @@ const Multiplayer = (() => {
 
         const inbox = res.data.inbox || [];
         if (inbox.length) {
+            let gotInvite = false;
             for (const entry of inbox) {
                 if (entry.type === "join-accept" && entry.roomCode) {
                     UI.showToast(`✅ ${entry.byUsername || "seu amigo"} aceitou seu pedido — entrando na sala...`);
                     await joinRoom(entry.roomCode, true);
                 } else if (entry.type === "join-decline") {
                     UI.showToast(`${entry.byUsername || "Seu amigo"} recusou o pedido pra entrar na sala.`);
+                } else if (entry.type === "room-invite" && entry.roomCode) {
+                    // (nova função) Convite direto pra sala — fica guardado
+                    // em memória pra aparecer no lobby com um botão "Entrar",
+                    // sem entrar sozinho (diferente do join-accept acima).
+                    const already = _myRoomInvites.some(i => i.roomCode === entry.roomCode && i.byUsername === entry.byUsername);
+                    if (!already) { _myRoomInvites.push({ roomCode: entry.roomCode, byUsername: entry.byUsername }); gotInvite = true; }
                 }
+            }
+            if (gotInvite) {
+                _renderRoomInvites();
+                UI.showToast("📨 Você recebeu um convite pra sala — veja em Multiplayer.");
             }
             await _writeUser(me.username, (current) => {
                 if (!current) return null;
@@ -15756,7 +16081,7 @@ const Multiplayer = (() => {
     function closeJoinRequestsModal() { UI.closeModal("mp-join-requests-modal"); }
 
     /* ── Abrir/fechar modais ── */
-    function openLobby() { UI.openModal("multiplayer-lobby-modal"); }
+    function openLobby() { _renderRoomInvites(); UI.openModal("multiplayer-lobby-modal"); }
     function closeLobby() { UI.closeModal("multiplayer-lobby-modal"); }
     function submitJoin() { joinRoom(document.getElementById("mp-join-code-input").value); }
     function openRoomPanel() { if (_code) { _renderRoomPanel(); UI.openModal("mp-room-modal"); } }
@@ -15772,6 +16097,10 @@ const Multiplayer = (() => {
         // (nova função) presença online/offline + pedido de entrada em modo visualização
         _initPresence, getFriendPresence, refreshFriendsPresence, requestJoinFriend,
         acceptJoinRequest, declineJoinRequest, openJoinRequestsModal, closeJoinRequestsModal,
+        // (nova função) convidar amizade direto pra sala
+        inviteFriend,
+        // (nova função) sincronização do editor entre membros da sala
+        notifySceneChanged,
     };
 })();
 
