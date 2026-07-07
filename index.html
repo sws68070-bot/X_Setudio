@@ -411,6 +411,18 @@
             <div id="account-settings-name" class="text-white font-bold text-sm"></div>
         </div>
 
+        <!-- (nova função) Código de amizade — copiar/colar em vez de digitar o
+             nome de usuário certinho. Aparece na área de "Adicionar amizade"
+             de quem colar esse código. -->
+        <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-id-badge"></i> Seu código de amizade</label>
+            <div class="flex gap-1">
+                <span id="account-settings-code" class="flex-1 bg-studio-input border studio-border rounded px-3 py-2 text-emerald-400 text-xs font-mono font-bold tracking-widest text-center select-all"></span>
+                <button onclick="Account.copyFriendCode()" title="Copiar código" class="px-3 bg-zinc-700 hover:bg-zinc-600 rounded text-white text-xs"><i class="fa-solid fa-copy"></i></button>
+            </div>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">Copie e mande esse código pra quem você quer adicionar — a pessoa cola em "Adicionar amizade" pra achar sua conta na hora, sem errar o nome digitando.</p>
+        </div>
+
         <!-- Tema -->
         <div class="flex items-center justify-between bg-studio-input border studio-border rounded px-3 py-2">
             <span class="text-zinc-300 text-xs flex items-center gap-2"><i class="fa-solid fa-circle-half-stroke"></i> Tema do editor</span>
@@ -601,6 +613,17 @@
             <button onclick="UI.closeModal('account-add-friend-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
         <div class="p-4 flex flex-col gap-3">
+            <!-- (nova função) Adicionar colando o código de amizade — mais
+                 rápido e sem erro de digitação do que procurar pelo nome. -->
+            <div class="flex flex-col gap-1 bg-studio-input border studio-border rounded p-2">
+                <label class="text-zinc-400 text-[10px] font-bold flex items-center gap-1"><i class="fa-solid fa-id-badge"></i> Colar código de amizade</label>
+                <div class="flex gap-1">
+                    <input type="text" id="account-add-friend-code-input" placeholder="Ex: AB3D9KQ" autocomplete="off" maxlength="12" class="flex-1 bg-studio-dark border studio-border rounded px-2 py-1.5 text-white text-xs placeholder-zinc-600 font-mono uppercase tracking-widest" onkeydown="if(event.key==='Enter') Account.addFriendByCode();">
+                    <button onclick="Account.addFriendByCode()" class="px-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs">Adicionar</button>
+                </div>
+            </div>
+
+            <div class="text-zinc-600 text-[10px] text-center">— ou procure pelo nome —</div>
             <input type="text" id="account-add-friend-input" placeholder="Filtrar por nome de usuário (opcional)..." autocomplete="off" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" oninput="Account.searchFriendCandidates(this.value)" onkeydown="if(event.key==='Enter') Account.submitAddFriend();">
             <div id="account-add-friend-results" class="flex flex-col gap-1 max-h-48 overflow-y-auto empty:hidden"></div>
             <div id="account-add-friend-hint" class="text-zinc-600 text-[10px] leading-relaxed">Carregando contas do repositório...</div>
@@ -14049,6 +14072,17 @@ const Account = (() => {
     function _uid() {
         return (crypto.randomUUID ? crypto.randomUUID() : "acc_" + Date.now() + "_" + Math.random().toString(36).slice(2));
     }
+    /* (nova função) CÓDIGO DE AMIZADE — um código curto e fácil de copiar/
+       colar (em vez de digitar o nome de usuário certinho, sem erro de
+       digitação). Evita letras/números parecidos (0/O, 1/I/L) pra reduzir
+       erro de leitura na hora de copiar de um lugar e colar no chat/
+       WhatsApp/etc. pra mandar pro amigo que você quer adicionar. */
+    function _genFriendCode() {
+        const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // sem 0,O,1,I,L
+        let code = "";
+        for (let i = 0; i < 7; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+        return code;
+    }
     /* (melhorado a pedido do usuário) A senha nunca é salva em texto puro —
        agora é transformada com SHA-256 (hash criptográfico de verdade, via
        Web Crypto do navegador) antes de ir pro repositório. Um hash não dá
@@ -14226,16 +14260,16 @@ const Account = (() => {
      *  índice é só uma otimização de busca, accounts.json continua sendo
      *  a fonte de verdade (e o próximo signup/rename tenta corrigir de
      *  novo se algo ficou desatualizado). */
-    async function _ensureInUsersIndex(id, username) {
+    async function _ensureInUsersIndex(id, username, code) {
         if (!GithubStorage.hasConfig() || !id || !username) return;
         for (let tries = 0; tries < 4; tries++) {
             const fresh = await _ghGetUsersIndex();
             if (!fresh.ok) return;
             const list = fresh.data || [];
             const existing = list.find(u => u.id === id);
-            if (existing && existing.username === username) return; // já está certo, nada a fazer
+            if (existing && existing.username === username && (!code || existing.code === code)) return; // já está certo, nada a fazer
             const next = list.filter(u => u.id !== id);
-            next.push({ id, username });
+            next.push({ id, username, code: code || (existing && existing.code) || null });
             const put = await _ghPutUsersIndex(next, fresh.sha, `Atualiza índice de usuários (${username})`);
             if (put.ok || put.status !== 409) return;
             // 409 = outra conta sendo criada/renomeada ao mesmo tempo — tenta de novo com dados frescos
@@ -14249,7 +14283,7 @@ const Account = (() => {
         if (username.length < 3) return { ok:false, error:"Usuário precisa ter pelo menos 3 letras." };
 
         if (GithubStorage.hasConfig()) {
-            const acc = { id:_uid(), username, passwordHash: await _hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
+            const acc = { id:_uid(), username, passwordHash: await _hash(password), photo:"", theme:"dark", friendCode:_genFriendCode(), friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
             const res = await _writeAccounts(list => {
                 if (list.some(a => a.username.toLowerCase() === username.toLowerCase())) {
                     return { ok:false, error:"Esse nome de usuário já existe (verificado no repositório — não pode repetir em nenhum computador)." };
@@ -14260,13 +14294,13 @@ const Account = (() => {
             if (!res.ok) return { ok:false, error: res.error || "Não consegui criar a conta no repositório." };
             _mergeLocalFromRepo(res.list);
             _activate(acc);
-            _ensureInUsersIndex(acc.id, acc.username).catch(() => {}); // (nova função) mantém users_index.json em dia, não bloqueia o cadastro
+            _ensureInUsersIndex(acc.id, acc.username, acc.friendCode).catch(() => {}); // (nova função) mantém users_index.json em dia, não bloqueia o cadastro
             return { ok:true };
         }
 
         // (fallback) Sem repositório configurado — conta continua só neste navegador.
         if (_findByUsername(username)) return { ok:false, error:"Esse nome de usuário já existe." };
-        const acc = { id:_uid(), username, passwordHash: await _hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
+        const acc = { id:_uid(), username, passwordHash: await _hash(password), photo:"", theme:"dark", friendCode:_genFriendCode(), friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
         const list = _loadAccounts(); list.push(acc); _saveAccounts(list);
         _activate(acc);
         UI.showToast("⚠️ Sem repositório GitHub configurado — esta conta só existe neste navegador. Configure em Configurações → Repositório de dados pra acessá-la de qualquer lugar.");
@@ -14318,6 +14352,21 @@ const Account = (() => {
         if (!s.loggedIds.includes(acc.id)) s.loggedIds.push(acc.id);
         _saveSession(s);
         applyTheme(acc.theme || "dark");
+        // (nova função) Conta criada antes do código de amizade existir —
+        // gera um agora, salva no repositório e no índice, sem travar o login.
+        if (!acc.friendCode) _backfillFriendCode(acc);
+    }
+    async function _backfillFriendCode(acc) {
+        const code = _genFriendCode();
+        acc.friendCode = code;
+        _persistCurrent();
+        if (!GithubStorage.hasConfig()) return;
+        await _writeAccounts(list => {
+            const me = list.find(a => a.id === acc.id);
+            if (me && !me.friendCode) me.friendCode = code;
+            return { ok:true, list };
+        }, "Gera código de amizade retroativo");
+        _ensureInUsersIndex(acc.id, acc.username, acc.friendCode).catch(() => {});
     }
     function logout() {
         const s = _loadSession();
@@ -14656,6 +14705,18 @@ const Account = (() => {
         renderAll();
         if (res.mutual) UI.showToast(`🎉 Vocês pediram amizade um pro outro — agora você e "${username}" são amigos!`);
         else UI.showToast(`📨 Pedido de amizade enviado pra "${username}"! Ela precisa aceitar.`);
+        // (nova função) Além de já estar salvo em accounts.json, avisa a
+        // pessoa NA HORA através do arquivo dela (users/{nome}.json — o
+        // mesmo que o Multiplayer já fica relendo a cada ~15s), em vez de
+        // esperar o próximo poll do Account notar sozinho. Não bloqueia a
+        // tela nem trava se der erro — é só um "toc-toc" a mais.
+        if (typeof Multiplayer !== "undefined" && Multiplayer.writeUserFile) {
+            Multiplayer.writeUserFile(username, (current) => {
+                const base = current || {};
+                base.inbox = [...(base.inbox || []), { type: "friend-request", byUsername: _current.username, ts: Date.now() }];
+                return base;
+            }, `Avisa ${username} sobre pedido de amizade`).catch(() => {});
+        }
     }
     function submitAddFriend() { addFriend(document.getElementById("account-add-friend-input").value); }
 
@@ -14979,12 +15040,21 @@ const Account = (() => {
         document.getElementById("account-settings-name").textContent = _current.username;
         document.getElementById("account-settings-username-input").value = _current.username;
         document.getElementById("account-settings-password-input").value = "";
+        document.getElementById("account-settings-code").textContent = _current.friendCode || "···";
         applyTheme(_current.theme || "dark");
         const av = document.getElementById("account-settings-avatar");
         const fb = document.getElementById("account-settings-avatar-fallback");
         if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
         else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
         _renderGithubFieldsInline();
+    }
+    function getCurrentFriendCode() { return _current ? (_current.friendCode || "") : ""; }
+    function copyFriendCode() {
+        const code = getCurrentFriendCode();
+        if (!code) { UI.showToast("Ainda não tenho um código pra copiar — tente reabrir as configurações."); return; }
+        (navigator.clipboard?.writeText(code) || Promise.reject())
+            .then(() => UI.showToast(`📋 Código "${code}" copiado!`))
+            .catch(() => UI.showToast(`Seu código é: ${code}`));
     }
 
     /** (nova função) Preenche a área "Repositório de dados" das Configurações
@@ -15188,6 +15258,24 @@ const Account = (() => {
        ação pronto pra cada um. Sem repositório configurado, cai pro
        aviso de sempre em vez de buscar. */
     let _friendSearchToken = 0;
+    /** (nova função) Adiciona colando o código de amizade (users_index.json
+     *  já guarda { id, username, code } de cada conta) — acha o nome de
+     *  usuário correspondente e manda o pedido normal (addFriend), sem
+     *  risco de erro de digitação de nome. */
+    async function addFriendByCode() {
+        const input = document.getElementById("account-add-friend-code-input");
+        const code = (input?.value || "").trim().toUpperCase();
+        if (!code) { UI.showToast("Cole um código de amizade primeiro."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure um repositório GitHub nas Configurações pra poder usar códigos."); return; }
+        UI.showToast("🔎 Procurando código...");
+        let index = await _getUsersIndex();
+        let match = index && index.find(u => (u.code || "").toUpperCase() === code);
+        if (!match) { index = await _getUsersIndex(true); match = index && index.find(u => (u.code || "").toUpperCase() === code); }
+        if (!match) { UI.showToast("⚠️ Nenhuma conta encontrada com esse código."); return; }
+        if (input) input.value = "";
+        addFriend(match.username);
+    }
+
     let _usersIndexCache = null; // cache em memória do índice já buscado nesta sessão (evita rebaixar de novo a cada letra)
 
     /** Devolve o índice de usuários, buscando do repositório na primeira
@@ -15399,6 +15487,7 @@ const Account = (() => {
     return {
         _init, signup, login, logout, switchTo, isLoggedIn, getCurrentUserId, getDisplayName,
         getCurrentPhoto, getFriendsList, getIncomingRequests, getOutgoingRequests,
+        getCurrentFriendCode, copyFriendCode, addFriendByCode,
         applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
         addFriend, submitAddFriend, searchFriendCandidates, removeFriend, acceptFriendRequest, declineFriendRequest,
         sendMessage, submitMessage, getConversation,
@@ -16345,6 +16434,15 @@ const Multiplayer = (() => {
                     // sem entrar sozinho (diferente do join-accept acima).
                     const already = _myRoomInvites.some(i => i.roomCode === entry.roomCode && i.byUsername === entry.byUsername);
                     if (!already) { _myRoomInvites.push({ roomCode: entry.roomCode, byUsername: entry.byUsername }); gotInvite = true; }
+                } else if (entry.type === "friend-request") {
+                    // (nova função) Aviso instantâneo de pedido de amizade —
+                    // o pedido em si já foi salvo em accounts.json (fonte de
+                    // verdade, ver Account.addFriend); isso aqui é só o
+                    // "toc-toc" pra avisar na hora, sem esperar o poll de
+                    // 15s do Account notar sozinho. Reaproveita o arquivo
+                    // users/{nome}.json que o Multiplayer já lê o tempo todo.
+                    UI.showToast(`👋 ${entry.byUsername || "Alguém"} te mandou um pedido de amizade! Veja no sino de notificações.`);
+                    if (Account.renderAll) Account.renderAll();
                 }
             }
             if (gotInvite) {
@@ -16508,6 +16606,16 @@ const Multiplayer = (() => {
     function currentRoomCode() { return _code; }
     function isInRoom() { return !!_code; }
 
+    /* ── (nova função) Acesso seguro ao arquivo users/{nome}.json de fora
+       deste módulo — o Módulo 12A · Account usa isso pra guardar amizades/
+       pedidos de amizade no arquivo de CADA PESSOA (em vez de um arquivo
+       accounts.json só, compartilhado por todo mundo). Reaproveita o mesmo
+       _writeUser (lê fresco → muda → salva, tentando de novo em caso de
+       409) que a presença online já usa nesse arquivo, pra nunca ter duas
+       escritas concorrentes brigando pelo mesmo arquivo sem coordenação. */
+    async function readUserFile(username) { return _ghGet(USER_PATH(username)); }
+    async function writeUserFile(username, mutateFn, message) { return _writeUser(username, mutateFn, message); }
+
     return {
         openLobby, closeLobby, createRoom, joinRoom, submitJoin,
         openRoomPanel, closeRoomPanel, leaveRoom, kickMember,
@@ -16520,6 +16628,8 @@ const Multiplayer = (() => {
         // (nova função) sincronização do editor entre membros da sala
         notifySceneChanged,
         sendRoomChat, submitRoomChat,
+        // (nova função) arquivo de amizade por pessoa, usado pelo Account
+        readUserFile, writeUserFile,
     };
 })();
 
