@@ -14608,17 +14608,33 @@ const Account = (() => {
             if ((me.friends || []).some(f => f.toLowerCase() === username.toLowerCase())) return { ok:false, error:"Já é seu amigo." };
             target.incomingRequests = target.incomingRequests || [];
             me.outgoingRequests = me.outgoingRequests || [];
+            me.incomingRequests = me.incomingRequests || [];
+            // (nova função) Pedido MÚTUO — se a outra pessoa já tinha te
+            // pedido amizade antes (está nos SEUS pedidos recebidos), os
+            // dois já queriam ser amigos, então vira amizade na hora, sem
+            // precisar que ninguém clique em "Aceitar".
+            const mutual = me.incomingRequests.some(r => r.toLowerCase() === target.username.toLowerCase());
+            if (mutual) {
+                me.incomingRequests = me.incomingRequests.filter(r => r.toLowerCase() !== target.username.toLowerCase());
+                target.outgoingRequests = (target.outgoingRequests || []).filter(r => r.toLowerCase() !== me.username.toLowerCase());
+                me.friends = me.friends || [];
+                target.friends = target.friends || [];
+                if (!me.friends.some(f => f.toLowerCase() === target.username.toLowerCase())) me.friends.push(target.username);
+                if (!target.friends.some(f => f.toLowerCase() === me.username.toLowerCase())) target.friends.push(me.username);
+                return { ok:true, list, mutual:true };
+            }
             if (target.incomingRequests.some(r => r.toLowerCase() === me.username.toLowerCase())) return { ok:false, error:"Você já pediu amizade pra essa pessoa — aguarde ela aceitar." };
             target.incomingRequests.push(me.username);
             if (!me.outgoingRequests.some(r => r.toLowerCase() === target.username.toLowerCase())) me.outgoingRequests.push(target.username);
-            return { ok:true, list };
+            return { ok:true, list, mutual:false };
         }, `Pedido de amizade de ${_current.username} para ${username}`);
         if (!res.ok) { UI.showToast("⚠️ " + (res.error || "Não consegui enviar o pedido.")); return; }
         _mergeLocalFromRepo(res.list);
         _current = res.list.find(a => a.id === _current.id) || _current;
         UI.closeModal("account-add-friend-modal");
         renderAll();
-        UI.showToast(`📨 Pedido de amizade enviado pra "${username}"! Ela precisa aceitar.`);
+        if (res.mutual) UI.showToast(`🎉 Vocês pediram amizade um pro outro — agora você e "${username}" são amigos!`);
+        else UI.showToast(`📨 Pedido de amizade enviado pra "${username}"! Ela precisa aceitar.`);
     }
     function submitAddFriend() { addFriend(document.getElementById("account-add-friend-input").value); }
 
@@ -15354,6 +15370,13 @@ const Multiplayer = (() => {
     const HEARTBEAT_MS = 10000;  // atualiza minha presença a cada 10s
     const POLL_MS = 6000;        // relê o estado da sala a cada 6s
     const STALE_MS = 30000;      // sem heartbeat há 30s = considerado fora da sala
+    // (nova função) Toda sala precisa ter pelo menos 1 pessoa ativa pra
+    // "existir" de verdade — se todo mundo fechou o navegador sem clicar
+    // em "Sair" (aba fechada à força, sem internet no momento, etc.) e
+    // ninguém dá sinal de vida há mais que isso, a sala é considerada
+    // abandonada e apagada do repositório na próxima vez que alguém tentar
+    // criar/entrar com esse código.
+    const ROOM_INACTIVE_MS = 60000;
 
     // (nova função) Perfil público "online" de cada conta, salvo no mesmo
     // repositório GitHub como users/{nome-em-minúsculo}.json — status
@@ -15549,6 +15572,34 @@ const Multiplayer = (() => {
     }
 
     /* ── Criar / Entrar ── */
+    /** Verdadeiro se NINGUÉM na sala deu sinal de vida (heartbeat) nos
+     *  últimos ROOM_INACTIVE_MS — ou seja, a sala tá "morta" mesmo que o
+     *  arquivo dela ainda exista no repositório. */
+    function _isRoomInactive(roomData) {
+        if (!roomData) return false; // não existe = não é "inativa", é inexistente mesmo
+        const members = roomData.members || [];
+        if (!members.length) return true; // sala sem ninguém dentro
+        const now = Date.now();
+        return !members.some(m => (now - (m.lastSeen || 0)) < ROOM_INACTIVE_MS);
+    }
+
+    /** Confere se a sala com esse código está inativa e, se estiver, apaga
+     *  ela (e o chat associado) do repositório. Devolve o estado mais
+     *  atual conhecido da sala: null se não existe (ou acabou de ser
+     *  apagada por estar inativa), ou o objeto da sala se ainda tem gente
+     *  ativa nela. */
+    async function _cleanupIfInactive(code) {
+        const fresh = await _ghGet(ROOM_PATH(code));
+        if (!fresh.ok) return { ok: false, error: fresh.error };
+        if (!fresh.data) return { ok: true, data: null };
+        if (!_isRoomInactive(fresh.data)) return { ok: true, data: fresh.data };
+        // Sala abandonada — limpa o arquivo dela e o chat junto.
+        await _ghDelete(ROOM_PATH(code), fresh.sha, `Apaga sala inativa ${code}`);
+        const chat = await _ghGet(CHAT_PATH(code));
+        if (chat.ok && chat.data) await _ghDelete(CHAT_PATH(code), chat.sha, `Apaga chat da sala inativa ${code}`);
+        return { ok: true, data: null, wasInactive: true };
+    }
+
     async function createRoom() {
         const me = _me();
         if (!me) { UI.showToast("⚠️ Entre numa conta antes de criar uma sala."); return; }
@@ -15556,7 +15607,7 @@ const Multiplayer = (() => {
         UI.showToast("🔄 Criando sala...");
         let code = _genCode();
         for (let i = 0; i < 5; i++) {
-            const check = await _ghGet(ROOM_PATH(code));
+            const check = await _cleanupIfInactive(code); // trata sala inativa como código livre (e já limpa ela)
             if (check.ok && check.data === null) break; // código livre
             code = _genCode();
         }
@@ -15579,6 +15630,15 @@ const Multiplayer = (() => {
         const code = (codeInput || "").trim().toUpperCase();
         if (!code) { UI.showToast("Digite o código da sala."); return; }
         UI.showToast(viewOnly ? "🔄 Entrando na sala em modo visualização..." : "🔄 Entrando na sala...");
+        // (nova função) Antes de tentar entrar, confere se a sala não foi
+        // abandonada (ninguém ativo há ROOM_INACTIVE_MS) — se foi, limpa
+        // ela do repositório em vez de deixar entrar numa sala fantasma.
+        const cleanup = await _cleanupIfInactive(code);
+        if (!cleanup.ok) { UI.showToast("⚠️ Não consegui verificar a sala: " + (cleanup.error || "")); return; }
+        if (cleanup.data === null) {
+            UI.showToast(cleanup.wasInactive ? "⚠️ Essa sala estava inativa (ninguém há mais de 1 minuto) e foi removida." : "⚠️ Sala não encontrada.");
+            return;
+        }
         const res = await _writeRoom(code, (current) => {
             if (!current) return null; // sala não existe
             if ((current.kicked || []).includes(me.id)) return null; // foi expulso, não deixa voltar
@@ -15972,10 +16032,13 @@ const Multiplayer = (() => {
         const iAmCrown = !!(crownId && me && crownId === me.id);
         const active = _activeMembers().sort((a, b) => a.joinedAt - b.joinedAt);
         box.innerHTML = "";
-        // (nova função) Pra saber se já é amizade / já tem pedido enviado e
-        // decidir se mostra o botão "Adicionar amizade" em cada membro.
+        // (nova função) Pra saber se já é amizade / já tem pedido enviado ou
+        // recebido e decidir a cor/ação do botão "Adicionar amizade" de
+        // cada membro — fica ROXO enquanto o pedido está pendente (num
+        // sentido ou no outro), igual pedido pra entrar num app de chat.
         const myFriendsLower = new Set(((Account.getFriendsList && Account.getFriendsList()) || []).map(f => f.toLowerCase()));
         const myOutgoingLower = new Set((Account.getOutgoingRequests ? Account.getOutgoingRequests() : []).map(f => f.toLowerCase()));
+        const myIncomingLower = new Set((Account.getIncomingRequests ? Account.getIncomingRequests() : []).map(f => f.toLowerCase()));
         active.forEach(m => {
             const row = document.createElement("div");
             row.className = "flex items-center gap-2 px-2 py-1.5 rounded bg-studio-input";
@@ -15983,9 +16046,16 @@ const Multiplayer = (() => {
             const uLower = (m.username || "").toLowerCase();
             let friendBtnHtml = "";
             if (!isMe) {
-                if (myFriendsLower.has(uLower)) friendBtnHtml = `<span class="text-[10px] text-emerald-400 font-bold px-1" title="Já são amizades">✓</span>`;
-                else if (myOutgoingLower.has(uLower)) friendBtnHtml = `<span class="text-[10px] text-zinc-500 font-bold px-1" title="Pedido já enviado">…</span>`;
-                else friendBtnHtml = `<button data-addfriend="${m.username}" title="Adicionar como amizade" class="px-2 py-0.5 bg-sky-800 hover:bg-sky-700 text-white rounded text-[10px] font-bold"><i class="fa-solid fa-user-plus"></i></button>`;
+                if (myFriendsLower.has(uLower)) {
+                    friendBtnHtml = `<span class="text-[10px] text-emerald-400 font-bold px-1" title="Já são amizades">✓</span>`;
+                } else if (myIncomingLower.has(uLower)) {
+                    // Essa pessoa já te pediu amizade — aceitar aqui mesmo.
+                    friendBtnHtml = `<button data-acceptfriend="${m.username}" title="${m.username} já te pediu amizade — clique pra aceitar" class="px-2 py-0.5 bg-purple-700 hover:bg-purple-600 text-white rounded text-[10px] font-bold flex items-center gap-1"><i class="fa-solid fa-user-clock"></i> Aceitar</button>`;
+                } else if (myOutgoingLower.has(uLower)) {
+                    friendBtnHtml = `<button disabled title="Pedido enviado — esperando aceitar" class="px-2 py-0.5 bg-purple-900 text-purple-200 rounded text-[10px] font-bold flex items-center gap-1 cursor-default"><i class="fa-solid fa-user-clock"></i> Pendente</button>`;
+                } else {
+                    friendBtnHtml = `<button data-addfriend="${m.username}" title="Adicionar como amizade" class="px-2 py-0.5 bg-sky-800 hover:bg-sky-700 text-white rounded text-[10px] font-bold"><i class="fa-solid fa-user-plus"></i></button>`;
+                }
             }
             row.innerHTML = `
                 ${m.viewOnly ? '<i class="fa-solid fa-eye text-zinc-400" title="Modo visualização — só acompanha, não edita"></i>' : (m.id === crownId ? '<i class="fa-solid fa-crown text-amber-400" title="Tem a coroa (pode expulsar)"></i>' : '<i class="fa-solid fa-user text-zinc-500"></i>')}
@@ -16001,6 +16071,12 @@ const Multiplayer = (() => {
         box.querySelectorAll("[data-addfriend]").forEach(btn => {
             btn.onclick = async () => {
                 await Account.addFriend(btn.getAttribute("data-addfriend"));
+                _renderRoomPanel();
+            };
+        });
+        box.querySelectorAll("[data-acceptfriend]").forEach(btn => {
+            btn.onclick = async () => {
+                await Account.acceptFriendRequest(btn.getAttribute("data-acceptfriend"));
                 _renderRoomPanel();
             };
         });
