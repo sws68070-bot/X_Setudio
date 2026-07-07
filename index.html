@@ -1486,6 +1486,14 @@
      único .zip pra baixar, já que o navegador não deixa salvar uma pasta
      de verdade direto no disco. -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<!-- (nova função) PeerJS — WebRTC simplificado, usado só pra sincronizar as
+     EDIÇÕES do editor (Explorer/Workspace) direto entre os navegadores da
+     sala, sem passar pelo GitHub a cada mudança. Usa o servidor de sinalização
+     público e gratuito da PeerJS (peerjs.com) só pro "aperto de mão" inicial —
+     depois disso os dados trafegam direto entre os navegadores (P2P/DataChannel).
+     A lista de membros da sala, convites, pedidos e o chat continuam usando o
+     repositório GitHub configurado (não são o gargalo — só a edição em si). -->
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
 <script>
 "use strict";
@@ -15365,22 +15373,38 @@ const Multiplayer = (() => {
     let _myRequests = [];     // pedidos pendentes de amizades pra entrar na MINHA sala atual
     let _myRoomInvites = [];  // (nova função) convites recebidos pra entrar em salas de amizades
 
-    /* ── (nova função) Sincronização do editor entre todo mundo da sala ──
-       Enquanto a sala em si (rooms/{code}.json) só guardava a lista de
-       membros, o PROJETO (State.tree — Explorer, Workspace, scripts,
-       propriedades, tudo) nunca era compartilhado: cada pessoa via só o
-       que tinha no próprio navegador. Agora, sempre que algo muda no
-       editor (ThreeManager.markDirty → App.notifyChanged → aqui), a cena
-       inteira é publicada em rooms/{code}-scene.json (com debounce, pra
-       não gravar a cada tecla) e todo mundo na sala — inclusive quem só
-       está "acompanhando" em modo visualização — recebe a atualização no
-       próximo poll e vê a mudança no próprio editor. */
-    const SCENE_PATH = (code) => `rooms/${code}-scene.json`;
-    const SCENE_PUSH_DEBOUNCE_MS = 1500;
-    let _scenePushTimer = null;
-    let _lastPushedSceneSig = null;   // último JSON de State.tree que EU enviei
-    let _lastAppliedSceneSig = null;  // último JSON de State.tree aplicado no meu editor (meu ou de outro membro)
-    let _applyingRemoteScene = false; // true enquanto aplico a cena de outro membro — evita eco (reenviar o que acabei de receber)
+    /* ── (atualizado a pedido do usuário) Sincronização do editor entre todo
+       mundo da sala — ANTES: cada mudança no editor era publicada num
+       arquivo rooms/{code}-scene.json no GitHub e todo mundo relia esse
+       arquivo a cada poll (alguns segundos de atraso + 1 gravação no
+       repositório por edição). AGORA: as edições viajam direto de
+       navegador pra navegador via WebRTC (biblioteca PeerJS) — sem gravar
+       nada no GitHub quando você move/adiciona/apaga uma Part. O GitHub
+       continua sendo usado só pra coisas que não são "por edição": lista
+       de membros da sala, convites, pedidos de amizade e o chat da sala.
+
+       Topologia "estrela": quem tem a coroa (_crownHolderId) vira o HOST —
+       cria um Peer com ID fixo e previsível (baseado no código da sala), e
+       todo mundo mais se conecta direto nesse ID. O host aplica a edição
+       que chega de qualquer membro e retransmite pros outros na hora (sem
+       voltar pra quem mandou = sem eco). Se o host sai da sala, a coroa
+       passa pra outra pessoa (mesma lógica de sempre) e essa pessoa assume
+       o mesmo ID fixo — os outros detectam a queda da conexão e tentam de
+       novo sozinhos, reconectando assim que o novo host sobe. */
+    const P2P_HOST_ID = (code) => `rsev3room-${String(code || "").toUpperCase()}`;
+    const SCENE_BROADCAST_DEBOUNCE_MS = 300; // bem mais rápido que o antigo (não tem mais custo de gravar arquivo)
+    const P2P_RETRY_MS = 4000; // intervalo pra tentar (re)conectar no host quando ainda não conseguiu
+    let _sceneBroadcastTimer = null;
+    let _lastBroadcastSceneSig = null; // último JSON de State.tree que EU já mandei/apliquei
+    let _lastAppliedSceneSig = null;   // último JSON de State.tree aplicado no meu editor (meu ou de outro membro)
+    let _applyingRemoteScene = false;  // true enquanto aplico a cena de outro membro — evita eco (reenviar o que acabei de receber)
+    let _peer = null;               // minha instância PeerJS (Peer) nesta sala
+    let _isHost = false;            // true se EU sou quem está hospedando (dono do ID fixo da sala)
+    let _hostConn = null;            // (quando não sou host) conexão de dados aberta com o host
+    let _peerConns = new Map();     // (quando sou host) connId -> DataConnection de cada outro membro conectado
+    let _p2pRetryTimer = null;
+    let _p2pConnecting = false;     // evita tentar conectar/hospedar duas vezes ao mesmo tempo
+    let _p2pWarnedNoLib = false;    // evita repetir o aviso de "PeerJS não carregou" a cada poll
 
     /* ── (nova função) Chat da sala ──────────────────────────────────────
        Um chat só pra quem está na mesma sala (diferente das mensagens
@@ -15629,11 +15653,11 @@ const Multiplayer = (() => {
             return;
         }
         _renderRoomPanel();
-        _pollSceneState();
+        _p2pEnsureConnected(); // reage a troca de coroa (novo host) e reconecta se a conexão P2P caiu
         _pollRoomChat();
     }
 
-    /* ── (nova função) Sincronização do editor entre membros da sala ── */
+    /* ── (atualizado) Sincronização do editor entre membros da sala — via WebRTC ── */
 
     /** Verdadeiro se EU sou membro viewOnly da sala atual — quem acompanha
      *  em modo visualização recebe as mudanças do editor, mas nunca publica
@@ -15645,50 +15669,177 @@ const Multiplayer = (() => {
         return !!(mine && mine.viewOnly);
     }
 
-    /** Chamado (via App.notifyChanged, ligado ao ThreeManager.markDirty)
-     *  toda vez que algo muda no projeto. Agenda o envio da cena pra
-     *  rooms/{code}-scene.json com um pequeno atraso, pra juntar várias
-     *  mudanças seguidas (arrastar um objeto, digitar um script...) numa
-     *  gravação só, em vez de uma por evento. */
-    function notifySceneChanged() {
-        if (!_code || _applyingRemoteScene || _amIViewOnly()) return;
-        if (_scenePushTimer) clearTimeout(_scenePushTimer);
-        _scenePushTimer = setTimeout(_pushSceneState, SCENE_PUSH_DEBOUNCE_MS);
+    /** Verdadeiro se EU devo ser o host (dono do ID fixo de PeerJS da sala)
+     *  agora — mesma pessoa que já tem a "coroa" no resto do sistema. */
+    function _shouldIBeHost() {
+        const me = _me();
+        return !!(me && _crownHolderId() === me.id);
     }
 
-    async function _pushSceneState() {
-        _scenePushTimer = null;
-        if (!_code || !GithubStorage.hasConfig()) return;
+    /** Fecha qualquer conexão/Peer aberta desta sessão P2P (usado ao sair
+     *  da sala, trocar de sala, ou antes de tentar reconectar do zero). */
+    function _p2pTeardown() {
+        if (_p2pRetryTimer) { clearTimeout(_p2pRetryTimer); _p2pRetryTimer = null; }
+        if (_sceneBroadcastTimer) { clearTimeout(_sceneBroadcastTimer); _sceneBroadcastTimer = null; }
+        _peerConns.forEach(c => { try { c.close(); } catch (_) {} });
+        _peerConns = new Map();
+        if (_hostConn) { try { _hostConn.close(); } catch (_) {} _hostConn = null; }
+        if (_peer) { try { _peer.destroy(); } catch (_) {} _peer = null; }
+        _isHost = false;
+        _p2pConnecting = false;
+    }
+
+    /** Garante que estou conectado ao "mundo P2P" da sala — vira host se
+     *  for pra mim ser o host agora (coroa), ou conecta como cliente no
+     *  host atual. Chamado ao entrar na sala e sempre que o poll normal da
+     *  sala roda (pra reagir a troca de coroa e reconectar sozinho se a
+     *  conexão caiu). Seguro de chamar repetidas vezes — não faz nada se já
+     *  está tudo certo. */
+    function _p2pEnsureConnected() {
+        if (!_code || _p2pConnecting) return;
+        if (typeof Peer === "undefined") {
+            // Biblioteca PeerJS não carregou (sem internet, CDN bloqueado
+            // etc.) — sem ela não tem como sincronizar o editor. Avisa uma
+            // vez só (evita spam de toast a cada poll de 6s).
+            if (!_p2pWarnedNoLib) { _p2pWarnedNoLib = true; UI.showToast("⚠️ Não consegui carregar a biblioteca de sincronização direta (WebRTC) — verifique sua internet."); }
+            return;
+        }
+        const iShouldHost = _shouldIBeHost();
+
+        if (iShouldHost) {
+            if (_isHost && _peer && !_peer.destroyed) return; // já sou o host, tudo certo
+            // Se eu tinha uma conexão de CLIENTE aberta (era não-host até
+            // agora), derruba antes de virar host.
+            if (!_isHost && (_peer || _hostConn)) _p2pTeardown();
+            _p2pConnecting = true;
+            let peer;
+            try { peer = new Peer(P2P_HOST_ID(_code)); }
+            catch (_) { _p2pConnecting = false; return; }
+            _peer = peer;
+            peer.on("open", () => {
+                _isHost = true; _p2pConnecting = false;
+                UI.log(`🟢 Você é o host da sincronização da sala ${_code} (WebRTC).`, "info");
+            });
+            peer.on("connection", (conn) => {
+                _peerConns.set(conn.peer + ":" + Date.now(), conn);
+                conn.on("open", () => {
+                    // Assim que alguém conecta, manda a cena atual pra essa
+                    // pessoa começar já sincronizada (substitui o antigo
+                    // "_syncSceneOnEnter" via GitHub).
+                    try { conn.send({ type: "scene", tree: State.tree, by: (_me() || {}).username }); } catch (_) {}
+                });
+                conn.on("data", (msg) => _p2pOnHostReceive(conn, msg));
+                conn.on("close", () => _p2pRemoveConn(conn));
+                conn.on("error", () => _p2pRemoveConn(conn));
+            });
+            peer.on("error", (err) => {
+                _p2pConnecting = false;
+                // "unavailable-id" = o ID fixo da sala ainda está ocupado
+                // (ex: eu mesmo, numa aba que acabou de fechar, ou outra
+                // pessoa que também virou coroa por uma fração de segundo).
+                // Tenta de novo mais adiante — o poll normal chama isso de
+                // novo em alguns segundos.
+                console.warn("[Multiplayer P2P] erro no host:", err && err.type);
+                if (_peer === peer) { try { peer.destroy(); } catch (_) {} _peer = null; _isHost = false; }
+                _p2pScheduleRetry();
+            });
+        } else {
+            if (_hostConn && _hostConn.open) return; // já conectado no host, tudo certo
+            if (_isHost) _p2pTeardown(); // era host e perdi a coroa — derruba antes de virar cliente
+            if (!_peer || _peer.destroyed) {
+                _p2pConnecting = true;
+                let peer;
+                try { peer = new Peer(); }
+                catch (_) { _p2pConnecting = false; return; }
+                _peer = peer;
+                peer.on("open", () => { _p2pConnecting = false; _p2pConnectToHost(); });
+                peer.on("error", (err) => {
+                    console.warn("[Multiplayer P2P] erro no peer cliente:", err && err.type);
+                    _p2pConnecting = false;
+                    _p2pScheduleRetry();
+                });
+            } else {
+                _p2pConnectToHost();
+            }
+        }
+    }
+
+    function _p2pConnectToHost() {
+        if (!_peer || !_code) return;
+        let conn;
+        try { conn = _peer.connect(P2P_HOST_ID(_code), { reliable: true }); }
+        catch (_) { _p2pScheduleRetry(); return; }
+        _hostConn = conn;
+        conn.on("open", () => {
+            UI.log(`🟢 Conectado direto (WebRTC) com o host da sala ${_code}.`, "info");
+        });
+        conn.on("data", (msg) => _p2pOnClientReceive(msg));
+        conn.on("close", () => { if (_hostConn === conn) _hostConn = null; _p2pScheduleRetry(); });
+        conn.on("error", () => { if (_hostConn === conn) _hostConn = null; _p2pScheduleRetry(); });
+    }
+
+    function _p2pRemoveConn(conn) {
+        for (const [key, c] of _peerConns) { if (c === conn) _peerConns.delete(key); }
+    }
+
+    function _p2pScheduleRetry() {
+        if (!_code) return;
+        if (_p2pRetryTimer) clearTimeout(_p2pRetryTimer);
+        _p2pRetryTimer = setTimeout(() => { _p2pRetryTimer = null; _p2pEnsureConnected(); }, P2P_RETRY_MS);
+    }
+
+    /** (host) Recebeu uma mensagem de um membro conectado — aplica local e
+     *  retransmite pros outros, exceto pra quem mandou (evita eco). */
+    function _p2pOnHostReceive(fromConn, msg) {
+        if (!msg || msg.type !== "scene") return;
+        let sig;
+        try { sig = JSON.stringify(msg.tree); } catch (_) { return; }
+        if (sig === _lastAppliedSceneSig) return;
+        _applyRemoteScene(msg.tree, sig, msg.by);
+        _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+    }
+
+    /** (cliente) Recebeu a cena atualizada do host — só aplica. */
+    function _p2pOnClientReceive(msg) {
+        if (!msg || msg.type !== "scene") return;
+        let sig;
+        try { sig = JSON.stringify(msg.tree); } catch (_) { return; }
+        if (sig === _lastAppliedSceneSig) return;
+        _applyRemoteScene(msg.tree, sig, msg.by);
+    }
+
+    /** Chamado (via App.notifyChanged, ligado ao ThreeManager.markDirty)
+     *  toda vez que algo muda no projeto. Agenda o ENVIO DIRETO (WebRTC)
+     *  da cena com um pequeno atraso, pra juntar várias mudanças seguidas
+     *  (arrastar um objeto, digitar um script...) num envio só, em vez de
+     *  um por evento — sem gravar nada no GitHub. */
+    function notifySceneChanged() {
+        if (!_code || _applyingRemoteScene || _amIViewOnly()) return;
+        if (_sceneBroadcastTimer) clearTimeout(_sceneBroadcastTimer);
+        _sceneBroadcastTimer = setTimeout(_broadcastSceneState, SCENE_BROADCAST_DEBOUNCE_MS);
+    }
+
+    function _broadcastSceneState() {
+        _sceneBroadcastTimer = null;
+        if (!_code) return;
         const me = _me();
         if (!me) return;
         let treeStr;
         try { treeStr = JSON.stringify(State.tree); } catch (_) { return; }
-        if (treeStr === _lastPushedSceneSig) return; // nada de novo desde o último envio
-        const fresh = await _ghGet(SCENE_PATH(_code));
-        if (!fresh.ok) return; // sem rede agora — a próxima mudança tenta de novo
-        const next = { tree: JSON.parse(treeStr), updatedAt: Date.now(), updatedBy: me.username };
-        const put = await _ghPut(SCENE_PATH(_code), next, fresh.sha, `Atualiza cena da sala ${_code} (${me.username})`);
-        if (put.ok) {
-            _lastPushedSceneSig = treeStr;
+        if (treeStr === _lastBroadcastSceneSig) return; // nada de novo desde o último envio
+        _p2pEnsureConnected(); // garante que a conexão existe antes de tentar mandar
+        const msg = { type: "scene", tree: State.tree, by: me.username };
+        if (_isHost) {
+            _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
+            _lastBroadcastSceneSig = treeStr;
             _lastAppliedSceneSig = treeStr;
+        } else if (_hostConn && _hostConn.open) {
+            try { _hostConn.send(msg); _lastBroadcastSceneSig = treeStr; _lastAppliedSceneSig = treeStr; } catch (_) {}
         }
-        // Em caso de conflito (409, outro membro salvou no mesmo instante),
-        // não insiste: o próximo poll traz a versão que "ganhou" e a
-        // próxima mudança local tenta publicar de novo.
-    }
-
-    /** Aplica no editor local a cena que está em rooms/{code}-scene.json,
-     *  se ela for diferente da última que eu já apliquei/publiquei. */
-    async function _pollSceneState() {
-        if (!_code || !GithubStorage.hasConfig()) return;
-        const res = await _ghGet(SCENE_PATH(_code));
-        if (!res.ok || !res.data || !res.data.tree) return;
-        let sig;
-        try { sig = JSON.stringify(res.data.tree); } catch (_) { return; }
-        if (sig === _lastAppliedSceneSig) return; // já está tudo igual
-        const me = _me();
-        if (me && res.data.updatedBy === me.username) { _lastAppliedSceneSig = sig; return; } // fui eu quem publicou
-        _applyRemoteScene(res.data.tree, sig, res.data.updatedBy);
+        // Se ainda não tem conexão nenhuma (acabou de entrar na sala e o
+        // WebRTC ainda tá de aperto de mão), a mudança fica só localmente
+        // por enquanto — assim que a conexão abrir, o próximo edit (ou o
+        // "open" da conexão, que já manda a cena atual) resolve isso.
     }
 
     function _applyRemoteScene(tree, sig, byUsername) {
@@ -15701,28 +15852,20 @@ const Multiplayer = (() => {
             if (typeof rebuildHUD === "function") rebuildHUD();
             if (typeof UI !== "undefined" && UI.buildPropertiesPanel) UI.buildPropertiesPanel();
             _lastAppliedSceneSig = sig;
-            _lastPushedSceneSig = sig;
-            UI.showToast(`🔄 Editor atualizado por ${byUsername || "outro membro da sala"}`);
+            _lastBroadcastSceneSig = sig;
+            UI.showToast(`🔄 Editor atualizado por ${byUsername || "outro membro da sala"} (direto, sem GitHub)`);
         } finally {
             _applyingRemoteScene = false;
         }
     }
 
-    /** Chamado assim que entro numa sala (criando ou entrando): busca a
-     *  cena atual da sala e substitui o meu editor por ela — assim todo
-     *  mundo começa vendo exatamente a mesma coisa. Se a sala é nova e
-     *  ainda não tem cena salva, publica o meu projeto atual como ponto
-     *  de partida (só quem não é viewOnly faz isso). */
+    /** Chamado assim que entro numa sala (criando ou entrando): conecta o
+     *  WebRTC com o resto da sala. Quem cria a sala vira host automatico
+     *  (tem a coroa) e o próprio State.tree atual já é o ponto de partida;
+     *  quem entra depois recebe a cena do host assim que a conexão abre. */
     async function _syncSceneOnEnter() {
-        if (!_code || !GithubStorage.hasConfig()) return;
-        const res = await _ghGet(SCENE_PATH(_code));
-        if (res.ok && res.data && res.data.tree) {
-            let sig;
-            try { sig = JSON.stringify(res.data.tree); } catch (_) { sig = null; }
-            if (sig) _applyRemoteScene(res.data.tree, sig, res.data.updatedBy);
-        } else if (!_amIViewOnly()) {
-            await _pushSceneState();
-        }
+        if (!_code) return;
+        _p2pEnsureConnected();
         _pollRoomChat();
     }
 
@@ -15984,8 +16127,8 @@ const Multiplayer = (() => {
             }
         }
         _room = null; _code = null;
-        if (_scenePushTimer) { clearTimeout(_scenePushTimer); _scenePushTimer = null; }
-        _lastPushedSceneSig = null; _lastAppliedSceneSig = null;
+        _p2pTeardown();
+        _lastBroadcastSceneSig = null; _lastAppliedSceneSig = null;
         _roomChat = []; _lastRoomChatSig = null; // (nova função) limpa cache do chat da sala anterior
         const badge = document.getElementById("mp-room-badge");
         if (badge) { badge.classList.add("hidden"); badge.classList.remove("flex"); }
