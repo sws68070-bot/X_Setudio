@@ -15587,6 +15587,22 @@ const Multiplayer = (() => {
     let _p2pConnecting = false;     // evita tentar conectar/hospedar duas vezes ao mesmo tempo
     let _p2pWarnedNoLib = false;    // evita repetir o aviso de "PeerJS não carregou" a cada poll
 
+    /* ── (nova função) SINCRONIZAÇÃO RESERVA (sem WebRTC) ─────────────────
+       O WebRTC direto (acima) é rápido, mas depende da rede de cada pessoa
+       conseguir abrir uma conexão direta — em redes mais fechadas (Wi-Fi de
+       empresa/escola, alguns 4G/5G, VPN etc.) isso às vezes NUNCA conecta,
+       e sem essa reserva a sala simplesmente parava de sincronizar sem
+       avisar por quê. Essa reserva publica a cena em rooms/{code}-scene.json
+       (no mesmo repositório) toda vez que algo muda — e quem não conseguiu
+       abrir WebRTC (`!_p2pIsLive()`) vai relendo esse arquivo a cada poll da
+       sala (POLL_MS). Um pouco mais devagar que o WebRTC (segundos, não
+       milissegundos), mas garante que "todo mundo vê tudo" mesmo quando a
+       conexão direta não rola. */
+    const SCENE_FALLBACK_PATH = (code) => `rooms/${code}-scene.json`;
+    const SCENE_FALLBACK_MIN_INTERVAL_MS = 3000; // não trava a rede publicando a cada tecla
+    let _fallbackSha = null;
+    let _lastFallbackPushAt = 0;
+
     /* ── (nova função) Chat da sala ──────────────────────────────────────
        Um chat só pra quem está na mesma sala (diferente das mensagens
        diretas do Account, que são 1-pra-1 entre amizades). Guardado em
@@ -15778,6 +15794,8 @@ const Multiplayer = (() => {
         const put = await _ghPut(ROOM_PATH(code), room, null, `Cria sala ${code}`);
         if (!put.ok) { UI.showToast("⚠️ Não consegui criar a sala: " + (put.error || "")); return; }
         _room = room; _code = code;
+        _fallbackSha = null;
+        _pushSceneFallback(true); // (nova função) já deixa a cena inicial publicada, pra quem entrar antes da 1ª edição já sincronizar certo
         _enterRoomUI();
     }
 
@@ -15872,6 +15890,7 @@ const Multiplayer = (() => {
         }
         _renderRoomPanel();
         _p2pEnsureConnected(); // reage a troca de coroa (novo host) e reconecta se a conexão P2P caiu
+        _pullSceneFallbackIfNeeded(); // (nova função) se o WebRTC não conectou, ainda assim sincroniza (mais devagar) via GitHub
         _pollRoomChat();
     }
 
@@ -15937,6 +15956,7 @@ const Multiplayer = (() => {
             peer.on("open", () => {
                 _isHost = true; _p2pConnecting = false;
                 UI.log(`🟢 Você é o host da sincronização da sala ${_code} (WebRTC).`, "info");
+                _pushSceneFallback(true); // (nova função) garante que quem só usa a reserva (sem WebRTC) já pega a cena certa com o novo host
             });
             peer.on("connection", (conn) => {
                 _peerConns.set(conn.peer + ":" + Date.now(), conn);
@@ -16000,6 +16020,56 @@ const Multiplayer = (() => {
         for (const [key, c] of _peerConns) { if (c === conn) _peerConns.delete(key); }
     }
 
+    /** Verdadeiro se eu tenho, AGORA, um jeito de mandar/receber a cena
+     *  direto por WebRTC (sou host com Peer aberto, ou cliente conectado
+     *  no host). Falso = preciso confiar na sincronização reserva abaixo. */
+    function _p2pIsLive() {
+        if (_isHost) return !!(_peer && !_peer.destroyed);
+        return !!(_hostConn && _hostConn.open);
+    }
+
+    /** (nova função) Publica a cena atual em rooms/{code}-scene.json —
+     *  chamada toda vez que algo muda (junto do envio por WebRTC), mas com
+     *  um intervalo mínimo entre gravações reais (`force` pula esse
+     *  intervalo, usado ao entrar na sala pela primeira vez). Fica em
+     *  segundo plano, sem travar o editor. */
+    async function _pushSceneFallback(force) {
+        if (!_code) return;
+        const now = Date.now();
+        if (!force && now - _lastFallbackPushAt < SCENE_FALLBACK_MIN_INTERVAL_MS) return;
+        _lastFallbackPushAt = now;
+        const me = _me();
+        if (!me || !GithubStorage.hasConfig()) return;
+        let treeStr;
+        try { treeStr = JSON.stringify(State.tree); } catch (_) { return; }
+        const put = await _ghPut(SCENE_FALLBACK_PATH(_code), { tree: State.tree, by: me.username, ts: now }, _fallbackSha, "Sincroniza cena (reserva, sem WebRTC)");
+        if (put.ok) { _fallbackSha = put.sha; return; }
+        if (put.status === 409) {
+            // Alguém mais publicou a cena entre minha leitura e minha escrita —
+            // relê só pra pegar o sha novo (não aplica: se for mais recente que
+            // a minha, o próximo poll de quem não tem WebRTC já pega certo).
+            const fresh = await _ghGet(SCENE_FALLBACK_PATH(_code));
+            if (fresh.ok) _fallbackSha = fresh.sha;
+        }
+    }
+
+    /** (nova função) Só chamada quando EU não tenho WebRTC ativo agora —
+     *  relê rooms/{code}-scene.json e aplica se for diferente do que já
+     *  tenho (e não for a última coisa que EU mesmo publiquei). */
+    async function _pullSceneFallbackIfNeeded() {
+        if (!_code || _p2pIsLive() || !GithubStorage.hasConfig()) return;
+        const res = await _ghGet(SCENE_FALLBACK_PATH(_code));
+        if (!res.ok || !res.data) return;
+        _fallbackSha = res.sha;
+        let sig;
+        try { sig = JSON.stringify(res.data.tree); } catch (_) { return; }
+        if (sig === _lastAppliedSceneSig) return; // já é o que eu tenho
+        const me = _me();
+        if (me && res.data.by === me.username) { _lastAppliedSceneSig = sig; _lastBroadcastSceneSig = sig; return; } // é a minha própria última publicação
+        if (_applyingRemoteScene) return;
+        _applyRemoteScene(res.data.tree, sig, res.data.by);
+    }
+
     function _p2pScheduleRetry() {
         if (!_code) return;
         if (_p2pRetryTimer) clearTimeout(_p2pRetryTimer);
@@ -16058,6 +16128,10 @@ const Multiplayer = (() => {
         // WebRTC ainda tá de aperto de mão), a mudança fica só localmente
         // por enquanto — assim que a conexão abrir, o próximo edit (ou o
         // "open" da conexão, que já manda a cena atual) resolve isso.
+
+        // (nova função) Publica também na sincronização reserva — quem não
+        // conseguiu abrir WebRTC ainda recebe essa mudança no próximo poll.
+        _pushSceneFallback();
     }
 
     function _applyRemoteScene(tree, sig, byUsername) {
@@ -16084,6 +16158,7 @@ const Multiplayer = (() => {
     async function _syncSceneOnEnter() {
         if (!_code) return;
         _p2pEnsureConnected();
+        _pullSceneFallbackIfNeeded(); // (nova função) já traz algo de imediato enquanto o WebRTC ainda aperta a mão
         _pollRoomChat();
     }
 
@@ -16363,6 +16438,7 @@ const Multiplayer = (() => {
         _room = null; _code = null;
         _p2pTeardown();
         _lastBroadcastSceneSig = null; _lastAppliedSceneSig = null;
+        _fallbackSha = null; _lastFallbackPushAt = 0; // (nova função) limpa cache da sincronização reserva da sala anterior
         _roomChat = []; _lastRoomChatSig = null; // (nova função) limpa cache do chat da sala anterior
         const badge = document.getElementById("mp-room-badge");
         if (badge) { badge.classList.add("hidden"); badge.classList.remove("flex"); }
