@@ -431,16 +431,45 @@
 
         <div class="border-t studio-border"></div>
 
-        <!-- ═══ (movido a pedido do usuário) Repositório de dados (GitHub) —
-             antes era um botão dentro do Toolbox; agora mora aqui porque o
-             mesmo repositório guarda conta, amizades e salas, não só o
-             catálogo do Toolbox. O token NUNCA fica escrito no código-fonte —
-             só é lido do que a pessoa colar aqui, e fica salvo no
-             localStorage deste navegador. ═══ -->
+        <!-- ═══ (a pedido do usuário) Repositório de dados (GitHub) — área
+             própria dentro das Configurações pra colar o token e ler/editar
+             o repositório, em vez de um botão que abre outro modal. O token
+             NUNCA fica escrito no código-fonte — só é lido do que a pessoa
+             colar aqui, e fica salvo no localStorage deste navegador, enviado
+             só direto pra api.github.com. ═══ -->
         <div class="flex flex-col gap-1.5 bg-studio-input border studio-border rounded px-3 py-2">
             <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-brands fa-github"></i> Repositório de dados</span>
             <span id="account-settings-github-status" class="text-[10px] text-zinc-500 leading-relaxed"></span>
-            <button onclick="PolyPizza.openGithubSettings()" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-key"></i> Configurar token / repositório</button>
+
+            <label class="text-zinc-400 text-[10px] font-bold mt-1">Token de acesso (Personal Access Token)</label>
+            <input type="password" id="account-settings-gh-token" placeholder="ghp_... ou github_pat_..." class="bg-studio-panel border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+
+            <div class="grid grid-cols-2 gap-1.5">
+                <div class="flex flex-col gap-1">
+                    <label class="text-zinc-400 text-[10px] font-bold">Usuário/organização</label>
+                    <input type="text" id="account-settings-gh-owner" placeholder="ex: joaosilva" class="bg-studio-panel border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-zinc-400 text-[10px] font-bold">Repositório</label>
+                    <input type="text" id="account-settings-gh-repo" placeholder="ex: meus-dados" class="bg-studio-panel border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-zinc-400 text-[10px] font-bold">Branch</label>
+                    <input type="text" id="account-settings-gh-branch" placeholder="main" class="bg-studio-panel border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-zinc-400 text-[10px] font-bold">Arquivo do Toolbox</label>
+                    <input type="text" id="account-settings-gh-path" placeholder="toolbox-catalog.json" class="bg-studio-panel border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1.5 mt-1">
+                <button onclick="Account.saveGithubConfigInline()" class="flex-1 px-2 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
+                <button onclick="Account.disconnectGithubInline()" title="Remove o token deste navegador (o repositório em si não é afetado)" class="px-2 py-1.5 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-unlink"></i></button>
+            </div>
+            <p class="text-zinc-600 text-[9px] leading-relaxed border-t studio-border pt-1.5 mt-1">
+                Crie o token em github.com → Settings → Developer settings → Fine-grained tokens, com permissão de leitura/escrita em <b class="text-zinc-400">Contents</b> só neste repositório. Esse mesmo repositório passa a guardar sua conta, amizades, salas e o catálogo do Toolbox.
+            </p>
         </div>
 
         <div class="border-t studio-border"></div>
@@ -14490,17 +14519,70 @@ const Account = (() => {
         const fb = document.getElementById("account-settings-avatar-fallback");
         if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
         else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
-        // (nova função) Status do repositório de dados (token/GitHub), agora
-        // configurado por aqui em vez de escondido dentro do Toolbox.
+        _renderGithubFieldsInline();
+    }
+
+    /** (nova função) Preenche a área "Repositório de dados" das Configurações
+     *  com o que já estiver salvo — assim dá pra ler E editar o repositório
+     *  direto por ali, sem precisar abrir outro modal. */
+    function _renderGithubFieldsInline() {
+        const cfg = (typeof GithubStorage !== "undefined") ? GithubStorage.getConfig() : null;
+        const tokenEl = document.getElementById("account-settings-gh-token");
+        const ownerEl = document.getElementById("account-settings-gh-owner");
+        const repoEl = document.getElementById("account-settings-gh-repo");
+        const branchEl = document.getElementById("account-settings-gh-branch");
+        const pathEl = document.getElementById("account-settings-gh-path");
+        if (tokenEl) tokenEl.value = cfg?.token || "";
+        if (ownerEl) ownerEl.value = cfg?.owner || "";
+        if (repoEl) repoEl.value = cfg?.repo || "";
+        if (branchEl) branchEl.value = cfg?.branch || "main";
+        if (pathEl) pathEl.value = cfg?.path || "toolbox-catalog.json";
         const ghStatus = document.getElementById("account-settings-github-status");
         if (ghStatus) {
-            if (typeof GithubStorage !== "undefined" && GithubStorage.hasConfig()) {
-                const cfg = GithubStorage.getConfig();
-                ghStatus.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} — sua conta, amizades e salas ficam salvas lá, então dá pra entrar de qualquer navegador/computador.`;
-            } else {
-                ghStatus.textContent = "⚠️ Sem repositório configurado — esta conta existe só neste navegador. Configure abaixo pra acessá-la de qualquer lugar.";
-            }
+            if (cfg) ghStatus.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} — sua conta, amizades e salas ficam salvas lá, então dá pra entrar de qualquer navegador/computador.`;
+            else ghStatus.textContent = "⚠️ Sem repositório configurado — esta conta existe só neste navegador. Preencha os campos abaixo pra acessá-la de qualquer lugar.";
         }
+    }
+
+    /** (nova função) Salva o token/repositório digitado direto nas
+     *  Configurações — mesmo formato usado pelo Toolbox (GithubStorage),
+     *  então tudo (conta, amizades, salas, catálogo) passa a usar o mesmo
+     *  repositório imediatamente. */
+    async function saveGithubConfigInline() {
+        const token  = document.getElementById("account-settings-gh-token").value.trim();
+        const owner  = document.getElementById("account-settings-gh-owner").value.trim();
+        const repo   = document.getElementById("account-settings-gh-repo").value.trim();
+        const branch = document.getElementById("account-settings-gh-branch").value.trim() || "main";
+        const path   = document.getElementById("account-settings-gh-path").value.trim() || "toolbox-catalog.json";
+        if (!token || !owner || !repo) { UI.showToast("Preencha pelo menos Token, Usuário e Repositório."); return; }
+        GithubStorage.saveConfig({ token, owner, repo, branch, path });
+        _renderGithubFieldsInline();
+        UI.showToast("✅ Repositório conectado! Buscando dados...");
+        // Mesmo repositório é usado pelo catálogo do Toolbox — sincroniza
+        // com ele também, se o módulo já estiver carregado.
+        if (typeof PolyPizza !== "undefined" && PolyPizza.syncWithGithub) {
+            try { await PolyPizza.syncWithGithub(); } catch (_) {}
+        }
+        // Busca a versão mais recente da conta atual no repositório recém
+        // conectado (pode já existir lá, criada de outro navegador).
+        if (_current) {
+            try {
+                const fresh = await _ghGetAccounts();
+                if (fresh.ok) {
+                    const found = (fresh.data || []).find(a => a.id === _current.id || a.username.toLowerCase() === _current.username.toLowerCase());
+                    if (found) { _mergeLocalFromRepo(fresh.data); _current = found; renderAll(); }
+                }
+            } catch (_) {}
+        }
+    }
+    /** (nova função) Desconecta o repositório — apaga só o token deste
+     *  navegador; a conta continua existindo no repositório, só que este
+     *  navegador para de ler/escrever nele até configurar de novo. */
+    function disconnectGithubInline() {
+        if (!confirm("Desconectar o repositório? O token salvo neste navegador será apagado (o repositório em si não é afetado).")) return;
+        GithubStorage.clearConfig();
+        _renderGithubFieldsInline();
+        UI.showToast("🔌 Repositório desconectado deste navegador.");
     }
 
     /* ── Meus itens publicados no Toolbox ── */
@@ -14660,6 +14742,7 @@ const Account = (() => {
         openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup,
         openSettingsSidebar, closeSettingsSidebar, openMyToolboxItems, openAccountSwitcher,
         closeAccountSwitcher, openAddFriend, renderAll,
+        saveGithubConfigInline, disconnectGithubInline,
     };
 })();
 
@@ -17432,4 +17515,3 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
-
