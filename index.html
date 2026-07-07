@@ -570,8 +570,10 @@
             <button onclick="UI.closeModal('account-add-friend-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
         <div class="p-4 flex flex-col gap-3">
-            <input type="text" id="account-add-friend-input" placeholder="Nome de usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" onkeydown="if(event.key==='Enter') Account.submitAddFriend();">
-            <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Enviar pedido</button>
+            <input type="text" id="account-add-friend-input" placeholder="Buscar nome de usuário no repositório..." autocomplete="off" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" oninput="Account.searchFriendCandidates(this.value)" onkeydown="if(event.key==='Enter') Account.submitAddFriend();">
+            <div id="account-add-friend-results" class="flex flex-col gap-1 max-h-48 overflow-y-auto empty:hidden"></div>
+            <div id="account-add-friend-hint" class="text-zinc-600 text-[10px] leading-relaxed">Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.</div>
+            <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Enviar pedido (nome exato)</button>
             <p class="text-zinc-600 text-[10px] leading-relaxed">A pessoa precisa aceitar o pedido pra virar amizade de verdade.</p>
         </div>
     </div>
@@ -13989,7 +13991,14 @@ const Account = (() => {
         const digest = await crypto.subtle.digest("SHA-256", bytes);
         return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
     }
-    function _convKey(a, b) { return [a, b].sort((x,y) => x.localeCompare(y)).join("::"); }
+    // (correção) Antes comparava/ordenava usando a caixa original das
+    // strings — "Ana" e "ana" geravam chaves DIFERENTES ("Ana::Keven" vs
+    // "Keven::ana"), então uma mensagem sincronizada do repositório (que
+    // guarda o nome do contato sempre em minúsculo) acabava caindo numa
+    // chave diferente da usada pra exibir a conversa, e simplesmente não
+    // aparecia na tela. Agora a chave é sempre minúscula, então bate com
+    // qualquer caixa usada pra chamar a função.
+    function _convKey(a, b) { return [a, b].map(s => String(s || "").toLowerCase()).sort((x,y) => x.localeCompare(y)).join("::"); }
     function _findByUsername(name) {
         return _loadAccounts().find(a => a.username.toLowerCase() === (name || "").trim().toLowerCase());
     }
@@ -14606,7 +14615,8 @@ const Account = (() => {
     }
     function unreadCountFrom(fromUsername) {
         if (!_current) return 0;
-        return getConversation(fromUsername).filter(m => m.to === _current.username && !m.read).length;
+        const meLower = _current.username.toLowerCase();
+        return getConversation(fromUsername).filter(m => String(m.to || "").toLowerCase() === meLower && !m.read).length;
     }
     function totalUnreadCount() {
         if (!_current) return 0;
@@ -14616,7 +14626,8 @@ const Account = (() => {
         if (!_current) return;
         const msgs = _loadMessages();
         const key = _convKey(_current.username, withUsername);
-        (msgs[key] || []).forEach(m => { if (m.to === _current.username) m.read = true; });
+        const meLower = _current.username.toLowerCase();
+        (msgs[key] || []).forEach(m => { if (String(m.to || "").toLowerCase() === meLower) m.read = true; });
         _saveMessages(msgs);
         renderAll();
     }
@@ -14655,7 +14666,7 @@ const Account = (() => {
         box.innerHTML = "";
         if (!conv.length) { box.innerHTML = `<div class="text-zinc-500 text-[10px] text-center py-4">Nenhuma mensagem ainda — diga oi!</div>`; return; }
         conv.forEach(m => {
-            const mine = m.from === _current.username;
+            const mine = String(m.from || "").toLowerCase() === _current.username.toLowerCase();
             const bubble = document.createElement("div");
             bubble.className = "flex " + (mine ? "justify-end" : "justify-start");
             bubble.innerHTML = `<div class="max-w-[75%] px-2.5 py-1.5 rounded-lg text-[11px] ${mine ? "bg-sky-700 text-white" : "bg-zinc-700 text-zinc-100"}">${_escapeHtml(m.text)}</div>`;
@@ -14722,15 +14733,22 @@ const Account = (() => {
         const repoEl = document.getElementById("account-settings-gh-repo");
         const branchEl = document.getElementById("account-settings-gh-branch");
         const pathEl = document.getElementById("account-settings-gh-path");
+        // (nova função) Repositório padrão deste projeto pré-preenchido —
+        // o usuário só precisa colar o próprio token (nunca fica salvo no
+        // código-fonte, só sugerido nos campos) e clicar em Salvar pra
+        // ativar contas/amizades/mensagens/salas nesse repositório.
+        const DEFAULT_OWNER = "sws68070-bot";
+        const DEFAULT_REPO = "Dados";
+        const DEFAULT_BRANCH = "main";
         if (tokenEl) tokenEl.value = cfg?.token || "";
-        if (ownerEl) ownerEl.value = cfg?.owner || "";
-        if (repoEl) repoEl.value = cfg?.repo || "";
-        if (branchEl) branchEl.value = cfg?.branch || "main";
+        if (ownerEl) ownerEl.value = cfg?.owner || DEFAULT_OWNER;
+        if (repoEl) repoEl.value = cfg?.repo || DEFAULT_REPO;
+        if (branchEl) branchEl.value = cfg?.branch || DEFAULT_BRANCH;
         if (pathEl) pathEl.value = cfg?.path || "toolbox-catalog.json";
         const ghStatus = document.getElementById("account-settings-github-status");
         if (ghStatus) {
             if (cfg) ghStatus.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} — sua conta, amizades e salas ficam salvas lá, então dá pra entrar de qualquer navegador/computador.`;
-            else ghStatus.textContent = "⚠️ Sem repositório configurado — esta conta existe só neste navegador. Preencha os campos abaixo pra acessá-la de qualquer lugar.";
+            else ghStatus.textContent = `⚠️ Sem repositório configurado — esta conta existe só neste navegador. Repositório padrão "${DEFAULT_OWNER}/${DEFAULT_REPO}" já preenchido abaixo — só falta colar seu token do GitHub (com permissão de Contents nesse repositório) e clicar em Salvar.`;
         }
     }
 
@@ -14828,7 +14846,88 @@ const Account = (() => {
     function openAddFriend() {
         if (!_current) { openLogin(); return; }
         document.getElementById("account-add-friend-input").value = "";
+        const results = document.getElementById("account-add-friend-results");
+        if (results) results.innerHTML = "";
+        const hint = document.getElementById("account-add-friend-hint");
+        if (hint) hint.textContent = "Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.";
         UI.openModal("account-add-friend-modal");
+    }
+
+    /* (nova função) Busca ao vivo — qualquer conta que exista no
+       accounts.json do repositório pode ser encontrada, não só um nome
+       exato. Lê o repositório fresco (mesma fonte que addFriend usa pra
+       validar), filtra por trecho do nome digitado, e mostra até 8
+       resultados com o status atual (amigo / pedido pendente / disponível)
+       e um botão de ação pronto pra cada um. Sem repositório configurado,
+       cai pro aviso de sempre em vez de buscar. */
+    let _friendSearchToken = 0;
+    async function searchFriendCandidates(query) {
+        const box = document.getElementById("account-add-friend-results");
+        const hint = document.getElementById("account-add-friend-hint");
+        if (!box) return;
+        query = (query || "").trim();
+        const myToken = ++_friendSearchToken;
+
+        if (!GithubStorage.hasConfig()) {
+            box.innerHTML = "";
+            if (hint) hint.textContent = "⚠️ Configure um repositório GitHub nas Configurações pra poder buscar contas.";
+            return;
+        }
+        if (query.length < 2) {
+            box.innerHTML = "";
+            if (hint) hint.textContent = "Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.";
+            return;
+        }
+        if (hint) hint.textContent = "🔎 Buscando no repositório...";
+
+        const fresh = await _ghGetAccounts();
+        if (myToken !== _friendSearchToken) return; // resposta antiga, digitação já mudou
+        if (!fresh.ok) {
+            box.innerHTML = "";
+            if (hint) hint.textContent = "⚠️ " + (fresh.error || "Não consegui buscar no repositório agora.");
+            return;
+        }
+        _mergeLocalFromRepo(fresh.data);
+
+        const qLower = query.toLowerCase();
+        const meLower = _current.username.toLowerCase();
+        const matches = (fresh.data || [])
+            .filter(a => a.username.toLowerCase() !== meLower && a.username.toLowerCase().includes(qLower))
+            .sort((a, b) => a.username.toLowerCase().indexOf(qLower) - b.username.toLowerCase().indexOf(qLower))
+            .slice(0, 8);
+
+        box.innerHTML = "";
+        if (!matches.length) {
+            if (hint) hint.textContent = "Nenhuma conta encontrada com esse nome no repositório.";
+            return;
+        }
+        if (hint) hint.textContent = `${matches.length} conta(s) encontrada(s) no repositório:`;
+
+        const myFriends = new Set((_current.friends || []).map(f => f.toLowerCase()));
+        const myOutgoing = new Set((_current.outgoingRequests || []).map(f => f.toLowerCase()));
+        const myIncoming = new Set((_current.incomingRequests || []).map(f => f.toLowerCase()));
+
+        matches.forEach(acc => {
+            const uLower = acc.username.toLowerCase();
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+            let actionHtml;
+            if (myFriends.has(uLower)) actionHtml = `<span class="text-[10px] text-emerald-400 font-bold px-2">✓ Amigos</span>`;
+            else if (myOutgoing.has(uLower)) actionHtml = `<span class="text-[10px] text-zinc-500 font-bold px-2">Pedido enviado</span>`;
+            else if (myIncoming.has(uLower)) actionHtml = `<button data-accept class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] rounded font-bold">Aceitar</button>`;
+            else actionHtml = `<button data-add class="px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white text-[10px] rounded font-bold">Adicionar</button>`;
+            row.innerHTML = `
+                <span class="relative inline-block shrink-0">
+                    ${acc.photo ? `<img src="${acc.photo}" class="w-6 h-6 rounded-full object-cover">` : `<i class="fa-solid fa-circle-user text-lg text-zinc-500"></i>`}
+                </span>
+                <span class="flex-1 text-zinc-200 text-xs truncate">${acc.username}</span>
+                ${actionHtml}`;
+            const addBtn = row.querySelector("[data-add]");
+            if (addBtn) addBtn.onclick = () => addFriend(acc.username);
+            const acceptBtn = row.querySelector("[data-accept]");
+            if (acceptBtn) acceptBtn.onclick = () => { acceptFriendRequest(acc.username); UI.closeModal("account-add-friend-modal"); };
+            box.appendChild(row);
+        });
     }
 
     /* ── Renderização geral (painel do topo + header do editor + amizades) ── */
@@ -14927,7 +15026,7 @@ const Account = (() => {
         _init, signup, login, logout, switchTo, isLoggedIn, getCurrentUserId, getDisplayName,
         getCurrentPhoto, getFriendsList, getIncomingRequests,
         applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
-        addFriend, submitAddFriend, removeFriend, acceptFriendRequest, declineFriendRequest,
+        addFriend, submitAddFriend, searchFriendCandidates, removeFriend, acceptFriendRequest, declineFriendRequest,
         sendMessage, submitMessage, getConversation,
         openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup,
         openSettingsSidebar, closeSettingsSidebar, openMyToolboxItems, openAccountSwitcher,
@@ -17705,3 +17804,4 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
