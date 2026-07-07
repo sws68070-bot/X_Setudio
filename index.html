@@ -2545,6 +2545,23 @@ const ThreeManager = (() => {
                         mesh.quaternion.copy(groupPivot.quaternion).multiply(baseQuat);
                     }
                 });
+                // (correção a pedido do usuário) Grupo sendo arrastado: sincroniza
+                // a Position/Rotation de cada membro no Tree em tempo real (não só
+                // no fim do arraste), pra quem mais estiver na sala ver o grupo
+                // inteiro se mexendo, não só o resultado final.
+                groupMembers.forEach(m => { const mesh = objectMap.get(m.id); if (mesh) _syncMeshToNode(mesh); });
+                markDirty();
+            } else if (transform.dragging && transform.object) {
+                // (correção a pedido do usuário) Antes, o Tree (e por tabela a
+                // sincronização multiplayer) só era atualizado quando o mouse era
+                // solto — durante o arraste em si, nada era avisado. Por isso os
+                // outros membros da sala só viam o objeto "teleportar" pro lugar
+                // final, em vez de te verem arrastando de verdade. Agora, a cada
+                // frame do arraste, o node correspondente já é atualizado e o
+                // multiplayer é avisado (o throttle de notifySceneChanged evita
+                // excesso de envios — não precisa se preocupar com performance).
+                _syncMeshToNode(transform.object);
+                markDirty();
             }
             if (composer) composer.render(); else renderer.render(scene, camera);
         });
@@ -15573,9 +15590,21 @@ const Multiplayer = (() => {
        o mesmo ID fixo — os outros detectam a queda da conexão e tentam de
        novo sozinhos, reconectando assim que o novo host sobe. */
     const P2P_HOST_ID = (code) => `rsev3room-${String(code || "").toUpperCase()}`;
-    const SCENE_BROADCAST_DEBOUNCE_MS = 300; // bem mais rápido que o antigo (não tem mais custo de gravar arquivo)
+    // (correção a pedido do usuário) Antes era um debounce puro: toda
+    // mudança cancelava e reagendava o envio, então enquanto alguém
+    // arrastava um objeto (mudança a cada frame) NADA era mandado — só
+    // quando a pessoa parava de mexer por 300ms sem interrupção. Por isso
+    // os outros só viam o objeto "sumir e reaparecer" no lugar final, em
+    // vez de ver a pessoa mexendo em tempo real. Agora é um THROTTLE: manda
+    // no máximo a cada SCENE_BROADCAST_THROTTLE_MS mesmo com mudança
+    // contínua (arrastando, girando, redimensionando...), e ainda garante
+    // um envio final (trailing) com o estado exato assim que a pessoa para.
+    const SCENE_BROADCAST_THROTTLE_MS = 120; // ritmo de envio durante mudança contínua (arrastar etc.)
+    const SCENE_BROADCAST_TRAILING_MS = 250; // envio de garantia com o estado final, após parar de mudar
     const P2P_RETRY_MS = 4000; // intervalo pra tentar (re)conectar no host quando ainda não conseguiu
     let _sceneBroadcastTimer = null;
+    let _sceneTrailingTimer = null;
+    let _lastBroadcastAt = 0; // Date.now() do último envio real (pro throttle)
     let _lastBroadcastSceneSig = null; // último JSON de State.tree que EU já mandei/apliquei
     let _lastAppliedSceneSig = null;   // último JSON de State.tree aplicado no meu editor (meu ou de outro membro)
     let _applyingRemoteScene = false;  // true enquanto aplico a cena de outro membro — evita eco (reenviar o que acabei de receber)
@@ -15918,6 +15947,7 @@ const Multiplayer = (() => {
     function _p2pTeardown() {
         if (_p2pRetryTimer) { clearTimeout(_p2pRetryTimer); _p2pRetryTimer = null; }
         if (_sceneBroadcastTimer) { clearTimeout(_sceneBroadcastTimer); _sceneBroadcastTimer = null; }
+        if (_sceneTrailingTimer) { clearTimeout(_sceneTrailingTimer); _sceneTrailingTimer = null; }
         _peerConns.forEach(c => { try { c.close(); } catch (_) {} });
         _peerConns = new Map();
         if (_hostConn) { try { _hostConn.close(); } catch (_) {} _hostConn = null; }
@@ -16103,12 +16133,31 @@ const Multiplayer = (() => {
      *  um por evento — sem gravar nada no GitHub. */
     function notifySceneChanged() {
         if (!_code || _applyingRemoteScene || _amIViewOnly()) return;
-        if (_sceneBroadcastTimer) clearTimeout(_sceneBroadcastTimer);
-        _sceneBroadcastTimer = setTimeout(_broadcastSceneState, SCENE_BROADCAST_DEBOUNCE_MS);
+        const now = Date.now();
+        const sinceLast = now - _lastBroadcastAt;
+        if (sinceLast >= SCENE_BROADCAST_THROTTLE_MS) {
+            // Já passou tempo suficiente desde o último envio — manda JÁ,
+            // sem esperar (isso é o que faz a pessoa do outro lado ver a
+            // mudança acontecendo, e não só o resultado final).
+            if (_sceneBroadcastTimer) { clearTimeout(_sceneBroadcastTimer); _sceneBroadcastTimer = null; }
+            _broadcastSceneState();
+        } else if (!_sceneBroadcastTimer) {
+            // Ainda dentro da janela de throttle — agenda pro fim dela
+            // (só se não tiver um envio já agendado, pra não atrasar mais).
+            _sceneBroadcastTimer = setTimeout(_broadcastSceneState, SCENE_BROADCAST_THROTTLE_MS - sinceLast);
+        }
+        // Envio de garantia: reagenda toda vez que algo muda, então só
+        // dispara de verdade quando as mudanças realmente pararem — assim
+        // o estado final (ex.: onde a Part ficou depois de soltar o mouse)
+        // sempre chega certinho, mesmo que o throttle acima tenha "pulado"
+        // o último frame da mudança.
+        if (_sceneTrailingTimer) clearTimeout(_sceneTrailingTimer);
+        _sceneTrailingTimer = setTimeout(() => { _sceneTrailingTimer = null; _broadcastSceneState(); }, SCENE_BROADCAST_TRAILING_MS);
     }
 
     function _broadcastSceneState() {
         _sceneBroadcastTimer = null;
+        _lastBroadcastAt = Date.now();
         if (!_code) return;
         const me = _me();
         if (!me) return;
