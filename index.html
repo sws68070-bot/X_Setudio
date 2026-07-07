@@ -279,6 +279,12 @@
                 <button onclick="Account.openLogin()" class="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
                 <button onclick="Account.openSignup()" class="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Cadastrar</button>
             </div>
+            <!-- (nova função) Notificações — pedidos de amizade pendentes, com
+                 Aceitar/Recusar. Fica do lado do botão de configurações. -->
+            <button id="account-notif-btn" onclick="Account.openNotifications()" class="hidden relative items-center justify-center w-9 h-9 bg-studio-panel hover:bg-zinc-700 border studio-border rounded-full">
+                <i class="fa-solid fa-bell text-zinc-300"></i>
+                <span id="account-notif-badge" class="hidden absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center"></span>
+            </button>
             <button id="account-panel-user" onclick="Account.openSettingsSidebar()" class="hidden relative items-center gap-2 px-3 py-1.5 bg-studio-panel hover:bg-zinc-700 border studio-border rounded-full">
                 <img id="account-panel-avatar" src="" class="hidden w-6 h-6 rounded-full object-cover">
                 <i id="account-panel-avatar-fallback" class="fa-solid fa-circle-user text-lg text-zinc-400"></i>
@@ -606,6 +612,21 @@
                 <div id="account-add-friend-mylist" class="flex flex-col gap-1 max-h-40 overflow-y-auto"></div>
                 <div id="account-add-friend-mylist-empty" class="hidden text-zinc-600 text-[10px] text-center py-3">Você ainda não tem amizades.</div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Notificações (pedidos de amizade) ═══ -->
+<div id="account-notifications-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-bell text-amber-300"></i> Notificações</span>
+            <button onclick="UI.closeModal('account-notifications-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-3 flex-1 overflow-y-auto flex flex-col gap-2">
+            <div class="text-zinc-400 text-[10px] font-bold uppercase tracking-wide flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Pedidos de amizade</div>
+            <div id="account-notifications-list" class="flex flex-col gap-1"></div>
+            <div id="account-notifications-empty" class="hidden text-zinc-600 text-[10px] text-center py-6">Nenhum pedido de amizade pendente.</div>
         </div>
     </div>
 </div>
@@ -15085,6 +15106,40 @@ const Account = (() => {
     }
     function closeAccountSwitcher() { UI.closeModal("account-switcher-modal"); }
 
+    /* ── (nova função) Notificações — pedidos de amizade, com Aceitar/Recusar,
+       num painel próprio do lado do botão de configurações (além da seção
+       que já existe na tela inicial e da lista dentro do "Adicionar amizade"
+       — assim dá pra ver isso de qualquer lugar, sem precisar voltar pra
+       tela inicial). ── */
+    function openNotifications() {
+        if (!_current) { openLogin(); return; }
+        _renderNotifications();
+        UI.openModal("account-notifications-modal");
+    }
+    function _renderNotifications() {
+        const list = document.getElementById("account-notifications-list");
+        const empty = document.getElementById("account-notifications-empty");
+        if (!list) return;
+        const incoming = getIncomingRequests();
+        list.innerHTML = "";
+        empty.classList.toggle("hidden", incoming.length > 0);
+        incoming.forEach(name => {
+            const acc = _findByUsername(name);
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+            row.innerHTML = `
+                <span class="relative inline-block shrink-0">
+                    ${acc && acc.photo ? `<img src="${acc.photo}" class="w-7 h-7 rounded-full object-cover">` : `<i class="fa-solid fa-circle-user text-xl text-zinc-500"></i>`}
+                </span>
+                <span class="flex-1 text-zinc-200 text-xs truncate"><b>${name}</b> quer ser sua amizade</span>
+                <button data-accept class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] rounded font-bold">Aceitar</button>
+                <button data-decline class="px-2 py-1 bg-red-900 hover:bg-red-800 text-red-200 text-[10px] rounded font-bold">Recusar</button>`;
+            row.querySelector("[data-accept]").onclick = () => acceptFriendRequest(name).then(() => _renderNotifications());
+            row.querySelector("[data-decline]").onclick = () => declineFriendRequest(name).then(() => _renderNotifications());
+            list.appendChild(row);
+        });
+    }
+
     /* ── Adicionar amizade (modal) ── */
     function openAddFriend() {
         if (!_current) { openLogin(); return; }
@@ -15214,7 +15269,7 @@ const Account = (() => {
             let actionHtml;
             if (myFriends.has(uLower)) actionHtml = `<span class="text-[10px] text-emerald-400 font-bold px-2">✓ Amigos</span>`;
             else if (myOutgoing.has(uLower)) actionHtml = `<span class="text-[10px] text-zinc-500 font-bold px-2">Pedido enviado</span>`;
-            else if (myIncoming.has(uLower)) actionHtml = `<button data-accept class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] rounded font-bold">Aceitar</button>`;
+            else if (myIncoming.has(uLower)) actionHtml = `<button data-accept class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] rounded font-bold">Aceitar</button><button data-decline class="px-2 py-1 bg-red-900 hover:bg-red-800 text-red-200 text-[10px] rounded font-bold ml-1">Recusar</button>`;
             else actionHtml = `<button data-add class="px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white text-[10px] rounded font-bold">Adicionar</button>`;
             row.innerHTML = `
                 <span class="relative inline-block shrink-0">
@@ -15226,6 +15281,8 @@ const Account = (() => {
             if (addBtn) addBtn.onclick = () => addFriend(u.username);
             const acceptBtn = row.querySelector("[data-accept]");
             if (acceptBtn) acceptBtn.onclick = () => { acceptFriendRequest(u.username); UI.closeModal("account-add-friend-modal"); };
+            const declineBtn = row.querySelector("[data-decline]");
+            if (declineBtn) declineBtn.onclick = () => declineFriendRequest(u.username).then(() => searchFriendCandidates(document.getElementById("account-add-friend-input").value));
             box.appendChild(row);
         });
     }
@@ -15244,6 +15301,7 @@ const Account = (() => {
             document.getElementById("header-profile-avatar")?.classList.add("hidden");
             document.getElementById("header-profile-avatar-fallback")?.classList.remove("hidden");
             document.getElementById("header-profile-badge")?.classList.add("hidden");
+            document.getElementById("account-notif-btn")?.classList.add("hidden");
             return;
         }
 
@@ -15272,6 +15330,17 @@ const Account = (() => {
         headerBadge.classList.toggle("hidden", notifCount === 0);
         headerBadge.textContent = notifCount > 9 ? "9+" : String(notifCount);
         headerBadge.title = badge.title;
+
+        // (nova função) Botão de notificações (sino) — do lado do botão de
+        // configurações — mostra só a contagem de pedidos de amizade.
+        const notifBtn = document.getElementById("account-notif-btn");
+        if (notifBtn) {
+            notifBtn.classList.remove("hidden");
+            notifBtn.classList.add("flex");
+            const notifBadge = document.getElementById("account-notif-badge");
+            notifBadge.classList.toggle("hidden", pendingRequests === 0);
+            notifBadge.textContent = pendingRequests > 9 ? "9+" : String(pendingRequests);
+        }
 
         // (nova função) Pedidos de amizade recebidos — precisam aceitar/recusar
         const reqSection = document.getElementById("account-friend-requests-section");
@@ -15335,7 +15404,7 @@ const Account = (() => {
         sendMessage, submitMessage, getConversation,
         openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup,
         openSettingsSidebar, closeSettingsSidebar, openMyToolboxItems, openAccountSwitcher,
-        closeAccountSwitcher, openAddFriend, renderAll,
+        closeAccountSwitcher, openAddFriend, openNotifications, renderAll,
         saveGithubConfigInline, disconnectGithubInline,
     };
 })();
@@ -18622,4 +18691,3 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
-
