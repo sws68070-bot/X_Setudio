@@ -235,9 +235,308 @@
         #gltf-modal .bg-studio-panel, #plugin-manager-modal .bg-studio-panel {
             box-shadow: 0 20px 60px rgba(0,0,0,0.55);
         }
+
+        /* ── (nova função) TEMA CLARO — alternado pela barra de configurações
+           da conta (Account.toggleTheme). Sobrescreve as classes de cor
+           customizadas do editor (definidas acima) e as classes utilitárias
+           de texto mais usadas. Aplicado no <body> como body.theme-light. ── */
+        body.theme-light { background:#f2f2f2; color:#1a1a1a; }
+        body.theme-light .bg-studio-dark { background-color:#e6e6e6 !important; }
+        body.theme-light .bg-studio-panel { background-color:#ffffff !important; }
+        body.theme-light .bg-studio-input { background-color:#f0f0f0 !important; }
+        body.theme-light .studio-border { border-color:#d0d0d0 !important; }
+        body.theme-light .text-white { color:#1a1a1a !important; }
+        body.theme-light .text-gray-200,
+        body.theme-light .text-zinc-200,
+        body.theme-light .text-zinc-300 { color:#333 !important; }
+        body.theme-light .text-zinc-400,
+        body.theme-light .text-zinc-500 { color:#666 !important; }
+        body.theme-light .text-zinc-600 { color:#999 !important; }
+        body.theme-light .hover\:bg-zinc-600:hover,
+        body.theme-light .hover\:bg-zinc-700:hover { background-color:#e0e0e0 !important; }
+        body.theme-light ::-webkit-scrollbar-track { background:#eee; }
+        body.theme-light ::-webkit-scrollbar-thumb { background:#ccc; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-xs select-none">
+
+<!-- ═══════════════════════════════════════════════════ TELA INICIAL (nova função) ═══
+     Aparece por cima de tudo assim que o site abre. Duas áreas (Projetos
+     publicados / Meus projetos salvos) + botão de criar projeto novo.
+     Tudo local (localStorage) — ver App.PUBLISHED_PROJECTS_KEY / NAMED_PROJECTS_KEY. -->
+<div id="landing-screen" class="fixed inset-0 z-[200] bg-studio-dark flex flex-col items-center overflow-y-auto py-10 px-4">
+    <div class="w-full max-w-4xl flex flex-col gap-8">
+
+        <!-- ═══ (nova função) PAINEL DE CONTA — topo da tela inicial ═══
+             Enquanto ninguém entrou: botões "Entrar" / "Cadastrar".
+             Depois de entrar/cadastrar: vira um botão de perfil (foto +
+             nome, com selo de mensagens não lidas) que abre a barra de
+             configurações lateral. Ver módulo Account. -->
+        <div class="w-full flex justify-end items-center gap-2">
+            <!-- (nova função) Botão Multiplayer — abre o lobby de criar/entrar em sala. Ver módulo Multiplayer. -->
+            <button onclick="Multiplayer.openLobby()" class="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-users-viewfinder"></i> Multiplayer</button>
+            <div id="account-panel-guest" class="flex items-center gap-2">
+                <button onclick="Account.openLogin()" class="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
+                <button onclick="Account.openSignup()" class="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Cadastrar</button>
+            </div>
+            <button id="account-panel-user" onclick="Account.openSettingsSidebar()" class="hidden relative items-center gap-2 px-3 py-1.5 bg-studio-panel hover:bg-zinc-700 border studio-border rounded-full">
+                <img id="account-panel-avatar" src="" class="hidden w-6 h-6 rounded-full object-cover">
+                <i id="account-panel-avatar-fallback" class="fa-solid fa-circle-user text-lg text-zinc-400"></i>
+                <span id="account-panel-username" class="text-white text-xs font-bold"></span>
+                <i class="fa-solid fa-gear text-zinc-400 text-xs"></i>
+                <span id="account-panel-badge" class="hidden absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center"></span>
+            </button>
+        </div>
+
+        <div class="text-center">
+            <h1 class="text-2xl font-bold text-white flex items-center justify-center gap-2">
+                <i class="fa-solid fa-cubes text-orange-400"></i> Roblox Studio Engine
+            </h1>
+            <p class="text-zinc-500 text-xs mt-1">Escolha um projeto publicado, abra um projeto salvo, ou comece um novo do zero.</p>
+        </div>
+
+        <div class="flex justify-center">
+            <button onclick="App.landingCreateNew()" class="px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg">
+                <i class="fa-solid fa-file-circle-plus"></i> Criar projeto novo
+            </button>
+        </div>
+
+        <!-- ═══ (nova função) Lista de amizades na tela inicial ═══ -->
+        <div id="account-friends-section" class="hidden">
+            <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-user-group text-sky-300"></i> Amizades
+                <!-- (nova função) Pedidos pra entrar na minha sala em modo visualização — ver Módulo 12B · Multiplayer -->
+                <button id="mp-join-requests-btn" onclick="Multiplayer.openJoinRequestsModal()" class="hidden relative ml-auto px-2 py-1 bg-purple-800 hover:bg-purple-700 text-white text-[10px] rounded font-bold items-center gap-1">
+                    <i class="fa-solid fa-bell"></i> Pedidos
+                    <span id="mp-join-requests-badge" class="hidden absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 items-center justify-center flex"></span>
+                </button>
+                <button onclick="Account.openAddFriend()" class="px-2 py-1 bg-sky-800 hover:bg-sky-700 text-white text-[10px] rounded font-bold flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Adicionar amizade</button>
+            </h2>
+            <div id="account-friends-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+            <div id="account-friends-empty" class="hidden text-zinc-500 text-xs text-center py-6 bg-studio-panel border studio-border rounded-lg">
+                Você ainda não adicionou nenhuma amizade.
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-cloud-arrow-up text-pink-400"></i> Projetos publicados
+            </h2>
+            <div id="landing-published-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+            <div id="landing-published-empty" class="hidden text-zinc-500 text-xs text-center py-6 bg-studio-panel border studio-border rounded-lg">
+                Nenhum projeto publicado ainda. Use Arquivo → "Publicar projeto..." pra aparecer aqui.
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-box-open text-purple-300"></i> Meus projetos salvos
+            </h2>
+            <div id="landing-mine-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+            <div id="landing-mine-empty" class="hidden text-zinc-500 text-xs text-center py-6 bg-studio-panel border studio-border rounded-lg">
+                Nenhum projeto salvo ainda. Use Arquivo → "Salvar projeto com nome..." pra aparecer aqui.
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Entrar ═══ -->
+<div id="account-login-modal" class="fixed inset-0 bg-black/70 z-[210] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-right-to-bracket text-emerald-400"></i> Entrar</span>
+            <button onclick="UI.closeModal('account-login-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-4 flex flex-col gap-3">
+            <input type="text" id="account-login-username" placeholder="Usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-emerald-500">
+            <input type="password" id="account-login-password" placeholder="Senha" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-emerald-500">
+            <button onclick="Account.submitLogin()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs">Entrar</button>
+            <button onclick="Account.openSignup()" class="text-zinc-500 hover:text-zinc-300 text-[10px] text-center">Não tem conta? Cadastre-se</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Cadastrar ═══ -->
+<div id="account-signup-modal" class="fixed inset-0 bg-black/70 z-[210] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-user-plus text-orange-400"></i> Cadastrar</span>
+            <button onclick="UI.closeModal('account-signup-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-4 flex flex-col gap-3">
+            <input type="text" id="account-signup-username" placeholder="Escolha um usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+            <input type="password" id="account-signup-password" placeholder="Escolha uma senha" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+            <button onclick="Account.submitSignup()" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs">Criar conta</button>
+            <button onclick="Account.openLogin()" class="text-zinc-500 hover:text-zinc-300 text-[10px] text-center">Já tem conta? Entrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) BARRA LATERAL — Configurações da conta ═══ -->
+<div id="account-settings-overlay" onclick="Account.closeSettingsSidebar()" class="hidden fixed inset-0 bg-black/50 z-[210]"></div>
+<div id="account-settings-sidebar" class="fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-studio-panel border-l-2 studio-border z-[211] flex flex-col transition-transform duration-200 translate-x-full">
+    <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center flex-shrink-0">
+        <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-gear text-zinc-400"></i> Configurações da conta</span>
+        <button onclick="Account.closeSettingsSidebar()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+
+        <!-- Perfil -->
+        <div class="flex flex-col items-center gap-2">
+            <div class="relative">
+                <img id="account-settings-avatar" src="" class="hidden w-16 h-16 rounded-full object-cover border-2 studio-border">
+                <i id="account-settings-avatar-fallback" class="fa-solid fa-circle-user text-6xl text-zinc-500"></i>
+                <label class="absolute bottom-0 right-0 bg-zinc-700 hover:bg-zinc-600 rounded-full w-6 h-6 flex items-center justify-center cursor-pointer border studio-border" title="Mudar foto de perfil">
+                    <i class="fa-solid fa-camera text-[10px] text-white"></i>
+                    <input type="file" accept="image/*" class="hidden" onchange="Account.onPhotoFileSelected(this)">
+                </label>
+            </div>
+            <div id="account-settings-name" class="text-white font-bold text-sm"></div>
+        </div>
+
+        <!-- Tema -->
+        <div class="flex items-center justify-between bg-studio-input border studio-border rounded px-3 py-2">
+            <span class="text-zinc-300 text-xs flex items-center gap-2"><i class="fa-solid fa-circle-half-stroke"></i> Tema do editor</span>
+            <button id="account-theme-toggle-btn" onclick="Account.toggleTheme()" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-white text-[10px] font-bold"></button>
+        </div>
+
+        <!-- Mudar nome de usuário -->
+        <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 text-xs font-bold">Nome de usuário</label>
+            <div class="flex gap-1">
+                <input type="text" id="account-settings-username-input" class="flex-1 bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs">
+                <button onclick="Account.changeUsername(document.getElementById('account-settings-username-input').value)" class="px-3 bg-blue-700 hover:bg-blue-600 rounded text-white text-xs font-bold">Salvar</button>
+            </div>
+        </div>
+
+        <!-- Mudar senha -->
+        <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 text-xs font-bold">Nova senha</label>
+            <div class="flex gap-1">
+                <input type="password" id="account-settings-password-input" placeholder="••••••••" class="flex-1 bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600">
+                <button onclick="Account.changePassword(document.getElementById('account-settings-password-input').value); document.getElementById('account-settings-password-input').value='';" class="px-3 bg-blue-700 hover:bg-blue-600 rounded text-white text-xs font-bold">Salvar</button>
+            </div>
+        </div>
+
+        <div class="border-t studio-border"></div>
+
+        <!-- Itens publicados no Toolbox -->
+        <button onclick="Account.openMyToolboxItems()" class="w-full px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-2"><i class="fa-solid fa-toolbox text-orange-400"></i> Meus itens publicados no Toolbox</button>
+
+        <div class="border-t studio-border"></div>
+
+        <button onclick="Account.logout()" class="w-full px-3 py-2 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-xs flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Sair desta conta</button>
+    </div>
+
+    <!-- Rodapé: trocar de conta -->
+    <div class="p-3 border-t studio-border flex-shrink-0">
+        <button onclick="Account.openAccountSwitcher()" class="w-full px-3 py-2 bg-purple-800 hover:bg-purple-700 text-white rounded font-bold text-xs flex items-center gap-2 justify-center"><i class="fa-solid fa-users-rectangle"></i> Trocar de conta</button>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Meus itens publicados no Toolbox ═══ -->
+<div id="account-toolbox-items-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-md rounded-lg shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-toolbox text-orange-400"></i> Meus itens no Toolbox</span>
+            <button onclick="UI.closeModal('account-toolbox-items-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div id="account-toolbox-items-list" class="p-3 flex flex-col gap-2 overflow-y-auto"></div>
+        <div id="account-toolbox-items-empty" class="hidden text-zinc-500 text-xs text-center py-6">Você ainda não publicou nada no Toolbox.</div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Trocar de conta ═══ -->
+<div id="account-switcher-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-users-rectangle text-purple-300"></i> Trocar de conta</span>
+        </div>
+        <div id="account-switcher-list" class="p-3 flex flex-col gap-2 overflow-y-auto"></div>
+        <div class="p-3 border-t studio-border flex flex-col gap-2">
+            <button onclick="Account.closeAccountSwitcher(); Account.openSignup();" class="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs flex items-center gap-2 justify-center"><i class="fa-solid fa-user-plus"></i> Adicionar conta</button>
+            <button onclick="Account.closeAccountSwitcher()" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Adicionar amizade ═══ -->
+<!-- ═══ (nova função) MODAL — Lobby do Multiplayer (Criar sala / Entrar em sala) ═══ -->
+<div id="multiplayer-lobby-modal" class="fixed inset-0 bg-black/70 z-[215] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-users-viewfinder text-purple-400"></i> Multiplayer</span>
+            <button onclick="Multiplayer.closeLobby()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-4 flex flex-col gap-3">
+            <button onclick="Multiplayer.createRoom()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> Criar sala</button>
+            <div class="flex items-center gap-2 text-zinc-600 text-[10px]"><div class="flex-1 h-px bg-zinc-700"></div>ou<div class="flex-1 h-px bg-zinc-700"></div></div>
+            <input type="text" id="mp-join-code-input" placeholder="Código da sala" maxlength="6" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 uppercase tracking-widest text-center" onkeydown="if(event.key==='Enter') Multiplayer.submitJoin();">
+            <button onclick="Multiplayer.submitJoin()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-right-to-bracket"></i> Entrar em sala</button>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">As salas usam o GitHub configurado (botão GitHub no Toolbox) como banco de dados — configure isso antes de usar o multiplayer. Também é preciso estar logado numa conta.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Painel da sala (ID, membros, coroa, remover) ═══ -->
+<div id="mp-room-modal" class="fixed inset-0 bg-black/70 z-[215] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-sm rounded-lg shadow-2xl">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-users-viewfinder text-purple-400"></i> Sala <span id="mp-room-code-text" class="text-purple-300 tracking-widest"></span></span>
+            <button onclick="Multiplayer.closeRoomPanel()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-3 flex flex-col gap-2">
+            <button onclick="navigator.clipboard.writeText(Multiplayer.currentRoomCode()||''); UI.showToast('📋 Código copiado!')" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-copy"></i> Copiar código da sala</button>
+            <div id="mp-room-members" class="flex flex-col gap-1 max-h-56 overflow-y-auto"></div>
+            <button onclick="Multiplayer.leaveRoom()" class="mt-2 px-3 py-1.5 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-door-open"></i> Sair da sala</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Pedidos de amizades pra entrar na minha sala,
+     em modo visualização (só olham, não editam nada) — ver Módulo 12B ═══ -->
+<div id="mp-join-requests-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-sm rounded-lg shadow-2xl">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-bell text-purple-400"></i> Pedidos pra entrar</span>
+            <button onclick="Multiplayer.closeJoinRequestsModal()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-3 flex flex-col gap-2">
+            <p class="text-zinc-600 text-[10px] leading-relaxed">Amizades que pediram pra entrar na sua sala atual em modo visualização — elas só acompanham quem está na sala, sem poder editar nem expulsar ninguém.</p>
+            <div id="mp-join-requests-list" class="flex flex-col gap-1 max-h-56 overflow-y-auto"></div>
+            <div id="mp-join-requests-empty" class="hidden text-zinc-500 text-[10px] text-center py-4">Nenhum pedido no momento.</div>
+        </div>
+    </div>
+</div>
+
+<div id="account-add-friend-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-user-plus text-sky-300"></i> Adicionar amizade</span>
+            <button onclick="UI.closeModal('account-add-friend-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-4 flex flex-col gap-3">
+            <input type="text" id="account-add-friend-input" placeholder="Nome de usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600">
+            <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Adicionar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ (nova função) MODAL — Conversa com amizade ═══ -->
+<div id="account-message-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-sm rounded-lg shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span id="account-message-title" class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-comment-dots text-sky-300"></i> Conversa</span>
+            <button onclick="Account.closeMessagePanel()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div id="account-message-list" class="p-3 flex flex-col gap-2 overflow-y-auto flex-1 min-h-[160px]"></div>
+        <div class="p-3 border-t studio-border flex gap-2">
+            <input type="text" id="account-message-input" placeholder="Escreva uma mensagem..." class="flex-1 bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" onkeydown="if(event.key==='Enter') Account.submitMessage();">
+            <button onclick="Account.submitMessage()" class="px-3 bg-sky-700 hover:bg-sky-600 rounded text-white"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+    </div>
+</div>
 
 <div id="pointer-lock-hint" class="hidden fixed inset-0 z-[60] items-center justify-center bg-black/40 pointer-events-none">
     <div class="bg-black/80 text-white text-sm px-5 py-3 rounded-lg border border-zinc-600 font-mono text-center">
@@ -249,6 +548,19 @@
 <!-- ═══════════════════════════════════════════════════ HEADER ═══ -->
 <header id="app-header" class="bg-studio-dark studio-border border-b p-1 flex items-center justify-between gap-2 z-10 flex-shrink-0 transition-all">
     <div class="flex items-center gap-2 flex-wrap">
+
+        <!-- (nova função) Foto de perfil — na frente do botão Arquivo. Leva
+             pra área inicial (mesma tela onde fica o painel de conta). -->
+        <button onclick="App.openLanding()" title="Voltar pra área inicial / conta" class="relative w-7 h-7 rounded-full overflow-hidden border studio-border flex items-center justify-center bg-studio-panel hover:bg-zinc-700 flex-shrink-0">
+            <img id="header-profile-avatar" src="" class="hidden w-full h-full object-cover">
+            <i id="header-profile-avatar-fallback" class="fa-solid fa-circle-user text-lg text-zinc-400"></i>
+            <span id="header-profile-badge" class="hidden absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-bold rounded-full min-w-[14px] h-3.5 px-0.5 flex items-center justify-center"></span>
+        </button>
+
+        <!-- (nova função) Selo da sala multiplayer — só aparece quando está numa sala. Ver módulo Multiplayer. -->
+        <button id="mp-room-badge" onclick="Multiplayer.openRoomPanel()" title="Ver sala multiplayer" class="hidden px-2 py-1 bg-purple-800 hover:bg-purple-700 text-white rounded font-bold text-[10px] items-center gap-1 flex-shrink-0">
+            <i class="fa-solid fa-users-viewfinder"></i> <span id="mp-room-badge-code"></span>
+        </button>
 
         <!-- Arquivo -->
         <div class="relative menu-wrap" id="file-menu-wrap" onmouseenter="UI.openDropdown('file-menu-dropdown')" onmouseleave="UI.scheduleCloseDropdown('file-menu-dropdown')">
@@ -265,6 +577,7 @@
                 <div class="border-t studio-border my-1"></div>
                 <button onclick="App.saveProjectAs()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-tag text-purple-400 w-4"></i> Salvar projeto com nome...</button>
                 <button onclick="App.openNamedProjectsModal()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-box-open text-purple-300 w-4"></i> Meus projetos salvos</button>
+                <button onclick="App.openLanding()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-table-cells-large text-pink-300 w-4"></i> Ver projetos publicados</button>
                 <button onclick="App.openGltfModal()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-cube text-purple-400 w-4"></i> Importar GLTF/GLB</button>
                 <div class="border-t border-zinc-700 my-1"></div>
                 <button onclick="App.resetToNew()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 text-red-400 flex items-center gap-2 transition-colors"><i class="fa-solid fa-file-circle-plus w-4"></i> Novo</button>
@@ -768,7 +1081,7 @@
             <div class="flex items-center gap-2">
                 <!-- (nova função) Histórico e Publicar, lado a lado -->
                 <button onclick="PolyPizza.openHistory()" title="Ver itens adicionados/copiados" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
-                <button onclick="PolyPizza.openGithubSettings()" title="Guardar os itens publicados num repositório do GitHub, em vez de só neste navegador" id="toolbox-github-btn" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded font-bold text-xs flex items-center gap-1"><i class="fa-brands fa-github"></i> GitHub</button>
+                <button onclick="PolyPizza.openGithubSettings()" title="Guardar os itens publicados num repositório do GitHub, em vez de só neste navegador" id="toolbox-github-btn" class="hidden px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded font-bold text-xs items-center gap-1"><i class="fa-brands fa-github"></i> GitHub</button>
                 <button onclick="PolyPizza.openPublish()" title="Publicar Malha, Modelo, Plugin, Som ou Imagem" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-cloud-arrow-up"></i> Publicar</button>
                 <button onclick="UI.closeModal('poly-pizza-modal')" class="text-zinc-400 hover:text-white text-lg font-bold ml-1">&times;</button>
             </div>
@@ -985,9 +1298,11 @@
                 <span class="text-zinc-600 text-[10px]">Preencha o Link OU cole o código aqui — pelo menos um dos dois.</span>
             </div>
 
-            <div class="flex flex-col gap-1">
-                <label class="text-zinc-400 text-xs font-bold">Autor (opcional)</label>
-                <input type="text" id="toolbox-publish-author" placeholder="Seu nome ou apelido" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-emerald-500">
+            <!-- (nova função) Autor não é mais digitado à mão — preenchido
+                 automaticamente com a conta logada (Account.getDisplayName()). -->
+            <div class="flex items-center gap-2 text-zinc-500 text-[10px] bg-studio-input border studio-border rounded px-3 py-2">
+                <i class="fa-solid fa-user-pen"></i>
+                <span>Autor: <b id="toolbox-publish-author-preview" class="text-zinc-300">Anônimo</b> <span class="text-zinc-600">(preenchido automaticamente pela conta logada)</span></span>
             </div>
 
             <!-- (nova função) Imagem de capa/thumbnail — vale pra qualquer tipo,
@@ -3763,9 +4078,31 @@ const GltfManager = (() => {
 const GithubStorage = (() => {
     const CONFIG_KEY = "github_storage_config_v1";
 
+    // (nova função) Configuração fixa pra não precisar preencher o modal
+    // toda vez que abrir o arquivo neste computador. SÓ FAÇA ISSO EM
+    // ARQUIVOS DE USO PESSOAL — nunca distribua este .html com o token
+    // preenchido aqui, porque qualquer um que abrir "Ver código-fonte"
+    // consegue ler e usar o token.
+    const DEFAULT_CONFIG = {
+        token:  "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",
+        owner:  "sws68070-bot",
+        repo:   "Dados",
+        branch: "main",
+        path:   "toolbox-catalog.json",
+    };
+
     function getConfig() {
-        try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || "null"); }
-        catch { return null; }
+        try {
+            const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
+            if (saved && saved.token && saved.owner && saved.repo && saved.path) return saved;
+        } catch (_) {}
+        // Sem configuração salva ainda (ou token de exemplo não trocado) —
+        // usa o padrão fixo acima, e já salva pra não perguntar de novo.
+        if (DEFAULT_CONFIG.token && DEFAULT_CONFIG.token !== "COLE_SEU_TOKEN_AQUI") {
+            try { localStorage.setItem(CONFIG_KEY, JSON.stringify(DEFAULT_CONFIG)); } catch (_) {}
+            return DEFAULT_CONFIG;
+        }
+        return null;
     }
     function hasConfig() {
         const c = getConfig();
@@ -4014,6 +4351,15 @@ const PolyPizza = (() => {
     function _uid() {
         return (crypto.randomUUID ? crypto.randomUUID() : "id_" + Date.now() + "_" + Math.random().toString(36).slice(2));
     }
+    // (nova função) Gera um id ESTÁVEL a partir do link de download — ao
+    // contrário de _uid() (aleatório), a mesma malha pesquisada de novo cai
+    // sempre no mesmo id, então _mergeCatalogs() atualiza em vez de duplicar.
+    function _stableId(str) {
+        let h = 0;
+        const s = String(str || "");
+        for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+        return "mc_" + (h >>> 0).toString(36);
+    }
     function _loadCatalog() {
         try { return JSON.parse(localStorage.getItem(CATALOG_STORAGE) || "[]"); }
         catch { return []; }
@@ -4108,6 +4454,78 @@ const PolyPizza = (() => {
         const pushRes = await _githubPush(merged, "Sincroniza catálogo do Toolbox");
         if (pushRes.ok) UI.showToast("✅ Catálogo do Toolbox sincronizado com o GitHub!");
         else UI.showToast("⚠️ Baixei do GitHub, mas não consegui enviar de volta: " + pushRes.error);
+    }
+
+    /** (nova função) Roda uma vez, no boot do app — sincroniza o catálogo
+     *  com o GitHub sem precisar abrir o Toolbox nem clicar em nada.
+     *  Silencioso: sem toast de erro (sem internet/config é normal). */
+    async function autoSyncOnBoot() {
+        if (!GithubStorage.hasConfig()) return;
+        await _githubPullMerge(true);
+        UI.log("☁️ Catálogo do Toolbox sincronizado com o GitHub ao abrir o app.", "info");
+    }
+
+    /** (nova função) Converte uma malha da API do poly.pizza (Title/
+     *  Thumbnail/Download/Attribution) pro formato do catálogo (title/
+     *  thumbnail/link/author), com id ESTÁVEL (baseado no link) — assim a
+     *  mesma malha pesquisada de novo atualiza em vez de duplicar. */
+    function _apiItemToCatalogEntry(item) {
+        return {
+            id: _stableId(item.Download || item.download),
+            type: "mesh",
+            title: item.Title || item.title || "Sem nome",
+            author: item.Attribution || item.attribution || "",
+            thumbnail: item.Thumbnail || item.thumbnail || "",
+            link: item.Download || item.download,
+            addedAt: Date.now(),
+            source: "api_cache", // marca que veio de busca, não de "Publicar" manual
+        };
+    }
+
+    /** (nova função) Converte de volta um item do catálogo (formato
+     *  interno) pro formato de card (Title/Thumbnail/Download/Attribution)
+     *  usado por _buildCard/_renderFallback/_renderResults. */
+    function _catalogEntryToCard(entry) {
+        return { Title: entry.title, Thumbnail: entry.thumbnail, Download: entry.link, Attribution: entry.author };
+    }
+
+    /** (nova função) Procura no catálogo local (já sincronizado com o
+     *  repositório) por malhas cujo título bata com o termo — é o que
+     *  garante que a busca "olhe primeiro o repositório": isso roda ANTES
+     *  de qualquer chamada à API ao vivo do poly.pizza. */
+    function _catalogMeshMatches(term) {
+        const t = (term || "").toLowerCase().trim();
+        const items = _loadCatalog().filter(e => e.type === "mesh" && e.link);
+        const matched = t ? items.filter(e => (e.title || "").toLowerCase().includes(t)) : items;
+        return matched.map(_catalogEntryToCard);
+    }
+
+    /** (nova função) Depois de uma busca ao vivo trazer resultados novos da
+     *  API, guarda todos no catálogo (pra aparecerem em buscas futuras sem
+     *  precisar de rede) e sincroniza com o GitHub — assim toda malha
+     *  pesquisada por qualquer um fica salva e disponível pra todo mundo. */
+    async function _cacheMeshResults(items) {
+        if (!Array.isArray(items) || !items.length) return;
+        const novos = items.map(_apiItemToCatalogEntry).filter(e => e.link);
+        const atual = _loadCatalog();
+        const merged = _mergeCatalogs(atual, novos); // novos ganham em empate de id (atualiza)
+        _saveCatalog(merged);
+        if (_catalogMode === "mesh") _renderMeshPublished();
+
+        if (GithubStorage.hasConfig()) {
+            try {
+                const res = await GithubStorage.pull();
+                const base = res.ok ? res.data : atual;
+                if (res.ok) _githubSha = res.sha;
+                const finalMerged = _mergeCatalogs(base, novos);
+                _saveCatalog(finalMerged);
+                const pushRes = await _githubPush(finalMerged, "Guarda malhas pesquisadas no Toolbox");
+                if (pushRes.ok) UI.log(`☁️ ${novos.length} malha(s) da busca salva(s) no repositório.`, "info");
+                else UI.log("⚠️ Não consegui salvar as malhas pesquisadas no GitHub: " + pushRes.error, "error");
+            } catch (e) {
+                UI.log("⚠️ Falha ao salvar malhas pesquisadas no GitHub: " + e.message, "error");
+            }
+        }
     }
 
     /** Abre o modal de configuração do GitHub, já preenchido com o que
@@ -4441,9 +4859,11 @@ const PolyPizza = (() => {
         document.getElementById("toolbox-publish-type").value = _catalogMode;
         document.getElementById("toolbox-publish-title").value = "";
         document.getElementById("toolbox-publish-link").value = "";
-        document.getElementById("toolbox-publish-author").value = "";
         document.getElementById("toolbox-publish-thumbnail").value = "";
         document.getElementById("toolbox-publish-code").value = "";
+        // (nova função) Autor não é mais digitado — mostra quem está logado agora.
+        const authorPreview = document.getElementById("toolbox-publish-author-preview");
+        if (authorPreview) authorPreview.textContent = (window.Account && Account.getDisplayName()) || "Anônimo";
         onPublishTypeChange();
         UI.openModal("toolbox-publish-modal");
     }
@@ -4452,13 +4872,16 @@ const PolyPizza = (() => {
         const type      = document.getElementById("toolbox-publish-type").value;
         const title     = document.getElementById("toolbox-publish-title").value.trim();
         const link      = document.getElementById("toolbox-publish-link").value.trim();
-        const author    = document.getElementById("toolbox-publish-author").value.trim();
+        // (nova função) Autor preenchido automaticamente pela conta logada,
+        // em vez de um campo digitado à mão.
+        const author    = (window.Account && Account.getDisplayName()) || "Anônimo";
+        const ownerId   = window.Account ? Account.getCurrentUserId() : null;
         const thumbnail = document.getElementById("toolbox-publish-thumbnail").value.trim();
         const code      = document.getElementById("toolbox-publish-code").value;
 
         if (!title) { UI.showToast("Preencha pelo menos o Nome."); return; }
 
-        const entry = { id: _uid(), type, title, author, thumbnail, addedAt: Date.now() };
+        const entry = { id: _uid(), type, title, author, ownerId, thumbnail, addedAt: Date.now() };
 
         if (type === "model") {
             // (nova função) Modelo escolhido no Explorador, em vez de link.
@@ -4795,6 +5218,11 @@ const PolyPizza = (() => {
         _page = page;
         document.getElementById("poly-pizza-page-label").textContent = `Página ${_page}`;
         _renderResults(items);
+        // (nova função) Guarda o que a busca ao vivo achou no catálogo
+        // compartilhado (repositório do GitHub) — assim da próxima vez que
+        // alguém (você ou outra pessoa, se este arquivo for compartilhado)
+        // buscar o mesmo termo, aparece na hora, sem precisar da API.
+        _cacheMeshResults(items);
     }
 
     function search() {
@@ -4826,9 +5254,21 @@ const PolyPizza = (() => {
 
     /** (novo) Ponto único disparado por busca/categoria: mostra na hora
      *  o que existir do catálogo local pra esse termo (instantâneo, sem
-     *  rede) e, em paralelo, tenta a busca ao vivo de verdade na API. */
+     *  rede) e, em paralelo, tenta a busca ao vivo de verdade na API.
+     *  (nova função) Agora "o que existir do catálogo local" inclui tanto
+     *  o FALLBACK_MODELS fixo quanto as malhas já salvas no repositório do
+     *  GitHub por qualquer pessoa (buscas anteriores + publicações) — ou
+     *  seja, o repositório é sempre consultado ANTES da API ao vivo. */
     function _runSearch(term) {
-        _renderFallback(_fallbackMatches(term));
+        const doFallback = _fallbackMatches(term);
+        const doRepo = _catalogMeshMatches(term);
+        // Repositório tem prioridade em empate de link (pode ter Attribution
+        // mais atual do que o catálogo fixo embutido no código).
+        const seen = new Set();
+        const combined = [];
+        doRepo.forEach(it => { if (it.Download && !seen.has(it.Download)) { seen.add(it.Download); combined.push(it); } });
+        doFallback.forEach(it => { if (it.Download && !seen.has(it.Download)) { seen.add(it.Download); combined.push(it); } });
+        _renderFallback(combined);
         _fetchPage(1);
     }
 
@@ -4841,7 +5281,7 @@ const PolyPizza = (() => {
         open, search, searchTerm, nextPage, prevPage, saveApiKey, hasApiKey,
         setCatalogMode, renderLocalCatalog, addFromCatalog, deleteFromCatalog,
         openHistory, clearHistory, logHistory, openPublish, submitPublish, onPublishTypeChange,
-        openGithubSettings, saveGithubConfig, clearGithubConfig, syncWithGithub,
+        openGithubSettings, saveGithubConfig, clearGithubConfig, syncWithGithub, autoSyncOnBoot,
     };
 })();
 
@@ -12982,6 +13422,33 @@ const App = (() => {
 
             _publishStatus(`Publicado! Baixado como ${a.download}.`, "success");
             UI.log(`📦 Projeto "${name}" publicado e baixado como ${a.download}.`, "success");
+
+            // (nova função) Além do .zip baixado, guarda uma cópia local
+            // (localStorage) desse projeto publicado, pra aparecer na tela
+            // inicial em "Projetos publicados".
+            try {
+                let coverDataUrl = null;
+                if (_publishCoverFile) {
+                    coverDataUrl = await new Promise(resolve => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => resolve(null);
+                        reader.readAsDataURL(_publishCoverFile);
+                    });
+                }
+                const list = _loadPublishedProjects();
+                list.unshift({
+                    id: _newId(),
+                    name, desc,
+                    cover: coverDataUrl,
+                    tree: JSON.stringify(State.tree),
+                    publishedAt: Date.now(),
+                });
+                _savePublishedProjects(list);
+            } catch (e) {
+                UI.log("⚠️ Publicado normalmente, mas não consegui guardar a cópia local pra tela inicial: " + e.message, "error");
+            }
+
             UI.showToast("Projeto publicado!");
             btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Salvar';
             btn.disabled = false;
@@ -13277,10 +13744,1193 @@ const App = (() => {
         return npcModel;
     }
 
+    /* ── (nova função) TELA INICIAL — "Projetos publicados" ─────────────
+       Guarda uma cópia local (localStorage) de cada projeto publicado via
+       Arquivo → "Publicar projeto..." (além do .zip baixado), pra aparecer
+       na tela inicial. Só neste navegador — não usa GitHub. ── */
+    const PUBLISHED_PROJECTS_KEY = "engine_published_projects_v1";
+
+    function _loadPublishedProjects() {
+        try { return JSON.parse(localStorage.getItem(PUBLISHED_PROJECTS_KEY) || "[]"); }
+        catch { return []; }
+    }
+    function _savePublishedProjects(list) {
+        try { localStorage.setItem(PUBLISHED_PROJECTS_KEY, JSON.stringify(list)); return true; }
+        catch (e) { UI.log("Erro ao salvar projeto publicado: " + e.message, "error"); return false; }
+    }
+    function _newId() {
+        return (crypto.randomUUID ? crypto.randomUUID() : "id_" + Date.now() + "_" + Math.random().toString(36).slice(2));
+    }
+
+    function deletePublishedProject(id) {
+        if (!confirm("Apagar este projeto publicado da lista? Isso não pode ser desfeito.")) return;
+        const list = _loadPublishedProjects().filter(p => p.id !== id);
+        _savePublishedProjects(list);
+        _renderLandingLists();
+    }
+
+    function openPublishedProject(id) {
+        const entry = _loadPublishedProjects().find(p => p.id === id);
+        if (!entry) { UI.showToast("Projeto publicado não encontrado."); return; }
+        if (!confirm(`Abrir "${entry.name}"? O projeto atual não salvo será perdido.`)) return;
+        try {
+            State.tree = JSON.parse(entry.tree);
+            State.sel  = [];
+            Explorer.rebuild();
+            ThreeManager.syncNow();
+            rebuildHUD();
+            UI.log(`Projeto publicado "${entry.name}" carregado.`, "success");
+            UI.showToast(`"${entry.name}" carregado!`);
+            Plugins.runHook("afterLoad", State.tree);
+            closeLanding();
+        } catch (e) {
+            UI.log("Erro ao abrir projeto publicado: " + e.message, "error");
+        }
+    }
+
+    /** Monta um card (usado tanto pra publicados quanto pra salvos). */
+    function _buildLandingCard({ id, name, when, cover, desc, onOpen, onDelete }) {
+        const card = document.createElement("div");
+        card.className = "bg-studio-panel border studio-border rounded-lg overflow-hidden flex flex-col hover:border-orange-500 transition-colors";
+        const thumb = document.createElement("div");
+        thumb.className = "h-24 bg-zinc-800 flex items-center justify-center overflow-hidden";
+        thumb.innerHTML = cover
+            ? `<img src="${cover}" class="w-full h-full object-cover">`
+            : `<i class="fa-solid fa-cube text-3xl text-zinc-600"></i>`;
+        card.appendChild(thumb);
+        const body = document.createElement("div");
+        body.className = "p-2 flex flex-col gap-1 flex-1";
+        body.innerHTML = `
+            <div class="text-white text-xs font-bold truncate" title="${name}">${name}</div>
+            <div class="text-zinc-500 text-[10px]">${when}</div>
+            ${desc ? `<div class="text-zinc-400 text-[10px] line-clamp-2">${desc}</div>` : ""}`;
+        const btnRow = document.createElement("div");
+        btnRow.className = "flex gap-1 mt-auto pt-1";
+        const openBtn = document.createElement("button");
+        openBtn.className = "flex-1 px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white text-[10px] rounded font-bold";
+        openBtn.textContent = "Abrir";
+        openBtn.onclick = onOpen;
+        const delBtn = document.createElement("button");
+        delBtn.className = "px-2 py-1 bg-red-800 hover:bg-red-700 text-white text-[10px] rounded";
+        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        delBtn.onclick = onDelete;
+        btnRow.appendChild(openBtn); btnRow.appendChild(delBtn);
+        body.appendChild(btnRow);
+        card.appendChild(body);
+        return card;
+    }
+
+    /** Redesenha as duas listas (publicados / meus salvos) da tela inicial. */
+    function _renderLandingLists() {
+        const pubList = _loadPublishedProjects();
+        const pubGrid = document.getElementById("landing-published-list");
+        const pubEmpty = document.getElementById("landing-published-empty");
+        pubGrid.innerHTML = "";
+        pubEmpty.classList.toggle("hidden", pubList.length > 0);
+        pubList.sort((a,b) => (b.publishedAt||0) - (a.publishedAt||0)).forEach(p => {
+            pubGrid.appendChild(_buildLandingCard({
+                id: p.id, name: p.name, desc: p.desc, cover: p.cover,
+                when: new Date(p.publishedAt || 0).toLocaleString(),
+                onOpen: () => openPublishedProject(p.id),
+                onDelete: () => deletePublishedProject(p.id),
+            }));
+        });
+
+        const mineObj = _loadNamedProjects();
+        const mineNames = Object.keys(mineObj).sort((a,b) => (mineObj[b].savedAt||0) - (mineObj[a].savedAt||0));
+        const mineGrid = document.getElementById("landing-mine-list");
+        const mineEmpty = document.getElementById("landing-mine-empty");
+        mineGrid.innerHTML = "";
+        mineEmpty.classList.toggle("hidden", mineNames.length > 0);
+        mineNames.forEach(name => {
+            mineGrid.appendChild(_buildLandingCard({
+                name, when: new Date(mineObj[name].savedAt || 0).toLocaleString(),
+                onOpen: () => { loadNamedProject(name); closeLanding(); },
+                onDelete: () => { deleteNamedProject(name); _renderLandingLists(); },
+            }));
+        });
+    }
+
+    function openLanding() {
+        _renderLandingLists();
+        document.getElementById("landing-screen").classList.remove("hidden");
+    }
+    function closeLanding() {
+        document.getElementById("landing-screen").classList.add("hidden");
+    }
+    /** Botão "Criar projeto novo" da tela inicial. */
+    function landingCreateNew() {
+        resetToNew();
+        closeLanding();
+        UI.showToast("Novo projeto criado!");
+    }
+
     return { saveProject, openProjectModal, openGltfModal, resetToNew, spawnNPC,
               downloadProject, quickSave, restoreAutosave, hasAutosave, notifyChanged, _startAutosaveLoop,
               saveProjectAs, loadNamedProject, deleteNamedProject, openNamedProjectsModal,
-              openPublishModal, publishProject, _onPublishCoverChange, _onPublishDemosChange };
+              openPublishModal, publishProject, _onPublishCoverChange, _onPublishDemosChange,
+              openLanding, closeLanding, landingCreateNew, openPublishedProject, deletePublishedProject };
+})();
+
+/* ================================================================
+   MÓDULO 12A · ACCOUNT  (nova função)
+   ─────────────────────────────────────────────────────────────────
+   Sistema de conta local: cadastro/entrar, várias contas no mesmo
+   navegador (trocar de conta), tema claro/escuro, mudar usuário,
+   senha e foto de perfil, amigos + mensagens (com contador de não
+   lidas na foto de perfil), e lista dos itens que essa conta
+   publicou no Toolbox (com opção de excluir).
+
+   Tudo isso é salvo no localStorage ("repositório" deste navegador,
+   mesmo termo usado pelo resto do app pra tudo que fica só aqui) —
+   a ÚNICA exceção são os projetos/jogos publicados e salvos, que
+   continuam em chaves totalmente separadas (ver Módulo 12 · APP,
+   PUBLISHED_PROJECTS_KEY / NAMED_PROJECTS_KEY) e não têm nenhuma
+   ligação com conta de usuário.
+
+   (Aviso: como o app inteiro roda só no navegador, sem servidor,
+   isso é uma SIMULAÇÃO local de conta — a "senha" só passa por uma
+   ofuscação simples, não é um sistema de autenticação seguro de
+   verdade. Mesmo nível do token do GitHub salvo mais acima.)
+   ================================================================ */
+const Account = (() => {
+
+    const ACCOUNTS_KEY = "engine_accounts_v1";
+    const SESSION_KEY   = "engine_session_v1";
+    const MESSAGES_KEY  = "engine_messages_v1";
+    const CATALOG_STORAGE = "toolbox_catalog_v1"; // mesma chave usada pelo PolyPizza
+
+    let _current = null; // conta logada agora (cache em memória)
+
+    /* ── Persistência básica ── */
+    function _loadAccounts() {
+        try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "[]"); }
+        catch { return []; }
+    }
+    function _saveAccounts(list) {
+        try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list)); return true; }
+        catch (e) { UI.log("Erro ao salvar contas: " + e.message, "error"); return false; }
+    }
+    function _loadSession() {
+        try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null") || { currentId: null, loggedIds: [] }; }
+        catch { return { currentId: null, loggedIds: [] }; }
+    }
+    function _saveSession(s) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch (_) {} }
+    function _loadMessages() {
+        try { return JSON.parse(localStorage.getItem(MESSAGES_KEY) || "{}"); }
+        catch { return {}; }
+    }
+    function _saveMessages(obj) { try { localStorage.setItem(MESSAGES_KEY, JSON.stringify(obj)); } catch (_) {} }
+    function _loadToolboxCatalog() {
+        try { return JSON.parse(localStorage.getItem(CATALOG_STORAGE) || "[]"); }
+        catch { return []; }
+    }
+    function _uid() {
+        return (crypto.randomUUID ? crypto.randomUUID() : "acc_" + Date.now() + "_" + Math.random().toString(36).slice(2));
+    }
+    /* Ofuscação simples da senha — não é criptografia de verdade (ver aviso acima). */
+    function _hash(str) {
+        let h = 0;
+        for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+        return "h" + h;
+    }
+    function _convKey(a, b) { return [a, b].sort((x,y) => x.localeCompare(y)).join("::"); }
+    function _findByUsername(name) {
+        return _loadAccounts().find(a => a.username.toLowerCase() === (name || "").trim().toLowerCase());
+    }
+    function _findById(id) { return _loadAccounts().find(a => a.id === id); }
+    function _persistCurrent() {
+        if (!_current) return;
+        const list = _loadAccounts();
+        const idx = list.findIndex(a => a.id === _current.id);
+        if (idx >= 0) { list[idx] = _current; _saveAccounts(list); }
+    }
+
+    /* ── Cadastro / Entrar / Sair / Trocar de conta ── */
+    function signup(username, password) {
+        username = (username || "").trim();
+        if (!username || !password) return { ok:false, error:"Preencha usuário e senha." };
+        if (username.length < 3) return { ok:false, error:"Usuário precisa ter pelo menos 3 letras." };
+        if (_findByUsername(username)) return { ok:false, error:"Esse nome de usuário já existe." };
+        const acc = { id:_uid(), username, passwordHash:_hash(password), photo:"", theme:"dark", friends:[], createdAt:Date.now() };
+        const list = _loadAccounts(); list.push(acc); _saveAccounts(list);
+        _activate(acc);
+        return { ok:true };
+    }
+    function login(username, password) {
+        const acc = _findByUsername(username);
+        if (!acc) return { ok:false, error:"Usuário não encontrado." };
+        if (acc.passwordHash !== _hash(password)) return { ok:false, error:"Senha incorreta." };
+        _activate(acc);
+        return { ok:true };
+    }
+    function _activate(acc) {
+        _current = acc;
+        const s = _loadSession();
+        s.currentId = acc.id;
+        if (!s.loggedIds.includes(acc.id)) s.loggedIds.push(acc.id);
+        _saveSession(s);
+        applyTheme(acc.theme || "dark");
+    }
+    function logout() {
+        const s = _loadSession();
+        if (_current) s.loggedIds = s.loggedIds.filter(id => id !== _current.id);
+        s.currentId = null;
+        _saveSession(s);
+        _current = null;
+        applyTheme("dark");
+        closeSettingsSidebar();
+        renderAll();
+    }
+    function switchTo(id) {
+        const acc = _findById(id);
+        if (!acc) return;
+        _activate(acc);
+        closeAccountSwitcher();
+        closeSettingsSidebar();
+        renderAll();
+        UI.showToast(`Trocado pra conta "${acc.username}"`);
+    }
+
+    function isLoggedIn() { return !!_current; }
+    function getCurrentUserId() { return _current ? _current.id : null; }
+    function getDisplayName() { return _current ? _current.username : "Anônimo"; }
+    // (nova função) Getters usados pelo módulo Multiplayer pra presença online/
+    // offline e pedido de entrada em modo visualização — ver Módulo 12B.
+    function getCurrentPhoto() { return _current ? (_current.photo || "") : ""; }
+    function getFriendsList() { return _current ? (_current.friends || []) : []; }
+
+    function _init() {
+        const s = _loadSession();
+        if (s.currentId) {
+            const acc = _findById(s.currentId);
+            if (acc) { _current = acc; applyTheme(acc.theme || "dark"); }
+        }
+        renderAll();
+    }
+
+    /* ── Tema claro/escuro ── */
+    function applyTheme(theme) {
+        document.body.classList.toggle("theme-light", theme === "light");
+        const btn = document.getElementById("account-theme-toggle-btn");
+        if (btn) btn.innerHTML = theme === "light" ? '<i class="fa-solid fa-sun mr-1"></i>Claro' : '<i class="fa-solid fa-moon mr-1"></i>Escuro';
+    }
+    function toggleTheme() {
+        if (!_current) { UI.showToast("Entre numa conta pra salvar sua preferência de tema."); return; }
+        _current.theme = (_current.theme === "light") ? "dark" : "light";
+        _persistCurrent();
+        applyTheme(_current.theme);
+    }
+
+    /* ── Editar perfil ── */
+    function changeUsername(newName) {
+        newName = (newName || "").trim();
+        if (!_current) return;
+        if (!newName || newName.length < 3) { UI.showToast("Usuário precisa ter pelo menos 3 letras."); return; }
+        const clash = _findByUsername(newName);
+        if (clash && clash.id !== _current.id) { UI.showToast("Esse nome de usuário já existe."); return; }
+        const oldName = _current.username;
+        _current.username = newName;
+        _persistCurrent();
+        // Atualiza o nome nas listas de amizade de todo mundo, pra não quebrar referências
+        const list = _loadAccounts();
+        list.forEach(a => { a.friends = (a.friends || []).map(f => f === oldName ? newName : f); });
+        _saveAccounts(list);
+        renderAll();
+        UI.showToast("Nome de usuário atualizado!");
+    }
+    function changePassword(newPassword) {
+        if (!_current) return;
+        if (!newPassword || newPassword.length < 3) { UI.showToast("Senha precisa ter pelo menos 3 caracteres."); return; }
+        _current.passwordHash = _hash(newPassword);
+        _persistCurrent();
+        UI.showToast("Senha atualizada!");
+    }
+    function changePhoto(dataUrl) {
+        if (!_current) return;
+        _current.photo = dataUrl;
+        _persistCurrent();
+        renderAll();
+    }
+    function onPhotoFileSelected(input) {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => changePhoto(reader.result);
+        reader.readAsDataURL(file);
+    }
+
+    /* ── Amigos ── */
+    function addFriend(username) {
+        username = (username || "").trim();
+        if (!_current) { UI.showToast("Entre numa conta primeiro."); return; }
+        if (!username) return;
+        if (username.toLowerCase() === _current.username.toLowerCase()) { UI.showToast("Você não pode se adicionar."); return; }
+        if (!_findByUsername(username)) { UI.showToast("Não existe nenhuma conta com esse nome de usuário."); return; }
+        if ((_current.friends || []).some(f => f.toLowerCase() === username.toLowerCase())) { UI.showToast("Já é seu amigo."); return; }
+        _current.friends = [...(_current.friends || []), username];
+        _persistCurrent();
+        UI.closeModal("account-add-friend-modal");
+        renderAll();
+        UI.showToast(`"${username}" adicionado à lista de amizades!`);
+    }
+    function submitAddFriend() { addFriend(document.getElementById("account-add-friend-input").value); }
+    function removeFriend(username) {
+        if (!_current) return;
+        if (!confirm(`Remover "${username}" da lista de amizades?`)) return;
+        _current.friends = (_current.friends || []).filter(f => f !== username);
+        _persistCurrent();
+        renderAll();
+    }
+
+    /* ── Mensagens (com contador de não lidas na foto de perfil) ── */
+    function sendMessage(toUsername, text) {
+        text = (text || "").trim();
+        if (!_current || !text) return;
+        const msgs = _loadMessages();
+        const key = _convKey(_current.username, toUsername);
+        if (!msgs[key]) msgs[key] = [];
+        msgs[key].push({ from:_current.username, to:toUsername, text, at:Date.now(), read:false });
+        _saveMessages(msgs);
+        document.getElementById("account-message-input").value = "";
+        _renderMessageList(toUsername);
+        renderAll();
+    }
+    function submitMessage() {
+        const to = _currentConversation;
+        if (!to) return;
+        sendMessage(to, document.getElementById("account-message-input").value);
+    }
+    function getConversation(withUsername) {
+        if (!_current) return [];
+        return _loadMessages()[_convKey(_current.username, withUsername)] || [];
+    }
+    function unreadCountFrom(fromUsername) {
+        if (!_current) return 0;
+        return getConversation(fromUsername).filter(m => m.to === _current.username && !m.read).length;
+    }
+    function totalUnreadCount() {
+        if (!_current) return 0;
+        return (_current.friends || []).reduce((sum, f) => sum + unreadCountFrom(f), 0);
+    }
+    function markConversationRead(withUsername) {
+        if (!_current) return;
+        const msgs = _loadMessages();
+        const key = _convKey(_current.username, withUsername);
+        (msgs[key] || []).forEach(m => { if (m.to === _current.username) m.read = true; });
+        _saveMessages(msgs);
+        renderAll();
+    }
+
+    let _currentConversation = null;
+    function openMessagePanel(withUsername) {
+        if (!_current) return;
+        _currentConversation = withUsername;
+        markConversationRead(withUsername);
+        document.getElementById("account-message-title").innerHTML =
+            `<i class="fa-solid fa-comment-dots text-sky-300"></i> Conversa com ${withUsername}`;
+        _renderMessageList(withUsername);
+        UI.openModal("account-message-modal");
+        setTimeout(() => document.getElementById("account-message-input")?.focus(), 50);
+    }
+    function closeMessagePanel() { UI.closeModal("account-message-modal"); _currentConversation = null; }
+    function _renderMessageList(withUsername) {
+        const box = document.getElementById("account-message-list");
+        const conv = getConversation(withUsername);
+        box.innerHTML = "";
+        if (!conv.length) { box.innerHTML = `<div class="text-zinc-500 text-[10px] text-center py-4">Nenhuma mensagem ainda — diga oi!</div>`; return; }
+        conv.forEach(m => {
+            const mine = m.from === _current.username;
+            const bubble = document.createElement("div");
+            bubble.className = "flex " + (mine ? "justify-end" : "justify-start");
+            bubble.innerHTML = `<div class="max-w-[75%] px-2.5 py-1.5 rounded-lg text-[11px] ${mine ? "bg-sky-700 text-white" : "bg-zinc-700 text-zinc-100"}">${_escapeHtml(m.text)}</div>`;
+            box.appendChild(bubble);
+        });
+        box.scrollTop = box.scrollHeight;
+    }
+    function _escapeHtml(s) {
+        const d = document.createElement("div"); d.textContent = s; return d.innerHTML;
+    }
+
+    /* ── Modais de Entrar / Cadastrar ── */
+    function openLogin() { UI.closeModal("account-signup-modal"); UI.openModal("account-login-modal"); }
+    function openSignup() { UI.closeModal("account-login-modal"); UI.openModal("account-signup-modal"); }
+    function submitLogin() {
+        const res = login(document.getElementById("account-login-username").value, document.getElementById("account-login-password").value);
+        if (!res.ok) { UI.showToast("⚠️ " + res.error); return; }
+        UI.closeModal("account-login-modal");
+        renderAll();
+        UI.showToast(`Bem-vindo(a) de volta, ${_current.username}!`);
+    }
+    function submitSignup() {
+        const res = signup(document.getElementById("account-signup-username").value, document.getElementById("account-signup-password").value);
+        if (!res.ok) { UI.showToast("⚠️ " + res.error); return; }
+        UI.closeModal("account-signup-modal");
+        renderAll();
+        UI.showToast(`Conta criada! Bem-vindo(a), ${_current.username}!`);
+    }
+
+    /* ── Barra lateral de configurações ── */
+    function openSettingsSidebar() {
+        if (!_current) { openLogin(); return; }
+        _renderSettingsSidebar();
+        document.getElementById("account-settings-overlay").classList.remove("hidden");
+        const bar = document.getElementById("account-settings-sidebar");
+        bar.classList.remove("translate-x-full");
+    }
+    function closeSettingsSidebar() {
+        document.getElementById("account-settings-overlay").classList.add("hidden");
+        document.getElementById("account-settings-sidebar").classList.add("translate-x-full");
+    }
+    function _renderSettingsSidebar() {
+        if (!_current) return;
+        document.getElementById("account-settings-name").textContent = _current.username;
+        document.getElementById("account-settings-username-input").value = _current.username;
+        document.getElementById("account-settings-password-input").value = "";
+        applyTheme(_current.theme || "dark");
+        const av = document.getElementById("account-settings-avatar");
+        const fb = document.getElementById("account-settings-avatar-fallback");
+        if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
+        else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
+    }
+
+    /* ── Meus itens publicados no Toolbox ── */
+    function openMyToolboxItems() {
+        if (!_current) return;
+        const list = document.getElementById("account-toolbox-items-list");
+        const empty = document.getElementById("account-toolbox-items-empty");
+        const mine = _loadToolboxCatalog().filter(i => i.ownerId === _current.id);
+        list.innerHTML = "";
+        empty.classList.toggle("hidden", mine.length > 0);
+        mine.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+            row.innerHTML = `
+                <i class="fa-solid fa-cube text-zinc-500"></i>
+                <span class="flex-1 text-zinc-200 text-xs truncate" title="${item.title}">${item.title}</span>
+                <span class="text-zinc-600 text-[9px] uppercase">${item.type}</span>`;
+            const delBtn = document.createElement("button");
+            delBtn.className = "px-2 py-1 bg-red-800 hover:bg-red-700 text-white text-[10px] rounded";
+            delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            delBtn.onclick = () => { PolyPizza.deleteFromCatalog(item.id); openMyToolboxItems(); };
+            row.appendChild(delBtn);
+            list.appendChild(row);
+        });
+        UI.openModal("account-toolbox-items-modal");
+    }
+
+    /* ── Trocar de conta ── */
+    function openAccountSwitcher() {
+        const s = _loadSession();
+        const all = _loadAccounts();
+        const box = document.getElementById("account-switcher-list");
+        box.innerHTML = "";
+        const loggedAccounts = all.filter(a => s.loggedIds.includes(a.id));
+        const source = loggedAccounts.length ? loggedAccounts : all;
+        if (!source.length) { box.innerHTML = `<div class="text-zinc-500 text-[10px] text-center py-4">Nenhuma conta neste navegador ainda.</div>`; }
+        source.forEach(a => {
+            const row = document.createElement("button");
+            const isActive = _current && a.id === _current.id;
+            row.className = "w-full flex items-center gap-2 px-2 py-2 rounded border studio-border " + (isActive ? "bg-purple-900/40 border-purple-500" : "bg-studio-input hover:bg-zinc-700");
+            row.onclick = () => switchTo(a.id);
+            row.innerHTML = `
+                ${a.photo ? `<img src="${a.photo}" class="w-6 h-6 rounded-full object-cover">` : `<i class="fa-solid fa-circle-user text-lg text-zinc-400"></i>`}
+                <span class="text-zinc-200 text-xs font-bold">${a.username}</span>
+                ${isActive ? '<i class="fa-solid fa-check text-purple-300 ml-auto"></i>' : ''}`;
+            box.appendChild(row);
+        });
+        UI.openModal("account-switcher-modal");
+    }
+    function closeAccountSwitcher() { UI.closeModal("account-switcher-modal"); }
+
+    /* ── Adicionar amizade (modal) ── */
+    function openAddFriend() {
+        if (!_current) { openLogin(); return; }
+        document.getElementById("account-add-friend-input").value = "";
+        UI.openModal("account-add-friend-modal");
+    }
+
+    /* ── Renderização geral (painel do topo + header do editor + amizades) ── */
+    function renderAll() {
+        const guest = document.getElementById("account-panel-guest");
+        const userBtn = document.getElementById("account-panel-user");
+        const friendsSection = document.getElementById("account-friends-section");
+        if (!guest || !userBtn) return; // ainda não montou o DOM
+
+        if (!_current) {
+            guest.classList.remove("hidden");
+            userBtn.classList.add("hidden");
+            friendsSection.classList.add("hidden");
+            document.getElementById("header-profile-avatar")?.classList.add("hidden");
+            document.getElementById("header-profile-avatar-fallback")?.classList.remove("hidden");
+            document.getElementById("header-profile-badge")?.classList.add("hidden");
+            return;
+        }
+
+        guest.classList.add("hidden");
+        userBtn.classList.remove("hidden");
+        userBtn.classList.add("flex");
+        friendsSection.classList.remove("hidden");
+
+        document.getElementById("account-panel-username").textContent = _current.username;
+        const unread = totalUnreadCount();
+        const badge = document.getElementById("account-panel-badge");
+        badge.classList.toggle("hidden", unread === 0);
+        badge.textContent = unread > 9 ? "9+" : String(unread);
+
+        [["account-panel-avatar", "account-panel-avatar-fallback"],
+         ["header-profile-avatar", "header-profile-avatar-fallback"]].forEach(([imgId, fbId]) => {
+            const img = document.getElementById(imgId), fb = document.getElementById(fbId);
+            if (!img) return;
+            if (_current.photo) { img.src = _current.photo; img.classList.remove("hidden"); fb.classList.add("hidden"); }
+            else { img.classList.add("hidden"); fb.classList.remove("hidden"); }
+        });
+        const headerBadge = document.getElementById("header-profile-badge");
+        headerBadge.classList.toggle("hidden", unread === 0);
+        headerBadge.textContent = unread > 9 ? "9+" : String(unread);
+
+        // Lista de amizades na tela inicial
+        const grid = document.getElementById("account-friends-list");
+        const empty = document.getElementById("account-friends-empty");
+        grid.innerHTML = "";
+        const friends = _current.friends || [];
+        empty.classList.toggle("hidden", friends.length > 0);
+        friends.forEach(f => {
+            const acc = _findByUsername(f);
+            const n = unreadCountFrom(f);
+            // (nova função) Status online/offline + "pedir pra entrar" — lê do
+            // cache de presença do módulo Multiplayer (arquivos users/{nome}.json
+            // no GitHub, atualizados por um heartbeat em segundo plano).
+            const pres = (typeof Multiplayer !== "undefined") ? Multiplayer.getFriendPresence(f) : { online: false, inRoom: null };
+            const card = document.createElement("div");
+            card.className = "relative bg-studio-panel border studio-border rounded-lg p-3 flex flex-col items-center gap-1 hover:border-sky-400 transition-colors";
+            card.innerHTML = `
+                <button data-msg class="flex flex-col items-center gap-1 w-full">
+                    <span class="relative inline-block">
+                        ${acc && acc.photo ? `<img src="${acc.photo}" class="w-10 h-10 rounded-full object-cover">` : `<i class="fa-solid fa-circle-user text-3xl text-zinc-500"></i>`}
+                        <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-studio-panel ${pres.online ? "bg-emerald-400" : "bg-zinc-600"}" title="${pres.online ? "Online" : "Offline"}"></span>
+                    </span>
+                    <span class="text-zinc-200 text-xs font-bold truncate max-w-full">${f}</span>
+                </button>
+                ${n > 0 ? `<span class="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">${n > 9 ? "9+" : n}</span>` : ""}
+                ${pres.online && pres.inRoom ? `<button data-join class="mt-0.5 px-2 py-0.5 bg-purple-800 hover:bg-purple-700 text-white text-[9px] rounded font-bold flex items-center gap-1"><i class="fa-solid fa-users-viewfinder"></i> Pedir pra entrar</button>` : ""}`;
+            card.querySelector("[data-msg]").onclick = () => openMessagePanel(f);
+            const joinBtn = card.querySelector("[data-join]");
+            if (joinBtn) joinBtn.onclick = (e) => { e.stopPropagation(); Multiplayer.requestJoinFriend(f); };
+            grid.appendChild(card);
+        });
+    }
+
+    return {
+        _init, signup, login, logout, switchTo, isLoggedIn, getCurrentUserId, getDisplayName,
+        getCurrentPhoto, getFriendsList,
+        applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
+        addFriend, submitAddFriend, removeFriend, sendMessage, submitMessage, getConversation,
+        openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup,
+        openSettingsSidebar, closeSettingsSidebar, openMyToolboxItems, openAccountSwitcher,
+        closeAccountSwitcher, openAddFriend, renderAll,
+    };
+})();
+
+/* ================================================================
+   MÓDULO 12B · MULTIPLAYER  (nova função)
+   ─────────────────────────────────────────────────────────────────
+   Sistema de SALAS usando o mesmo repositório do GitHub configurado
+   em GithubStorage como "banco de dados": cada sala vira um arquivo
+   `rooms/{CÓDIGO}.json` no repositório. Isso NÃO sincroniza os objetos
+   da cena entre quem está na sala — é só o lobby: código da sala,
+   quem está dentro, coroa (quem manda) e expulsar. Pra criar/entrar
+   numa sala é preciso estar logado numa conta (ver módulo Account) e
+   ter o GitHub configurado (botão GitHub no Toolbox).
+
+   Como a API do GitHub não é tempo real, cada aba faz:
+     • "heartbeat" — atualiza a própria presença a cada HEARTBEAT_MS.
+     • "poll"      — relê o arquivo da sala a cada POLL_MS.
+   Ou seja, existe um atraso de alguns segundos entre uma ação (alguém
+   sair, ser expulso, etc.) e todo mundo ver — e um limite de gente
+   por causa do limite de requisições/hora do GitHub (5000/h por
+   token). Se estourar esse limite com muita gente ao mesmo tempo, dá
+   pra aumentar os intervalos abaixo.
+
+   Coroa: quem criou a sala (ownerId) tem a coroa sempre que estiver
+   ativo na sala. Se sair (ou ficar sem heartbeat por STALE_MS), a
+   coroa passa pra quem entrou há mais tempo entre os que restam. Se
+   o dono voltar, a coroa volta pra ele automaticamente.
+   ================================================================ */
+const Multiplayer = (() => {
+    const ROOM_PATH = (code) => `rooms/${code}.json`;
+    const HEARTBEAT_MS = 10000;  // atualiza minha presença a cada 10s
+    const POLL_MS = 6000;        // relê o estado da sala a cada 6s
+    const STALE_MS = 30000;      // sem heartbeat há 30s = considerado fora da sala
+
+    // (nova função) Perfil público "online" de cada conta, salvo no mesmo
+    // repositório GitHub como users/{nome-em-minúsculo}.json — status
+    // online/offline dos amigos e pedidos pra entrar numa sala em modo
+    // visualização usam esse arquivo. Ver Módulo 12A · Account pra tudo
+    // que continua só em localStorage (perfil "de verdade", mensagens etc.).
+    const USER_PATH = (username) => `users/${String(username || "").trim().toLowerCase()}.json`;
+    const PRESENCE_MS = 15000;      // atualiza meu status online a cada 15s
+    const PRESENCE_STALE_MS = 40000; // sem atualização há 40s = considerado offline
+
+    let _room = null;   // último estado lido da sala (cache local)
+    let _code = null;   // código da sala atual
+    let _heartbeatTimer = null;
+    let _pollTimer = null;
+    let _presenceTimer = null;
+    const _presence = {};     // username-em-minúsculo -> { lastSeen, currentRoom, photo }
+    let _myRequests = [];     // pedidos pendentes de amizades pra entrar na MINHA sala atual
+
+    function _utf8ToB64(str) { return btoa(unescape(encodeURIComponent(str))); }
+    function _b64ToUtf8(b64) { return decodeURIComponent(escape(atob(String(b64 || "").replace(/\n/g, "")))); }
+
+    function _apiUrl(cfg, path) {
+        const cleanPath = String(path).replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
+        return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cleanPath}`;
+    }
+
+    /** Lê um arquivo qualquer do repositório configurado. Devolve
+     *  { ok, data, sha } — data é null se o arquivo não existir ainda. */
+    async function _ghGet(path) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok: false, error: "GitHub não configurado.", data: null, sha: null };
+        try {
+            const res = await fetch(`${_apiUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch || "main")}`, {
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" },
+                cache: "no-store",
+            });
+            if (res.status === 404) return { ok: true, data: null, sha: null };
+            if (!res.ok) return { ok: false, error: `Erro HTTP ${res.status} ao ler a sala.`, data: null, sha: null };
+            const json = await res.json();
+            let parsed = null;
+            try { parsed = JSON.parse(_b64ToUtf8(json.content)); } catch (_) { parsed = null; }
+            return { ok: true, data: parsed, sha: json.sha };
+        } catch (e) {
+            return { ok: false, error: "Falha de rede: " + e.message, data: null, sha: null };
+        }
+    }
+
+    /** Sobrescreve um arquivo qualquer do repositório configurado. */
+    async function _ghPut(path, obj, sha, message) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok: false, error: "GitHub não configurado." };
+        try {
+            const body = {
+                message: message || "Atualiza sala multiplayer",
+                content: _utf8ToB64(JSON.stringify(obj, null, 2)),
+                branch: cfg.branch || "main",
+            };
+            if (sha) body.sha = sha;
+            const res = await fetch(_apiUrl(cfg, path), {
+                method: "PUT",
+                headers: {
+                    "Authorization": `token ${cfg.token}`,
+                    "Accept": "application/vnd.github+json",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(body),
+                keepalive: true, // dá mais chance da requisição terminar mesmo se a aba estiver fechando
+            });
+            if (!res.ok) return { ok: false, status: res.status, error: (res.status === 409) ? "Conflito (409)" : `Erro HTTP ${res.status}` };
+            const json = await res.json();
+            return { ok: true, sha: json.content?.sha || null };
+        } catch (e) {
+            return { ok: false, error: "Falha de rede: " + e.message };
+        }
+    }
+
+    /** Apaga o arquivo da sala do repositório — usado quando o último
+     *  membro sai e a sala fica vazia, pra não deixar código "fantasma"
+     *  ativo pra sempre no GitHub. */
+    async function _ghDelete(path, sha, message) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok: false, error: "GitHub não configurado." };
+        try {
+            const res = await fetch(_apiUrl(cfg, path), {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `token ${cfg.token}`,
+                    "Accept": "application/vnd.github+json",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ message: message || "Apaga sala vazia", sha, branch: cfg.branch || "main" }),
+                keepalive: true,
+            });
+            if (!res.ok) return { ok: false, status: res.status, error: `Erro HTTP ${res.status}` };
+            return { ok: true };
+        } catch (e) {
+            return { ok: false, error: "Falha de rede: " + e.message };
+        }
+    }
+
+    /** Lê a sala mais recente, aplica `mutateFn(currentRoomOrNull)` (que
+     *  devolve o novo objeto da sala, ou `null` pra cancelar — ex: sala
+     *  não existe / usuário expulso) e tenta salvar. Se der 409 (outra
+     *  aba salvou no meio do caminho), relê e tenta de novo, até 4x. */
+    async function _writeRoom(code, mutateFn, message) {
+        for (let tries = 0; tries < 4; tries++) {
+            const fresh = await _ghGet(ROOM_PATH(code));
+            if (!fresh.ok) return fresh;
+            const next = mutateFn(fresh.data);
+            if (next === null) return { ok: true, data: fresh.data, sha: fresh.sha, aborted: true };
+            const put = await _ghPut(ROOM_PATH(code), next, fresh.sha, message);
+            if (put.ok) return { ok: true, data: next, sha: put.sha };
+            if (put.status !== 409) return put;
+            // 409 = alguém mais salvou entre a leitura e a escrita — tenta de novo com dados frescos
+        }
+        return { ok: false, error: "Muita gente escrevendo na sala ao mesmo tempo — tente de novo." };
+    }
+
+    /** Mesma ideia do `_writeRoom`, mas pro arquivo de perfil "online" de um
+     *  usuário (users/{nome}.json) — usado pra presença online/offline e
+     *  pros pedidos de entrada em modo visualização (função nova). */
+    async function _writeUser(username, mutateFn, message) {
+        const path = USER_PATH(username);
+        for (let tries = 0; tries < 4; tries++) {
+            const fresh = await _ghGet(path);
+            if (!fresh.ok) return fresh;
+            const next = mutateFn(fresh.data);
+            if (next === null) return { ok: true, data: fresh.data, sha: fresh.sha, aborted: true };
+            const put = await _ghPut(path, next, fresh.sha, message);
+            if (put.ok) return { ok: true, data: next, sha: put.sha };
+            if (put.status !== 409) return put;
+        }
+        return { ok: false, error: "Muita coisa acontecendo ao mesmo tempo — tente de novo." };
+    }
+    function _reqId() {
+        return (crypto.randomUUID ? crypto.randomUUID() : "req_" + Date.now() + "_" + Math.random().toString(36).slice(2));
+    }
+
+    function _genCode() {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem letras/números fáceis de confundir
+        let s = "";
+        for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+        return s;
+    }
+
+    function _me() {
+        if (!Account.isLoggedIn()) return null;
+        return { id: Account.getCurrentUserId(), username: Account.getDisplayName() };
+    }
+
+    /* ── Criar / Entrar ── */
+    async function createRoom() {
+        const me = _me();
+        if (!me) { UI.showToast("⚠️ Entre numa conta antes de criar uma sala."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o GitHub (botão GitHub no Toolbox) antes de usar o multiplayer."); return; }
+        UI.showToast("🔄 Criando sala...");
+        let code = _genCode();
+        for (let i = 0; i < 5; i++) {
+            const check = await _ghGet(ROOM_PATH(code));
+            if (check.ok && check.data === null) break; // código livre
+            code = _genCode();
+        }
+        const now = Date.now();
+        const room = {
+            code, ownerId: me.id, ownerUsername: me.username, createdAt: now,
+            members: [{ id: me.id, username: me.username, joinedAt: now, lastSeen: now }],
+            kicked: [],
+        };
+        const put = await _ghPut(ROOM_PATH(code), room, null, `Cria sala ${code}`);
+        if (!put.ok) { UI.showToast("⚠️ Não consegui criar a sala: " + (put.error || "")); return; }
+        _room = room; _code = code;
+        _enterRoomUI();
+    }
+
+    async function joinRoom(codeInput, viewOnly) {
+        const me = _me();
+        if (!me) { UI.showToast("⚠️ Entre numa conta antes de entrar numa sala."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o GitHub (botão GitHub no Toolbox) antes de usar o multiplayer."); return; }
+        const code = (codeInput || "").trim().toUpperCase();
+        if (!code) { UI.showToast("Digite o código da sala."); return; }
+        UI.showToast(viewOnly ? "🔄 Entrando na sala em modo visualização..." : "🔄 Entrando na sala...");
+        const res = await _writeRoom(code, (current) => {
+            if (!current) return null; // sala não existe
+            if ((current.kicked || []).includes(me.id)) return null; // foi expulso, não deixa voltar
+            const now = Date.now();
+            const already = (current.members || []).find(m => m.id === me.id);
+            if (already) { already.lastSeen = now; return current; }
+            // (nova função) viewOnly = entrou por um pedido de "acompanhar" a sala
+            // de uma amizade — aparece na lista, mas nunca vira coroa nem pode
+            // remover ninguém (ver _crownHolderId).
+            current.members = [...(current.members || []), { id: me.id, username: me.username, joinedAt: now, lastSeen: now, viewOnly: !!viewOnly }];
+            return current;
+        }, `Entra na sala ${code}`);
+        if (!res.ok) { UI.showToast("⚠️ Não consegui entrar na sala: " + (res.error || "")); return; }
+        if (res.aborted) {
+            if (res.data === null) { UI.showToast("⚠️ Sala não encontrada."); return; }
+            UI.showToast("⚠️ Você foi removido dessa sala e não pode voltar a entrar."); return;
+        }
+        _room = res.data; _code = code;
+        _enterRoomUI();
+    }
+
+    function _enterRoomUI() {
+        UI.closeModal("multiplayer-lobby-modal");
+        App.closeLanding();
+        const badge = document.getElementById("mp-room-badge");
+        if (badge) { badge.classList.remove("hidden"); badge.classList.add("flex"); }
+        const badgeCode = document.getElementById("mp-room-badge-code");
+        if (badgeCode) badgeCode.textContent = _code;
+        _renderRoomPanel();
+        _startLoops();
+        UI.showToast(`✅ Você está na sala ${_code}!`);
+    }
+
+    /* ── Heartbeat / Poll ── */
+    function _startLoops() {
+        _stopLoops();
+        _heartbeatTimer = setInterval(_heartbeat, HEARTBEAT_MS);
+        _pollTimer = setInterval(_poll, POLL_MS);
+    }
+    function _stopLoops() {
+        if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+        if (_pollTimer) clearInterval(_pollTimer);
+        _heartbeatTimer = null; _pollTimer = null;
+    }
+
+    async function _heartbeat() {
+        if (!_code) return;
+        const me = _me();
+        if (!me) return;
+        const res = await _writeRoom(_code, (current) => {
+            if (!current) return null;
+            const mine = (current.members || []).find(m => m.id === me.id);
+            if (!mine) return null; // fui expulso/saí — não recria
+            mine.lastSeen = Date.now();
+            return current;
+        }, "Heartbeat da sala");
+        if (res.ok && !res.aborted) { _room = res.data; }
+    }
+
+    async function _poll() {
+        if (!_code) return;
+        const me = _me();
+        const res = await _ghGet(ROOM_PATH(_code));
+        if (!res.ok || !res.data) return; // erro de rede ou sala sumiu — tenta de novo no próximo poll
+        const wasMember = (_room?.members || []).some(m => m.id === me?.id);
+        _room = res.data;
+        const stillMember = (_room.members || []).some(m => m.id === me?.id);
+        if (wasMember && !stillMember) {
+            UI.showToast("🚫 Você foi removido da sala.");
+            leaveRoom(true);
+            return;
+        }
+        _renderRoomPanel();
+    }
+
+    /* ── Coroa / render do painel ── */
+    function _activeMembers() {
+        if (!_room) return [];
+        const now = Date.now();
+        return (_room.members || []).filter(m => (now - (m.lastSeen || 0)) < STALE_MS);
+    }
+    function _crownHolderId() {
+        if (!_room) return null;
+        // (nova função) Quem entrou em modo visualização (viewOnly) nunca
+        // vira coroa — só acompanha a sala, não administra ela.
+        const active = _activeMembers().filter(m => !m.viewOnly);
+        if (active.some(m => m.id === _room.ownerId)) return _room.ownerId;
+        const sorted = [...active].sort((a, b) => a.joinedAt - b.joinedAt);
+        return sorted.length ? sorted[0].id : null;
+    }
+
+    function _renderRoomPanel() {
+        const box = document.getElementById("mp-room-members");
+        const codeEl = document.getElementById("mp-room-code-text");
+        if (!box || !_room) return;
+        if (codeEl) codeEl.textContent = _code;
+        const crownId = _crownHolderId();
+        const me = _me();
+        const iAmCrown = !!(crownId && me && crownId === me.id);
+        const active = _activeMembers().sort((a, b) => a.joinedAt - b.joinedAt);
+        box.innerHTML = "";
+        active.forEach(m => {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 px-2 py-1.5 rounded bg-studio-input";
+            row.innerHTML = `
+                ${m.viewOnly ? '<i class="fa-solid fa-eye text-zinc-400" title="Modo visualização — só acompanha, não edita"></i>' : (m.id === crownId ? '<i class="fa-solid fa-crown text-amber-400" title="Tem a coroa (pode expulsar)"></i>' : '<i class="fa-solid fa-user text-zinc-500"></i>')}
+                <span class="text-zinc-200 text-xs flex-1 truncate">${m.username}${me && m.id === me.id ? " (você)" : ""}${m.viewOnly ? " (visualizando)" : ""}</span>
+                ${(iAmCrown && me && m.id !== me.id) ? `<button data-kick="${m.id}" class="px-2 py-0.5 bg-red-900 hover:bg-red-800 text-red-200 rounded text-[10px] font-bold">Remover</button>` : ""}
+            `;
+            box.appendChild(row);
+        });
+        box.querySelectorAll("[data-kick]").forEach(btn => {
+            btn.onclick = () => kickMember(btn.getAttribute("data-kick"));
+        });
+    }
+
+    async function kickMember(memberId) {
+        const me = _me();
+        if (!_code || !me) return;
+        if (_crownHolderId() !== me.id) { UI.showToast("⚠️ Só quem tem a coroa pode remover alguém da sala."); return; }
+        const res = await _writeRoom(_code, (current) => {
+            if (!current) return null;
+            current.members = (current.members || []).filter(m => m.id !== memberId);
+            current.kicked = [...new Set([...(current.kicked || []), memberId])];
+            return current;
+        }, "Remove membro da sala");
+        if (res.ok && !res.aborted) { _room = res.data; _renderRoomPanel(); UI.showToast("Pessoa removida da sala."); }
+        else UI.showToast("⚠️ " + (res.error || "Não consegui remover essa pessoa."));
+    }
+
+    /* ── Sair da sala ── */
+    /** Se eu for o último membro, apaga o arquivo da sala do GitHub em vez
+     *  de só esvaziar a lista — assim o código da sala "desaparece" de
+     *  verdade quando todo mundo sai, em vez de ficar um arquivo vazio
+     *  ativo pra sempre. */
+    async function leaveRoom(silent) {
+        _stopLoops();
+        const me = _me();
+        const code = _code;
+        if (code && me) {
+            for (let tries = 0; tries < 4; tries++) {
+                const fresh = await _ghGet(ROOM_PATH(code));
+                if (!fresh.ok || !fresh.data) break; // já não existe, ou erro de rede — nada a fazer
+                const wasPresent = (fresh.data.members || []).some(m => m.id === me.id);
+                if (!wasPresent) break; // já não estava mais na lista (ex: fui expulso)
+                const remaining = (fresh.data.members || []).filter(m => m.id !== me.id);
+                if (remaining.length === 0) {
+                    const del = await _ghDelete(ROOM_PATH(code), fresh.sha, `Apaga sala ${code} (ficou vazia)`);
+                    if (del.ok || del.status === 404 || del.status === 409) break; // apagada, ou outra aba já cuidou disso
+                    continue; // outro erro — tenta de novo com dados frescos
+                }
+                fresh.data.members = remaining;
+                const put = await _ghPut(ROOM_PATH(code), fresh.data, fresh.sha, "Sai da sala");
+                if (put.ok || put.status !== 409) break;
+                // 409 = outra aba salvou no meio do caminho — tenta de novo
+            }
+        }
+        _room = null; _code = null;
+        const badge = document.getElementById("mp-room-badge");
+        if (badge) { badge.classList.add("hidden"); badge.classList.remove("flex"); }
+        UI.closeModal("mp-room-modal");
+        if (!silent) UI.showToast("Você saiu da sala.");
+    }
+
+    /* ── Fechar a aba/janela sem clicar em "Sair" ──
+       Best-effort: o navegador pode encerrar a página antes da requisição
+       terminar, então isso não é 100% garantido — mas com `keepalive`
+       nos fetches acima, na maioria dos casos dá tempo de completar. */
+    window.addEventListener("pagehide", () => { if (isInRoom()) leaveRoom(true); });
+
+    /* ── (nova função) Presença online/offline + pedido pra entrar em modo
+       visualização ─────────────────────────────────────────────────────
+       Cada conta logada mantém um arquivo users/{nome}.json no mesmo
+       repositório GitHub, com { lastSeen, currentRoom, photo, requests,
+       inbox }. Um heartbeat em segundo plano (independente de estar numa
+       sala ou não) atualiza esse arquivo a cada PRESENCE_MS e também
+       confere se chegou algum pedido de amizade pra "acompanhar" a sala
+       atual, ou alguma resposta (aceite/recusa) de um pedido que EU fiz. */
+    function _myPresenceBase(me) {
+        return { id: me.id, username: me.username, lastSeen: 0, currentRoom: null, photo: "", requests: [], inbox: [] };
+    }
+
+    async function _pushMyPresence() {
+        const me = _me();
+        if (!me || !GithubStorage.hasConfig()) return;
+        await _writeUser(me.username, (current) => {
+            const base = current || _myPresenceBase(me);
+            base.id = me.id;
+            base.username = me.username;
+            base.photo = Account.getCurrentPhoto ? Account.getCurrentPhoto() : (base.photo || "");
+            base.lastSeen = Date.now();
+            base.currentRoom = _code || null;
+            base.requests = base.requests || [];
+            base.inbox = base.inbox || [];
+            return base;
+        }, "Atualiza status online (nova função)");
+    }
+
+    /** Lê meu próprio arquivo de presença: mostra pedidos pendentes de
+     *  amizades pra entrar na minha sala, e processa respostas (aceite/
+     *  recusa) de pedidos que eu mesmo fiz pra entrar na sala de alguém. */
+    async function _checkMyInboxAndRequests() {
+        const me = _me();
+        if (!me || !GithubStorage.hasConfig()) return;
+        const res = await _ghGet(USER_PATH(me.username));
+        if (!res.ok || !res.data) return;
+
+        const incoming = res.data.requests || [];
+        const isNew = incoming.length > _myRequests.length;
+        _myRequests = incoming;
+        _renderJoinRequests();
+        if (isNew) UI.showToast(`📩 Você tem ${incoming.length} pedido${incoming.length > 1 ? "s" : ""} pra entrar na sua sala.`);
+
+        const inbox = res.data.inbox || [];
+        if (inbox.length) {
+            for (const entry of inbox) {
+                if (entry.type === "join-accept" && entry.roomCode) {
+                    UI.showToast(`✅ ${entry.byUsername || "seu amigo"} aceitou seu pedido — entrando na sala...`);
+                    await joinRoom(entry.roomCode, true);
+                } else if (entry.type === "join-decline") {
+                    UI.showToast(`${entry.byUsername || "Seu amigo"} recusou o pedido pra entrar na sala.`);
+                }
+            }
+            await _writeUser(me.username, (current) => {
+                if (!current) return null;
+                current.inbox = [];
+                return current;
+            }, "Limpa notificações lidas");
+        }
+    }
+
+    /** Relê o arquivo de presença de cada amizade e guarda em cache local
+     *  (_presence), depois redesenha a lista de amizades (bolinha online/
+     *  offline + botão "Pedir pra entrar"). */
+    async function refreshFriendsPresence() {
+        const friends = (Account.getFriendsList && Account.getFriendsList()) || [];
+        if (!GithubStorage.hasConfig() || !friends.length) return;
+        for (const f of friends) {
+            const res = await _ghGet(USER_PATH(f));
+            if (res.ok) {
+                _presence[f.toLowerCase()] = res.data
+                    ? { lastSeen: res.data.lastSeen || 0, currentRoom: res.data.currentRoom || null, photo: res.data.photo || "" }
+                    : null;
+            }
+        }
+        if (Account.renderAll) Account.renderAll();
+    }
+
+    /** Devolve o status em cache (sem esperar rede) — usado pela renderização
+     *  da lista de amizades em Account.renderAll(). */
+    function getFriendPresence(username) {
+        const p = _presence[(username || "").toLowerCase()];
+        if (!p) return { online: false, inRoom: null };
+        const online = (Date.now() - (p.lastSeen || 0)) < PRESENCE_STALE_MS;
+        return { online, inRoom: online ? p.currentRoom : null };
+    }
+
+    function _startPresenceLoop() {
+        if (_presenceTimer) return;
+        _pushMyPresence();
+        _checkMyInboxAndRequests();
+        refreshFriendsPresence();
+        _presenceTimer = setInterval(() => {
+            if (!Account.isLoggedIn() || !GithubStorage.hasConfig()) return;
+            _pushMyPresence();
+            _checkMyInboxAndRequests();
+            refreshFriendsPresence();
+        }, PRESENCE_MS);
+    }
+    /** Chamado uma vez no boot do app (ver _initStep no final do arquivo) —
+     *  fica rodando em segundo plano estejamos ou não numa sala. */
+    function _initPresence() { _startPresenceLoop(); }
+
+    /** Pede pra "acompanhar" a sala atual de uma amizade, em modo
+     *  visualização (só olha quem está na sala, não edita nem administra
+     *  nada — ver joinRoom(code, viewOnly) e _crownHolderId). */
+    async function requestJoinFriend(username) {
+        const me = _me();
+        if (!me) { UI.showToast("⚠️ Entre numa conta antes de pedir pra entrar numa sala."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o GitHub (botão GitHub no Toolbox) antes de usar o multiplayer."); return; }
+        const pres = getFriendPresence(username);
+        if (!pres.online || !pres.inRoom) { UI.showToast(`${username} não está numa sala agora.`); return; }
+        const res = await _writeUser(username, (current) => {
+            const base = current || _myPresenceBase({ id: null, username });
+            base.requests = [...(base.requests || []).filter(r => r.fromId !== me.id), { id: _reqId(), fromId: me.id, fromUsername: me.username, roomCode: pres.inRoom, ts: Date.now() }];
+            return base;
+        }, `Pedido pra acompanhar sala (de ${me.username})`);
+        if (res.ok && !res.aborted) UI.showToast(`📨 Pedido enviado pra ${username}!`);
+        else UI.showToast("⚠️ " + (res.error || "Não consegui enviar o pedido."));
+    }
+
+    /** Aceita um pedido pendente — só funciona enquanto EU estiver dentro
+     *  da sala que a amizade quer acompanhar (adiciona ela como membro
+     *  viewOnly diretamente no arquivo da sala). */
+    async function acceptJoinRequest(reqId) {
+        const me = _me();
+        const req = (_myRequests || []).find(r => r.id === reqId);
+        if (!me || !req) return;
+        if (!_code) { UI.showToast("⚠️ Você precisa estar numa sala pra aceitar esse pedido."); return; }
+        const addRes = await _writeRoom(_code, (current) => {
+            if (!current) return null;
+            const already = (current.members || []).some(m => m.id === req.fromId);
+            if (!already) current.members = [...(current.members || []), { id: req.fromId, username: req.fromUsername, joinedAt: Date.now(), lastSeen: Date.now(), viewOnly: true }];
+            return current;
+        }, "Aceita pedido pra acompanhar a sala");
+        if (!addRes.ok) { UI.showToast("⚠️ " + (addRes.error || "Não consegui adicionar essa pessoa na sala.")); return; }
+        if (!addRes.aborted) { _room = addRes.data; _renderRoomPanel(); }
+        await _writeUser(me.username, (current) => {
+            if (!current) return null;
+            current.requests = (current.requests || []).filter(r => r.id !== reqId);
+            return current;
+        }, "Remove pedido já atendido");
+        await _writeUser(req.fromUsername, (current) => {
+            const base = current || _myPresenceBase({ id: req.fromId, username: req.fromUsername });
+            base.inbox = [...(base.inbox || []), { type: "join-accept", roomCode: _code, byUsername: me.username, ts: Date.now() }];
+            return base;
+        }, "Avisa aceite do pedido");
+        _myRequests = _myRequests.filter(r => r.id !== reqId);
+        _renderJoinRequests();
+        UI.showToast(`✅ ${req.fromUsername} entrou na sala em modo visualização.`);
+    }
+
+    async function declineJoinRequest(reqId) {
+        const me = _me();
+        const req = (_myRequests || []).find(r => r.id === reqId);
+        if (!me || !req) return;
+        await _writeUser(me.username, (current) => {
+            if (!current) return null;
+            current.requests = (current.requests || []).filter(r => r.id !== reqId);
+            return current;
+        }, "Recusa pedido");
+        await _writeUser(req.fromUsername, (current) => {
+            const base = current || _myPresenceBase({ id: req.fromId, username: req.fromUsername });
+            base.inbox = [...(base.inbox || []), { type: "join-decline", byUsername: me.username, ts: Date.now() }];
+            return base;
+        }, "Avisa recusa do pedido");
+        _myRequests = _myRequests.filter(r => r.id !== reqId);
+        _renderJoinRequests();
+        UI.showToast("Pedido recusado.");
+    }
+
+    function _renderJoinRequests() {
+        const list = document.getElementById("mp-join-requests-list");
+        const empty = document.getElementById("mp-join-requests-empty");
+        const btn = document.getElementById("mp-join-requests-btn");
+        const badgeCount = document.getElementById("mp-join-requests-badge");
+        if (!list) return;
+        const reqs = _myRequests || [];
+        if (btn) { btn.classList.toggle("hidden", reqs.length === 0); btn.classList.toggle("flex", reqs.length > 0); }
+        if (badgeCount) badgeCount.classList.toggle("hidden", reqs.length === 0);
+        if (badgeCount) badgeCount.textContent = reqs.length > 9 ? "9+" : String(reqs.length);
+        if (empty) empty.classList.toggle("hidden", reqs.length > 0);
+        list.innerHTML = "";
+        reqs.forEach(r => {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 px-2 py-1.5 rounded bg-studio-input";
+            row.innerHTML = `
+                <i class="fa-solid fa-user text-zinc-500"></i>
+                <span class="text-zinc-200 text-xs flex-1 truncate">${r.fromUsername}</span>
+                <button data-accept class="px-2 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 rounded text-[10px] font-bold">Aceitar</button>
+                <button data-decline class="px-2 py-0.5 bg-red-900 hover:bg-red-800 text-red-200 rounded text-[10px] font-bold">Recusar</button>`;
+            row.querySelector("[data-accept]").onclick = () => acceptJoinRequest(r.id);
+            row.querySelector("[data-decline]").onclick = () => declineJoinRequest(r.id);
+            list.appendChild(row);
+        });
+    }
+
+    function openJoinRequestsModal() { _renderJoinRequests(); UI.openModal("mp-join-requests-modal"); }
+    function closeJoinRequestsModal() { UI.closeModal("mp-join-requests-modal"); }
+
+    /* ── Abrir/fechar modais ── */
+    function openLobby() { UI.openModal("multiplayer-lobby-modal"); }
+    function closeLobby() { UI.closeModal("multiplayer-lobby-modal"); }
+    function submitJoin() { joinRoom(document.getElementById("mp-join-code-input").value); }
+    function openRoomPanel() { if (_code) { _renderRoomPanel(); UI.openModal("mp-room-modal"); } }
+    function closeRoomPanel() { UI.closeModal("mp-room-modal"); }
+
+    function currentRoomCode() { return _code; }
+    function isInRoom() { return !!_code; }
+
+    return {
+        openLobby, closeLobby, createRoom, joinRoom, submitJoin,
+        openRoomPanel, closeRoomPanel, leaveRoom, kickMember,
+        currentRoomCode, isInRoom,
+        // (nova função) presença online/offline + pedido de entrada em modo visualização
+        _initPresence, getFriendPresence, refreshFriendsPresence, requestJoinFriend,
+        acceptJoinRequest, declineJoinRequest, openJoinRequestsModal, closeJoinRequestsModal,
+    };
 })();
 
 /* ================================================================
@@ -15433,10 +17083,17 @@ window.addEventListener('DOMContentLoaded', () => {
     _initStep("inicializar o motor 3D", ThreeManager.init);
     _initStep("configurar editor de vértices", VertexEditor.setup);
     _initStep("criar o projeto inicial", App.resetToNew);
+    _initStep("mostrar tela inicial (projetos publicados/salvos)", App.openLanding);
+    _initStep("carregar conta de usuário (nova função)", Account._init);
+    _initStep("iniciar status online/offline do multiplayer (nova função)", Multiplayer._initPresence);
     _initStep("configurar o teclado", setupKeyboard);
     _initStep("configurar redimensionador Explorer/Properties", setupExplorerPropertiesResizer);
     _initStep("carregar plugins salvos", Plugins.loadAllStored);
     _initStep("iniciar o autosave", App._startAutosaveLoop);
+    // (nova função) Sincroniza o catálogo do Toolbox com o GitHub assim que
+    // o app abre, sem esperar o usuário clicar em nada — silencioso (não
+    // mostra erro se estiver sem internet ou sem configuração).
+    _initStep("sincronizar catálogo do Toolbox com o GitHub", () => PolyPizza.autoSyncOnBoot());
     if (App.hasAutosave()) UI.log("💾 Há um autosave salvo no navegador. Use Arquivo → Restaurar autosave para recuperá-lo.", "info");
     UI.log("Pronto. Q/W/E/R = modos de transform. Ctrl+S = salvar rápido. WASD+mouse+Espaço (pulo duplo) no Play.", "success");
 });
