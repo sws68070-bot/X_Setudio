@@ -555,6 +555,18 @@
                 <div id="mp-room-invite-list" class="flex flex-col gap-1 max-h-40 overflow-y-auto"></div>
             </div>
 
+            <!-- (nova função) Chat da sala — todo mundo que está na sala vê e
+                 manda mensagem aqui, sincronizado no mesmo esquema da cena
+                 (rooms/{code}-chat.json), ver Multiplayer._pollRoomChat. -->
+            <div class="border-t studio-border pt-2 mt-1 flex flex-col gap-1.5">
+                <div class="text-zinc-400 text-[10px] font-bold uppercase tracking-wide flex items-center gap-1"><i class="fa-solid fa-comments"></i> Chat da sala</div>
+                <div id="mp-room-chat-list" class="flex flex-col gap-1.5 max-h-48 overflow-y-auto bg-studio-input rounded p-2"></div>
+                <div class="flex gap-1.5">
+                    <input type="text" id="mp-room-chat-input" placeholder="Escreva no chat da sala..." autocomplete="off" class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs placeholder-zinc-600" onkeydown="if(event.key==='Enter') Multiplayer.submitRoomChat();">
+                    <button onclick="Multiplayer.submitRoomChat()" class="px-3 bg-sky-700 hover:bg-sky-600 rounded text-white text-xs"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+
             <button onclick="Multiplayer.leaveRoom()" class="mt-2 px-3 py-1.5 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-door-open"></i> Sair da sala</button>
         </div>
     </div>
@@ -583,9 +595,9 @@
             <button onclick="UI.closeModal('account-add-friend-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
         <div class="p-4 flex flex-col gap-3">
-            <input type="text" id="account-add-friend-input" placeholder="Buscar nome de usuário no repositório..." autocomplete="off" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" oninput="Account.searchFriendCandidates(this.value)" onkeydown="if(event.key==='Enter') Account.submitAddFriend();">
+            <input type="text" id="account-add-friend-input" placeholder="Filtrar por nome de usuário (opcional)..." autocomplete="off" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" oninput="Account.searchFriendCandidates(this.value)" onkeydown="if(event.key==='Enter') Account.submitAddFriend();">
             <div id="account-add-friend-results" class="flex flex-col gap-1 max-h-48 overflow-y-auto empty:hidden"></div>
-            <div id="account-add-friend-hint" class="text-zinc-600 text-[10px] leading-relaxed">Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.</div>
+            <div id="account-add-friend-hint" class="text-zinc-600 text-[10px] leading-relaxed">Carregando contas do repositório...</div>
             <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Enviar pedido (nome exato)</button>
             <p class="text-zinc-600 text-[10px] leading-relaxed">A pessoa precisa aceitar o pedido pra virar amizade de verdade.</p>
 
@@ -14316,6 +14328,9 @@ const Account = (() => {
     function getCurrentPhoto() { return _current ? (_current.photo || "") : ""; }
     function getFriendsList() { return _current ? (_current.friends || []) : []; }
     function getIncomingRequests() { return _current ? (_current.incomingRequests || []) : []; }
+    // (nova função) Exposto pra outros módulos (ex: Multiplayer) saberem se
+    // eu já mandei pedido de amizade pra alguém, sem duplicar a lógica.
+    function getOutgoingRequests() { return _current ? (_current.outgoingRequests || []) : []; }
 
     async function _init() {
         const s = _loadSession();
@@ -15050,12 +15065,11 @@ const Account = (() => {
     function openAddFriend() {
         if (!_current) { openLogin(); return; }
         document.getElementById("account-add-friend-input").value = "";
-        const results = document.getElementById("account-add-friend-results");
-        if (results) results.innerHTML = "";
-        const hint = document.getElementById("account-add-friend-hint");
-        if (hint) hint.textContent = "Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.";
         _renderMyFriendsInModal();
         UI.openModal("account-add-friend-modal");
+        // (atualizado) Já abre listando todas as contas do repositório —
+        // ver comentário em searchFriendCandidates.
+        searchFriendCandidates("");
     }
 
     /* (nova função) Lista de todas as amizades atuais direto na área de
@@ -15118,24 +15132,25 @@ const Account = (() => {
         return built;
     }
 
+    /* (atualizado a pedido do usuário) Antes, essa área só mostrava
+       resultado depois de digitar 2+ letras. Agora, assim que o modal abre
+       (query vazia), já lista TODAS as contas do repositório (menos a
+       minha), até um limite razoável — digitar filtra essa mesma lista
+       em vez de exigir busca pra aparecer alguma coisa. */
     async function searchFriendCandidates(query) {
         const box = document.getElementById("account-add-friend-results");
         const hint = document.getElementById("account-add-friend-hint");
         if (!box) return;
         query = (query || "").trim();
         const myToken = ++_friendSearchToken;
+        const showingAll = query.length === 0;
 
         if (!GithubStorage.hasConfig()) {
             box.innerHTML = "";
-            if (hint) hint.textContent = "⚠️ Configure um repositório GitHub nas Configurações pra poder buscar contas.";
+            if (hint) hint.textContent = "⚠️ Configure um repositório GitHub nas Configurações pra poder ver as contas.";
             return;
         }
-        if (query.length < 2) {
-            box.innerHTML = "";
-            if (hint) hint.textContent = "Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.";
-            return;
-        }
-        if (hint) hint.textContent = "🔎 Buscando no índice de usuários...";
+        if (hint) hint.textContent = showingAll ? "🔎 Carregando todas as contas do repositório..." : "🔎 Buscando no índice de usuários...";
 
         const index = await _getUsersIndex();
         if (myToken !== _friendSearchToken) return; // resposta antiga, digitação já mudou
@@ -15147,17 +15162,22 @@ const Account = (() => {
 
         const qLower = query.toLowerCase();
         const meLower = _current.username.toLowerCase();
+        const FULL_LIST_LIMIT = 60; // teto pra não travar a tela em repositórios com muita gente
         const matches = index
-            .filter(u => u.username && u.username.toLowerCase() !== meLower && u.username.toLowerCase().includes(qLower))
-            .sort((a, b) => a.username.toLowerCase().indexOf(qLower) - b.username.toLowerCase().indexOf(qLower))
-            .slice(0, 8);
+            .filter(u => u.username && u.username.toLowerCase() !== meLower && (showingAll || u.username.toLowerCase().includes(qLower)))
+            .sort((a, b) => showingAll
+                ? a.username.toLowerCase().localeCompare(b.username.toLowerCase())
+                : a.username.toLowerCase().indexOf(qLower) - b.username.toLowerCase().indexOf(qLower))
+            .slice(0, showingAll ? FULL_LIST_LIMIT : 8);
 
         box.innerHTML = "";
         if (!matches.length) {
-            if (hint) hint.textContent = "Nenhuma conta encontrada com esse nome no índice de usuários.";
+            if (hint) hint.textContent = showingAll ? "Nenhuma outra conta no repositório ainda." : "Nenhuma conta encontrada com esse nome no índice de usuários.";
             return;
         }
-        if (hint) hint.textContent = `${matches.length} conta(s) encontrada(s):`;
+        if (hint) hint.textContent = showingAll
+            ? `${matches.length} de ${index.length - 1} conta(s) do repositório${index.length - 1 > FULL_LIST_LIMIT ? " (digite pra filtrar)" : ""}:`
+            : `${matches.length} conta(s) encontrada(s):`;
 
         const myFriends = new Set((_current.friends || []).map(f => f.toLowerCase()));
         const myOutgoing = new Set((_current.outgoingRequests || []).map(f => f.toLowerCase()));
@@ -15285,7 +15305,7 @@ const Account = (() => {
 
     return {
         _init, signup, login, logout, switchTo, isLoggedIn, getCurrentUserId, getDisplayName,
-        getCurrentPhoto, getFriendsList, getIncomingRequests,
+        getCurrentPhoto, getFriendsList, getIncomingRequests, getOutgoingRequests,
         applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
         addFriend, submitAddFriend, searchFriendCandidates, removeFriend, acceptFriendRequest, declineFriendRequest,
         sendMessage, submitMessage, getConversation,
@@ -15361,6 +15381,16 @@ const Multiplayer = (() => {
     let _lastPushedSceneSig = null;   // último JSON de State.tree que EU enviei
     let _lastAppliedSceneSig = null;  // último JSON de State.tree aplicado no meu editor (meu ou de outro membro)
     let _applyingRemoteScene = false; // true enquanto aplico a cena de outro membro — evita eco (reenviar o que acabei de receber)
+
+    /* ── (nova função) Chat da sala ──────────────────────────────────────
+       Um chat só pra quem está na mesma sala (diferente das mensagens
+       diretas do Account, que são 1-pra-1 entre amizades). Guardado em
+       rooms/{code}-chat.json, com as últimas mensagens; lido junto do
+       _poll() normal da sala (a cada POLL_MS), sem loop próprio. */
+    const CHAT_PATH = (code) => `rooms/${code}-chat.json`;
+    const CHAT_MAX_MESSAGES = 200; // guarda só as últimas N pra não crescer pra sempre
+    let _roomChat = [];        // cache local das mensagens já carregadas
+    let _lastRoomChatSig = null; // assinatura (JSON) do que já foi renderizado, evita re-render sem necessidade
 
     function _utf8ToB64(str) { return btoa(unescape(encodeURIComponent(str))); }
     function _b64ToUtf8(b64) { return decodeURIComponent(escape(atob(String(b64 || "").replace(/\n/g, "")))); }
@@ -15600,6 +15630,7 @@ const Multiplayer = (() => {
         }
         _renderRoomPanel();
         _pollSceneState();
+        _pollRoomChat();
     }
 
     /* ── (nova função) Sincronização do editor entre membros da sala ── */
@@ -15692,6 +15723,84 @@ const Multiplayer = (() => {
         } else if (!_amIViewOnly()) {
             await _pushSceneState();
         }
+        _pollRoomChat();
+    }
+
+    /* ── (nova função) Chat da sala ── */
+
+    /** Manda uma mensagem no chat da sala atual. Lê o arquivo mais recente
+     *  (pra não perder mensagens de quem escreveu entre um poll e outro),
+     *  acrescenta a minha e regrava — mesmo esquema de "ler → mudar →
+     *  gravar com retry em 409" usado pra sala e cena. */
+    async function sendRoomChat(text) {
+        text = (text || "").trim();
+        if (!text || !_code) return;
+        const me = _me();
+        if (!me) { UI.showToast("⚠️ Entre numa conta antes de usar o chat."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o repositório do GitHub antes de usar o chat."); return; }
+        const msg = { id: _reqId(), username: me.username, text: text.slice(0, 500), ts: Date.now() };
+        for (let tries = 0; tries < 4; tries++) {
+            const fresh = await _ghGet(CHAT_PATH(_code));
+            if (!fresh.ok) { UI.showToast("⚠️ Não consegui enviar: " + (fresh.error || "")); return; }
+            const list = [...((fresh.data && fresh.data.messages) || []), msg].slice(-CHAT_MAX_MESSAGES);
+            const put = await _ghPut(CHAT_PATH(_code), { messages: list }, fresh.sha, `Chat da sala ${_code} (${me.username})`);
+            if (put.ok) {
+                _roomChat = list;
+                _lastRoomChatSig = JSON.stringify(list);
+                _renderRoomChat();
+                return;
+            }
+            if (put.status !== 409) { UI.showToast("⚠️ Não consegui enviar: " + (put.error || "")); return; }
+            // 409 = outro membro escreveu no meio do caminho — relê e tenta de novo
+        }
+        UI.showToast("⚠️ Muita gente escrevendo no chat ao mesmo tempo — tente de novo.");
+    }
+
+    /** Chamado pelo botão/Enter do campo de chat da sala. */
+    function submitRoomChat() {
+        const input = document.getElementById("mp-room-chat-input");
+        if (!input) return;
+        const text = input.value;
+        input.value = "";
+        sendRoomChat(text);
+    }
+
+    /** Relê rooms/{code}-chat.json e atualiza a lista na tela, se mudou
+     *  desde a última vez (evita re-renderizar/rolar a lista à toa a cada
+     *  poll quando ninguém escreveu nada de novo). */
+    async function _pollRoomChat() {
+        if (!_code || !GithubStorage.hasConfig()) return;
+        const res = await _ghGet(CHAT_PATH(_code));
+        if (!res.ok) return;
+        const list = (res.data && res.data.messages) || [];
+        const sig = JSON.stringify(list);
+        if (sig === _lastRoomChatSig) return;
+        _roomChat = list;
+        _lastRoomChatSig = sig;
+        _renderRoomChat();
+    }
+
+    function _renderRoomChat() {
+        const box = document.getElementById("mp-room-chat-list");
+        if (!box || !_code) return;
+        const me = _me();
+        box.innerHTML = "";
+        if (!_roomChat.length) {
+            box.innerHTML = `<div class="text-zinc-600 text-[10px] text-center py-2">Nenhuma mensagem ainda — diga oi pra galera da sala!</div>`;
+            return;
+        }
+        _roomChat.forEach(m => {
+            const mine = !!(me && m.username === me.username);
+            const row = document.createElement("div");
+            row.className = `flex flex-col ${mine ? "items-end" : "items-start"}`;
+            const time = new Date(m.ts || 0).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            row.innerHTML = `
+                <span class="text-[9px] text-zinc-500">${mine ? "você" : m.username} · ${time}</span>
+                <span class="max-w-[85%] text-xs px-2 py-1 rounded-lg break-words ${mine ? "bg-sky-700 text-white" : "bg-zinc-700 text-zinc-100"}"></span>`;
+            row.querySelector("span:last-child").textContent = m.text || "";
+            box.appendChild(row);
+        });
+        box.scrollTop = box.scrollHeight;
     }
 
     /* ── Coroa / render do painel ── */
@@ -15720,20 +15829,40 @@ const Multiplayer = (() => {
         const iAmCrown = !!(crownId && me && crownId === me.id);
         const active = _activeMembers().sort((a, b) => a.joinedAt - b.joinedAt);
         box.innerHTML = "";
+        // (nova função) Pra saber se já é amizade / já tem pedido enviado e
+        // decidir se mostra o botão "Adicionar amizade" em cada membro.
+        const myFriendsLower = new Set(((Account.getFriendsList && Account.getFriendsList()) || []).map(f => f.toLowerCase()));
+        const myOutgoingLower = new Set((Account.getOutgoingRequests ? Account.getOutgoingRequests() : []).map(f => f.toLowerCase()));
         active.forEach(m => {
             const row = document.createElement("div");
             row.className = "flex items-center gap-2 px-2 py-1.5 rounded bg-studio-input";
+            const isMe = !!(me && m.id === me.id);
+            const uLower = (m.username || "").toLowerCase();
+            let friendBtnHtml = "";
+            if (!isMe) {
+                if (myFriendsLower.has(uLower)) friendBtnHtml = `<span class="text-[10px] text-emerald-400 font-bold px-1" title="Já são amizades">✓</span>`;
+                else if (myOutgoingLower.has(uLower)) friendBtnHtml = `<span class="text-[10px] text-zinc-500 font-bold px-1" title="Pedido já enviado">…</span>`;
+                else friendBtnHtml = `<button data-addfriend="${m.username}" title="Adicionar como amizade" class="px-2 py-0.5 bg-sky-800 hover:bg-sky-700 text-white rounded text-[10px] font-bold"><i class="fa-solid fa-user-plus"></i></button>`;
+            }
             row.innerHTML = `
                 ${m.viewOnly ? '<i class="fa-solid fa-eye text-zinc-400" title="Modo visualização — só acompanha, não edita"></i>' : (m.id === crownId ? '<i class="fa-solid fa-crown text-amber-400" title="Tem a coroa (pode expulsar)"></i>' : '<i class="fa-solid fa-user text-zinc-500"></i>')}
-                <span class="text-zinc-200 text-xs flex-1 truncate">${m.username}${me && m.id === me.id ? " (você)" : ""}${m.viewOnly ? " (visualizando)" : ""}</span>
-                ${(iAmCrown && me && m.id !== me.id) ? `<button data-kick="${m.id}" class="px-2 py-0.5 bg-red-900 hover:bg-red-800 text-red-200 rounded text-[10px] font-bold">Remover</button>` : ""}
+                <span class="text-zinc-200 text-xs flex-1 truncate">${m.username}${isMe ? " (você)" : ""}${m.viewOnly ? " (visualizando)" : ""}</span>
+                ${friendBtnHtml}
+                ${(iAmCrown && !isMe) ? `<button data-kick="${m.id}" class="px-2 py-0.5 bg-red-900 hover:bg-red-800 text-red-200 rounded text-[10px] font-bold">Remover</button>` : ""}
             `;
             box.appendChild(row);
         });
         box.querySelectorAll("[data-kick]").forEach(btn => {
             btn.onclick = () => kickMember(btn.getAttribute("data-kick"));
         });
+        box.querySelectorAll("[data-addfriend]").forEach(btn => {
+            btn.onclick = async () => {
+                await Account.addFriend(btn.getAttribute("data-addfriend"));
+                _renderRoomPanel();
+            };
+        });
         _renderInviteFriends();
+        _renderRoomChat();
     }
 
     /* ── (nova função) Convidar amizade direto pra sala ─────────────────
@@ -15857,6 +15986,7 @@ const Multiplayer = (() => {
         _room = null; _code = null;
         if (_scenePushTimer) { clearTimeout(_scenePushTimer); _scenePushTimer = null; }
         _lastPushedSceneSig = null; _lastAppliedSceneSig = null;
+        _roomChat = []; _lastRoomChatSig = null; // (nova função) limpa cache do chat da sala anterior
         const badge = document.getElementById("mp-room-badge");
         if (badge) { badge.classList.add("hidden"); badge.classList.remove("flex"); }
         UI.closeModal("mp-room-modal");
@@ -16101,6 +16231,7 @@ const Multiplayer = (() => {
         inviteFriend,
         // (nova função) sincronização do editor entre membros da sala
         notifySceneChanged,
+        sendRoomChat, submitRoomChat,
     };
 })();
 
