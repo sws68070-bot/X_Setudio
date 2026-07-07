@@ -575,6 +575,12 @@
             <div id="account-add-friend-hint" class="text-zinc-600 text-[10px] leading-relaxed">Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.</div>
             <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Enviar pedido (nome exato)</button>
             <p class="text-zinc-600 text-[10px] leading-relaxed">A pessoa precisa aceitar o pedido pra virar amizade de verdade.</p>
+
+            <div class="border-t studio-border pt-3 mt-1">
+                <div class="text-zinc-400 text-[10px] font-bold uppercase tracking-wide mb-2 flex items-center gap-1"><i class="fa-solid fa-user-group"></i> Suas amizades</div>
+                <div id="account-add-friend-mylist" class="flex flex-col gap-1 max-h-40 overflow-y-auto"></div>
+                <div id="account-add-friend-mylist-empty" class="hidden text-zinc-600 text-[10px] text-center py-3">Você ainda não tem amizades.</div>
+            </div>
         </div>
     </div>
 </div>
@@ -14287,6 +14293,7 @@ const Account = (() => {
         if (!newName || newName.length < 3) { UI.showToast("Usuário precisa ter pelo menos 3 letras."); return; }
         const oldName = _current.username;
         if (newName.toLowerCase() === oldName.toLowerCase()) return;
+        const friendsBefore = (_current.friends || []).slice();
 
         if (GithubStorage.hasConfig()) {
             const res = await _writeAccounts(list => {
@@ -14309,6 +14316,13 @@ const Account = (() => {
             _current = res.list.find(a => a.id === _current.id) || _current;
             renderAll();
             UI.showToast("Nome de usuário atualizado!");
+            // (nova função) Sem isso, o histórico de mensagens ficava "preso"
+            // no nome antigo — a conversa some da tela porque a chave local
+            // (e o arquivo messages/{nome}.json de cada amigo) ainda aponta
+            // pro nome de antes da troca. Migra em segundo plano, sem travar
+            // a troca de nome mesmo se der erro de rede no meio do caminho.
+            _migrateLocalMessagesOnRename(oldName, newName);
+            _migrateRepoMessagesOnRename(oldName, newName, friendsBefore).catch(() => {});
             return;
         }
 
@@ -14317,10 +14331,101 @@ const Account = (() => {
         _current.username = newName;
         _persistCurrent();
         const list = _loadAccounts();
-        list.forEach(a => { a.friends = (a.friends || []).map(f => f === oldName ? newName : f); });
+        // (correção) Antes só "friends" era atualizado aqui — pedidos de
+        // amizade pendentes (incoming/outgoing) continuavam com o nome
+        // antigo pra sempre, e nunca mais eram encontrados depois da troca.
+        list.forEach(a => {
+            a.friends = (a.friends || []).map(f => f === oldName ? newName : f);
+            a.incomingRequests = (a.incomingRequests || []).map(f => f === oldName ? newName : f);
+            a.outgoingRequests = (a.outgoingRequests || []).map(f => f === oldName ? newName : f);
+        });
         _saveAccounts(list);
+        _migrateLocalMessagesOnRename(oldName, newName);
         renderAll();
         UI.showToast("Nome de usuário atualizado!");
+    }
+
+    /* (nova função) Reconstrói o cache local de mensagens depois de uma
+       troca de nome: renomeia from/to que apontavam pro nome antigo e
+       recalcula a chave da conversa a partir das próprias mensagens (não
+       do texto antigo da key), pra bater com o nome novo em qualquer
+       lugar que ler a conversa depois. */
+    function _migrateLocalMessagesOnRename(oldName, newName) {
+        const oldLower = oldName.toLowerCase();
+        const newLower = newName.toLowerCase();
+        const local = _loadMessages();
+        const rebuilt = {};
+        Object.keys(local).forEach(key => {
+            const list = (local[key] || []).map(m => ({
+                ...m,
+                from: (m.from && m.from.toLowerCase() === oldLower) ? newName : m.from,
+                to: (m.to && m.to.toLowerCase() === oldLower) ? newName : m.to,
+            }));
+            if (!list.length) return;
+            const sample = list[0];
+            const other = (sample.from && sample.from.toLowerCase() !== newLower) ? sample.from
+                        : (sample.to && sample.to.toLowerCase() !== newLower) ? sample.to
+                        : null;
+            const newKey = other ? _convKey(newName, other) : key;
+            if (rebuilt[newKey]) {
+                const seen = new Set(rebuilt[newKey].map(m => m.from + "|" + m.text + "|" + m.at));
+                list.forEach(m => { const sig = m.from + "|" + m.text + "|" + m.at; if (!seen.has(sig)) { rebuilt[newKey].push(m); seen.add(sig); } });
+                rebuilt[newKey].sort((a, b) => a.at - b.at);
+            } else {
+                rebuilt[newKey] = list;
+            }
+        });
+        _saveMessages(rebuilt);
+    }
+
+    /* (nova função) Melhor esforço pra migrar o histórico de mensagens no
+       repositório depois de uma troca de nome: copia o próprio arquivo
+       messages/{nome-antigo}.json pro novo caminho messages/{nome-novo}.json
+       (corrigindo from/to), e em cada arquivo de amigo renomeia a chave da
+       conversa que usava o nome antigo. Roda em segundo plano — se falhar
+       (rede, conflito), a troca de nome já foi salva e a conversa antiga
+       simplesmente fica disponível só neste navegador via cache local. */
+    async function _migrateRepoMessagesOnRename(oldName, newName, friendsList) {
+        if (!GithubStorage.hasConfig()) return;
+        const oldLower = oldName.toLowerCase();
+        const newLower = newName.toLowerCase();
+        const fixEntry = m => ({
+            ...m,
+            from: (m.from && m.from.toLowerCase() === oldLower) ? newName : m.from,
+            to: (m.to && m.to.toLowerCase() === oldLower) ? newName : m.to,
+        });
+
+        try {
+            const mine = await _ghGetUserMessages(oldName);
+            if (mine.ok && mine.data && Object.keys(mine.data).length) {
+                const fixed = {};
+                Object.keys(mine.data).forEach(contact => { fixed[contact] = (mine.data[contact] || []).map(fixEntry); });
+                await _writeUserMessages(newName, existing => {
+                    const merged = { ...existing };
+                    Object.keys(fixed).forEach(c => {
+                        const already = existing[c] || [];
+                        const seen = new Set(already.map(m => m.from + "|" + m.text + "|" + m.at));
+                        merged[c] = already.concat(fixed[c].filter(m => !seen.has(m.from + "|" + m.text + "|" + m.at)));
+                    });
+                    return { ok:true, data: merged };
+                }, `Migra mensagens de "${oldName}" para "${newName}"`);
+            }
+        } catch (_) { /* melhor esforço — não trava a troca de nome */ }
+
+        for (const friend of (friendsList || [])) {
+            try {
+                const fData = await _ghGetUserMessages(friend);
+                if (!fData.ok || !fData.data || !fData.data[oldLower]) continue;
+                const fixedMsgs = fData.data[oldLower].map(fixEntry);
+                await _writeUserMessages(friend, obj => {
+                    const existing = obj[newLower] || [];
+                    const seen = new Set(existing.map(m => m.from + "|" + m.text + "|" + m.at));
+                    obj[newLower] = existing.concat(fixedMsgs.filter(m => !seen.has(m.from + "|" + m.text + "|" + m.at)));
+                    delete obj[oldLower];
+                    return { ok:true, data: obj };
+                }, `Atualiza contato renomeado de "${oldName}" para "${newName}"`);
+            } catch (_) { /* melhor esforço */ }
+        }
     }
     /** Grava um campo (ou vários) da conta atual no cache local e, se
      *  houver repositório configurado, também no accounts.json — assim
@@ -14850,7 +14955,35 @@ const Account = (() => {
         if (results) results.innerHTML = "";
         const hint = document.getElementById("account-add-friend-hint");
         if (hint) hint.textContent = "Digite pelo menos 2 letras pra buscar entre todas as contas do repositório.";
+        _renderMyFriendsInModal();
         UI.openModal("account-add-friend-modal");
+    }
+
+    /* (nova função) Lista de todas as amizades atuais direto na área de
+       "Adicionar amizade" — assim dá pra ver quem você já tem de amizade
+       e adicionar gente nova no mesmo lugar, sem trocar de tela. */
+    function _renderMyFriendsInModal() {
+        const box = document.getElementById("account-add-friend-mylist");
+        const empty = document.getElementById("account-add-friend-mylist-empty");
+        if (!box || !_current) return;
+        const friends = _current.friends || [];
+        box.innerHTML = "";
+        if (empty) empty.classList.toggle("hidden", friends.length > 0);
+        friends.forEach(f => {
+            const acc = _findByUsername(f);
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+            row.innerHTML = `
+                <span class="relative inline-block shrink-0">
+                    ${acc && acc.photo ? `<img src="${acc.photo}" class="w-6 h-6 rounded-full object-cover">` : `<i class="fa-solid fa-circle-user text-lg text-zinc-500"></i>`}
+                </span>
+                <span class="flex-1 text-zinc-200 text-xs truncate">${f}</span>
+                <button data-msg class="px-2 py-1 bg-sky-800 hover:bg-sky-700 text-white text-[10px] rounded font-bold"><i class="fa-solid fa-comment-dots"></i></button>
+                <button data-remove class="px-2 py-1 bg-red-900 hover:bg-red-800 text-red-200 text-[10px] rounded font-bold"><i class="fa-solid fa-user-xmark"></i></button>`;
+            row.querySelector("[data-msg]").onclick = () => { UI.closeModal("account-add-friend-modal"); openMessagePanel(f); };
+            row.querySelector("[data-remove]").onclick = () => removeFriend(f).then(() => _renderMyFriendsInModal());
+            box.appendChild(row);
+        });
     }
 
     /* (nova função) Busca ao vivo — qualquer conta que exista no
@@ -14888,6 +15021,7 @@ const Account = (() => {
             return;
         }
         _mergeLocalFromRepo(fresh.data);
+        _current = (fresh.data || []).find(a => a.id === _current.id) || _current;
 
         const qLower = query.toLowerCase();
         const meLower = _current.username.toLowerCase();
@@ -14954,9 +15088,12 @@ const Account = (() => {
 
         document.getElementById("account-panel-username").textContent = _current.username;
         const unread = totalUnreadCount();
+        const pendingRequests = getIncomingRequests().length;
+        const notifCount = unread + pendingRequests;
         const badge = document.getElementById("account-panel-badge");
-        badge.classList.toggle("hidden", unread === 0);
-        badge.textContent = unread > 9 ? "9+" : String(unread);
+        badge.classList.toggle("hidden", notifCount === 0);
+        badge.textContent = notifCount > 9 ? "9+" : String(notifCount);
+        badge.title = pendingRequests > 0 ? `${pendingRequests} pedido(s) de amizade + ${unread} mensagem(ns) não lida(s)` : `${unread} mensagem(ns) não lida(s)`;
 
         [["account-panel-avatar", "account-panel-avatar-fallback"],
          ["header-profile-avatar", "header-profile-avatar-fallback"]].forEach(([imgId, fbId]) => {
@@ -14966,8 +15103,9 @@ const Account = (() => {
             else { img.classList.add("hidden"); fb.classList.remove("hidden"); }
         });
         const headerBadge = document.getElementById("header-profile-badge");
-        headerBadge.classList.toggle("hidden", unread === 0);
-        headerBadge.textContent = unread > 9 ? "9+" : String(unread);
+        headerBadge.classList.toggle("hidden", notifCount === 0);
+        headerBadge.textContent = notifCount > 9 ? "9+" : String(notifCount);
+        headerBadge.title = badge.title;
 
         // (nova função) Pedidos de amizade recebidos — precisam aceitar/recusar
         const reqSection = document.getElementById("account-friend-requests-section");
@@ -15020,6 +15158,7 @@ const Account = (() => {
             if (joinBtn) joinBtn.onclick = (e) => { e.stopPropagation(); Multiplayer.requestJoinFriend(f); };
             grid.appendChild(card);
         });
+        _renderMyFriendsInModal();
     }
 
     return {
