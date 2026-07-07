@@ -312,6 +312,16 @@
                 </button>
                 <button onclick="Account.openAddFriend()" class="px-2 py-1 bg-sky-800 hover:bg-sky-700 text-white text-[10px] rounded font-bold flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Adicionar amizade</button>
             </h2>
+            <!-- ═══ (nova função) Pedidos de amizade recebidos — precisam ser
+                 aceitos ou recusados antes de virarem amizade de verdade.
+                 Guardados no repositório do GitHub configurado (accounts.json),
+                 então aparecem em qualquer navegador/computador em que a pessoa
+                 entrar na conta dela. ═══ -->
+            <div id="account-friend-requests-section" class="hidden mb-3 bg-studio-panel border studio-border rounded-lg p-3">
+                <div class="text-zinc-300 text-xs font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-user-clock text-amber-400"></i> Pedidos de amizade recebidos</div>
+                <div id="account-friend-requests-list" class="flex flex-col gap-1.5"></div>
+            </div>
+
             <div id="account-friends-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
             <div id="account-friends-empty" class="hidden text-zinc-500 text-xs text-center py-6 bg-studio-panel border studio-border rounded-lg">
                 Você ainda não adicionou nenhuma amizade.
@@ -421,6 +431,20 @@
 
         <div class="border-t studio-border"></div>
 
+        <!-- ═══ (movido a pedido do usuário) Repositório de dados (GitHub) —
+             antes era um botão dentro do Toolbox; agora mora aqui porque o
+             mesmo repositório guarda conta, amizades e salas, não só o
+             catálogo do Toolbox. O token NUNCA fica escrito no código-fonte —
+             só é lido do que a pessoa colar aqui, e fica salvo no
+             localStorage deste navegador. ═══ -->
+        <div class="flex flex-col gap-1.5 bg-studio-input border studio-border rounded px-3 py-2">
+            <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-brands fa-github"></i> Repositório de dados</span>
+            <span id="account-settings-github-status" class="text-[10px] text-zinc-500 leading-relaxed"></span>
+            <button onclick="PolyPizza.openGithubSettings()" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1"><i class="fa-solid fa-key"></i> Configurar token / repositório</button>
+        </div>
+
+        <div class="border-t studio-border"></div>
+
         <!-- Itens publicados no Toolbox -->
         <button onclick="Account.openMyToolboxItems()" class="w-full px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-2"><i class="fa-solid fa-toolbox text-orange-400"></i> Meus itens publicados no Toolbox</button>
 
@@ -474,7 +498,7 @@
             <div class="flex items-center gap-2 text-zinc-600 text-[10px]"><div class="flex-1 h-px bg-zinc-700"></div>ou<div class="flex-1 h-px bg-zinc-700"></div></div>
             <input type="text" id="mp-join-code-input" placeholder="Código da sala" maxlength="6" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 uppercase tracking-widest text-center" onkeydown="if(event.key==='Enter') Multiplayer.submitJoin();">
             <button onclick="Multiplayer.submitJoin()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-right-to-bracket"></i> Entrar em sala</button>
-            <p class="text-zinc-600 text-[10px] leading-relaxed">As salas usam o GitHub configurado (botão GitHub no Toolbox) como banco de dados — configure isso antes de usar o multiplayer. Também é preciso estar logado numa conta.</p>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">As salas usam o repositório do GitHub configurado (Configurações da conta → Repositório de dados) como banco de dados — configure isso antes de usar o multiplayer. Também é preciso estar logado numa conta.</p>
         </div>
     </div>
 </div>
@@ -513,12 +537,13 @@
 <div id="account-add-friend-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
     <div class="bg-studio-panel border-2 studio-border w-full max-w-xs rounded-lg shadow-2xl">
         <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
-            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-user-plus text-sky-300"></i> Adicionar amizade</span>
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-user-plus text-sky-300"></i> Pedido de amizade</span>
             <button onclick="UI.closeModal('account-add-friend-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
         <div class="p-4 flex flex-col gap-3">
-            <input type="text" id="account-add-friend-input" placeholder="Nome de usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600">
-            <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Adicionar</button>
+            <input type="text" id="account-add-friend-input" placeholder="Nome de usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600" onkeydown="if(event.key==='Enter') Account.submitAddFriend();">
+            <button onclick="Account.submitAddFriend()" class="px-4 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs">Enviar pedido</button>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">A pessoa precisa aceitar o pedido pra virar amizade de verdade.</p>
         </div>
     </div>
 </div>
@@ -1081,7 +1106,10 @@
             <div class="flex items-center gap-2">
                 <!-- (nova função) Histórico e Publicar, lado a lado -->
                 <button onclick="PolyPizza.openHistory()" title="Ver itens adicionados/copiados" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
-                <button onclick="PolyPizza.openGithubSettings()" title="Guardar os itens publicados num repositório do GitHub, em vez de só neste navegador" id="toolbox-github-btn" class="hidden px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded font-bold text-xs items-center gap-1"><i class="fa-brands fa-github"></i> GitHub</button>
+                <!-- (movido a pedido do usuário) O botão de config do GitHub saiu
+                     daqui — agora fica em Configurações da conta → Repositório de
+                     dados (GitHub), já que o mesmo repositório também guarda
+                     contas, amizades e salas, não só o Toolbox. -->
                 <button onclick="PolyPizza.openPublish()" title="Publicar Malha, Modelo, Plugin, Som ou Imagem" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs flex items-center gap-1"><i class="fa-solid fa-cloud-arrow-up"></i> Publicar</button>
                 <button onclick="UI.closeModal('poly-pizza-modal')" class="text-zinc-400 hover:text-white text-lg font-bold ml-1">&times;</button>
             </div>
@@ -1211,7 +1239,7 @@
         </div>
         <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-xs">
             <p class="text-zinc-400 leading-relaxed">
-                Guarda os itens publicados no Toolbox como um arquivo JSON num repositório seu do GitHub, em vez de só neste navegador — assim eles aparecem em qualquer computador que abra este arquivo com os mesmos dados abaixo.
+                Guarda sua conta, amizades, salas e os itens publicados no Toolbox como arquivos JSON num repositório seu do GitHub, em vez de só neste navegador — assim dá pra entrar na mesma conta, ver as mesmas amizades e usar as mesmas salas em qualquer computador que use os mesmos dados abaixo. O nome de usuário também passa a ser único de verdade (checado contra o repositório, não só este navegador).
             </p>
             <ol class="text-zinc-500 list-decimal list-inside leading-relaxed">
                 <li>Crie um <b class="text-zinc-300">Personal Access Token</b> em github.com → Settings → Developer settings → Fine-grained tokens, dando permissão de leitura/escrita só em <b class="text-zinc-300">Contents</b>, só no repositório abaixo.</li>
@@ -4078,30 +4106,18 @@ const GltfManager = (() => {
 const GithubStorage = (() => {
     const CONFIG_KEY = "github_storage_config_v1";
 
-    // (nova função) Configuração fixa pra não precisar preencher o modal
-    // toda vez que abrir o arquivo neste computador. SÓ FAÇA ISSO EM
-    // ARQUIVOS DE USO PESSOAL — nunca distribua este .html com o token
-    // preenchido aqui, porque qualquer um que abrir "Ver código-fonte"
-    // consegue ler e usar o token.
-    const DEFAULT_CONFIG = {
-        token:  "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",
-        owner:  "sws68070-bot",
-        repo:   "Dados",
-        branch: "main",
-        path:   "toolbox-catalog.json",
-    };
-
+    // (CORREÇÃO DE SEGURANÇA) Antes havia um token de acesso do GitHub
+    // fixo direto no código-fonte deste arquivo (DEFAULT_CONFIG). Qualquer
+    // pessoa que abrisse "Ver código-fonte" nesse .html conseguia copiar
+    // esse token e usar sua conta do GitHub livremente. Isso foi removido —
+    // agora o token só existe se o próprio usuário colar nas Configurações
+    // (Configurações da conta → Repositório de dados), e fica salvo só no
+    // localStorage deste navegador, nunca no código.
     function getConfig() {
         try {
             const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
             if (saved && saved.token && saved.owner && saved.repo && saved.path) return saved;
         } catch (_) {}
-        // Sem configuração salva ainda (ou token de exemplo não trocado) —
-        // usa o padrão fixo acima, e já salva pra não perguntar de novo.
-        if (DEFAULT_CONFIG.token && DEFAULT_CONFIG.token !== "COLE_SEU_TOKEN_AQUI") {
-            try { localStorage.setItem(CONFIG_KEY, JSON.stringify(DEFAULT_CONFIG)); } catch (_) {}
-            return DEFAULT_CONFIG;
-        }
         return null;
     }
     function hasConfig() {
@@ -4544,14 +4560,16 @@ const PolyPizza = (() => {
 
     function _refreshGithubStatus() {
         const status = document.getElementById("github-storage-status");
-        if (!status) return;
+        // (nova função) Mesmo status também aparece resumido nas Configurações
+        // da conta, já que o repositório agora também guarda contas/amizades/salas.
+        const settingsStatus = document.getElementById("account-settings-github-status");
         if (GithubStorage.hasConfig()) {
             const cfg = GithubStorage.getConfig();
-            status.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} (${cfg.branch || "main"}) — arquivo: ${cfg.path}`;
-            status.className = "text-[11px] text-emerald-400";
+            if (status) { status.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} (${cfg.branch || "main"}) — arquivo: ${cfg.path}`; status.className = "text-[11px] text-emerald-400"; }
+            if (settingsStatus) settingsStatus.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} — contas, amizades e salas ficam salvas lá.`;
         } else {
-            status.textContent = "⚠️ Ainda não configurado — os itens publicados ficam só neste navegador.";
-            status.className = "text-[11px] text-amber-400";
+            if (status) { status.textContent = "⚠️ Ainda não configurado — os itens publicados ficam só neste navegador."; status.className = "text-[11px] text-amber-400"; }
+            if (settingsStatus) settingsStatus.textContent = "⚠️ Sem repositório configurado — a conta, amizades e salas ficam só neste navegador.";
         }
     }
 
@@ -13946,18 +13964,156 @@ const Account = (() => {
         if (idx >= 0) { list[idx] = _current; _saveAccounts(list); }
     }
 
+    /* ════════════════════════════════════════════════════════════
+       (nova função) CONTA NO REPOSITÓRIO DO GITHUB
+       ─────────────────────────────────────────────────────────────
+       Antes as contas viviam só no localStorage — cada navegador tinha
+       sua própria lista, então "criar conta" no PC não existia no
+       celular. Agora, quando há um repositório do GitHub configurado
+       (Configurações da conta → Repositório de dados), TODAS as contas
+       (perfil, senha ofuscada, amizades, pedidos de amizade) ficam
+       também num arquivo `accounts.json` nesse repositório — a mesma
+       "base de dados" que Multiplayer já usa pras salas. Assim dá pra
+       entrar na mesma conta de qualquer navegador/computador, e o nome
+       de usuário não pode se repetir (checado contra o repositório,
+       não só contra este navegador).
+       Sem repositório configurado, tudo continua funcionando só neste
+       navegador (modo antigo), como fallback.
+       ════════════════════════════════════════════════════════════ */
+    const ACCOUNTS_PATH = "accounts.json";
+
+    function _utf8ToB64Acc(str) { return btoa(unescape(encodeURIComponent(str))); }
+    function _b64ToUtf8Acc(b64) { return decodeURIComponent(escape(atob(String(b64 || "").replace(/\n/g, "")))); }
+    function _accApiUrl(cfg) {
+        const cleanPath = ACCOUNTS_PATH.split("/").map(encodeURIComponent).join("/");
+        return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cleanPath}`;
+    }
+    /** Lê accounts.json do repositório configurado. */
+    async function _ghGetAccounts() {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok:false, error:"GitHub não configurado.", data:null, sha:null };
+        try {
+            const res = await fetch(`${_accApiUrl(cfg)}?ref=${encodeURIComponent(cfg.branch || "main")}`, {
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" },
+                cache: "no-store",
+            });
+            if (res.status === 404) return { ok:true, data:[], sha:null };
+            if (!res.ok) return { ok:false, error:`Erro HTTP ${res.status} ao ler as contas.`, data:null, sha:null };
+            const json = await res.json();
+            let parsed = [];
+            try { parsed = JSON.parse(_b64ToUtf8Acc(json.content)); } catch (_) { parsed = []; }
+            return { ok:true, data: Array.isArray(parsed) ? parsed : [], sha: json.sha };
+        } catch (e) {
+            return { ok:false, error:"Falha de rede: " + e.message, data:null, sha:null };
+        }
+    }
+    /** Sobrescreve accounts.json no repositório configurado. */
+    async function _ghPutAccounts(list, sha, message) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok:false, error:"GitHub não configurado." };
+        try {
+            const body = { message: message || "Atualiza contas", content: _utf8ToB64Acc(JSON.stringify(list, null, 2)), branch: cfg.branch || "main" };
+            if (sha) body.sha = sha;
+            const res = await fetch(_accApiUrl(cfg), {
+                method: "PUT",
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+                keepalive: true,
+            });
+            if (!res.ok) return { ok:false, status: res.status, error: (res.status === 409) ? "Conflito (409)" : `Erro HTTP ${res.status}` };
+            const json = await res.json();
+            return { ok:true, sha: json.content?.sha || null };
+        } catch (e) {
+            return { ok:false, error:"Falha de rede: " + e.message };
+        }
+    }
+    /** Lê accounts.json fresco, aplica `mutateFn(list)` — que deve devolver
+     *  `{ ok:true, list, ...extra }` (salva) ou `{ ok:false, error }`
+     *  (cancela sem salvar, ex: nome de usuário repetido) — e tenta salvar,
+     *  repetindo em caso de 409 (outra aba/pessoa salvou no meio do caminho). */
+    async function _writeAccounts(mutateFn, message) {
+        for (let tries = 0; tries < 4; tries++) {
+            const fresh = await _ghGetAccounts();
+            if (!fresh.ok) return fresh;
+            const result = mutateFn(fresh.data || []);
+            if (!result || result.ok === false) return result || { ok:false, error:"Operação cancelada." };
+            const put = await _ghPutAccounts(result.list, fresh.sha, message);
+            if (put.ok) return result;
+            if (put.status !== 409) return put;
+        }
+        return { ok:false, error:"Muita gente mexendo nas contas ao mesmo tempo — tente de novo." };
+    }
+    /** Mescla a lista vinda do repositório no cache local (por id), sem
+     *  apagar contas locais que por acaso ainda não tenham sido enviadas. */
+    function _mergeLocalFromRepo(repoList) {
+        const local = _loadAccounts();
+        const byId = new Map(local.map(a => [a.id, a]));
+        (repoList || []).forEach(a => byId.set(a.id, a));
+        _saveAccounts(Array.from(byId.values()));
+    }
+
     /* ── Cadastro / Entrar / Sair / Trocar de conta ── */
-    function signup(username, password) {
+    async function signup(username, password) {
         username = (username || "").trim();
         if (!username || !password) return { ok:false, error:"Preencha usuário e senha." };
         if (username.length < 3) return { ok:false, error:"Usuário precisa ter pelo menos 3 letras." };
+
+        if (GithubStorage.hasConfig()) {
+            const acc = { id:_uid(), username, passwordHash:_hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
+            const res = await _writeAccounts(list => {
+                if (list.some(a => a.username.toLowerCase() === username.toLowerCase())) {
+                    return { ok:false, error:"Esse nome de usuário já existe (verificado no repositório — não pode repetir em nenhum computador)." };
+                }
+                list.push(acc);
+                return { ok:true, list };
+            }, `Cria conta "${username}"`);
+            if (!res.ok) return { ok:false, error: res.error || "Não consegui criar a conta no repositório." };
+            _mergeLocalFromRepo(res.list);
+            _activate(acc);
+            return { ok:true };
+        }
+
+        // (fallback) Sem repositório configurado — conta continua só neste navegador.
         if (_findByUsername(username)) return { ok:false, error:"Esse nome de usuário já existe." };
-        const acc = { id:_uid(), username, passwordHash:_hash(password), photo:"", theme:"dark", friends:[], createdAt:Date.now() };
+        const acc = { id:_uid(), username, passwordHash:_hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
         const list = _loadAccounts(); list.push(acc); _saveAccounts(list);
         _activate(acc);
+        UI.showToast("⚠️ Sem repositório GitHub configurado — esta conta só existe neste navegador. Configure em Configurações → Repositório de dados pra acessá-la de qualquer lugar.");
         return { ok:true };
     }
-    function login(username, password) {
+    async function login(username, password) {
+        username = (username || "").trim();
+        if (GithubStorage.hasConfig()) {
+            const fresh = await _ghGetAccounts();
+            if (!fresh.ok) return { ok:false, error: "Não consegui verificar o repositório: " + (fresh.error || "") };
+            let acc = (fresh.data || []).find(a => a.username.toLowerCase() === username.toLowerCase());
+            if (!acc) {
+                // (nova função) Conta criada antes de configurar o repositório
+                // (só existia neste navegador) — se a senha bater, migra ela
+                // pro repositório automaticamente no primeiro login, em vez
+                // de simplesmente dizer "usuário não encontrado".
+                const localAcc = _findByUsername(username);
+                if (localAcc && localAcc.passwordHash === _hash(password)) {
+                    const res = await _writeAccounts(list => {
+                        if (list.some(a => a.username.toLowerCase() === username.toLowerCase())) {
+                            return { ok:false, error:"Esse nome de usuário já existe no repositório com outra senha." };
+                        }
+                        list.push(localAcc);
+                        return { ok:true, list };
+                    }, `Migra conta local "${username}" para o repositório`);
+                    if (!res.ok) return { ok:false, error: res.error || "Não consegui migrar a conta pro repositório." };
+                    _mergeLocalFromRepo(res.list);
+                    _activate(localAcc);
+                    UI.showToast("☁️ Sua conta local foi migrada pro repositório — agora dá pra entrar dela em qualquer navegador/computador.");
+                    return { ok:true };
+                }
+                return { ok:false, error:"Usuário não encontrado." };
+            }
+            if (acc.passwordHash !== _hash(password)) return { ok:false, error:"Senha incorreta." };
+            _mergeLocalFromRepo(fresh.data);
+            _activate(acc);
+            return { ok:true };
+        }
         const acc = _findByUsername(username);
         if (!acc) return { ok:false, error:"Usuário não encontrado." };
         if (acc.passwordHash !== _hash(password)) return { ok:false, error:"Senha incorreta." };
@@ -13982,9 +14138,19 @@ const Account = (() => {
         closeSettingsSidebar();
         renderAll();
     }
-    function switchTo(id) {
-        const acc = _findById(id);
+    async function switchTo(id) {
+        let acc = _findById(id);
         if (!acc) return;
+        // (nova função) Se houver repositório configurado, busca a versão mais
+        // recente da conta antes de trocar (pode ter amigos/pedidos novos
+        // vindos de outro dispositivo).
+        if (GithubStorage.hasConfig()) {
+            const fresh = await _ghGetAccounts();
+            if (fresh.ok) {
+                _mergeLocalFromRepo(fresh.data);
+                acc = (fresh.data || []).find(a => a.id === id) || acc;
+            }
+        }
         _activate(acc);
         closeAccountSwitcher();
         closeSettingsSidebar();
@@ -13999,14 +14165,29 @@ const Account = (() => {
     // offline e pedido de entrada em modo visualização — ver Módulo 12B.
     function getCurrentPhoto() { return _current ? (_current.photo || "") : ""; }
     function getFriendsList() { return _current ? (_current.friends || []) : []; }
+    function getIncomingRequests() { return _current ? (_current.incomingRequests || []) : []; }
 
-    function _init() {
+    async function _init() {
         const s = _loadSession();
         if (s.currentId) {
             const acc = _findById(s.currentId);
             if (acc) { _current = acc; applyTheme(acc.theme || "dark"); }
         }
         renderAll();
+        // (nova função) Se estiver logado e houver repositório configurado,
+        // busca a versão mais recente da conta em segundo plano ao abrir o
+        // app — assim pedidos de amizade feitos noutro dispositivo aparecem
+        // sem precisar sair e entrar de novo.
+        if (_current && GithubStorage.hasConfig()) {
+            try {
+                const fresh = await _ghGetAccounts();
+                if (fresh.ok) {
+                    _mergeLocalFromRepo(fresh.data);
+                    const updated = (fresh.data || []).find(a => a.id === _current.id);
+                    if (updated) { _current = updated; renderAll(); }
+                }
+            } catch (_) { /* offline — segue com o cache local */ }
+        }
     }
 
     /* ── Tema claro/escuro ── */
@@ -14015,41 +14196,80 @@ const Account = (() => {
         const btn = document.getElementById("account-theme-toggle-btn");
         if (btn) btn.innerHTML = theme === "light" ? '<i class="fa-solid fa-sun mr-1"></i>Claro' : '<i class="fa-solid fa-moon mr-1"></i>Escuro';
     }
-    function toggleTheme() {
+    async function toggleTheme() {
         if (!_current) { UI.showToast("Entre numa conta pra salvar sua preferência de tema."); return; }
-        _current.theme = (_current.theme === "light") ? "dark" : "light";
-        _persistCurrent();
-        applyTheme(_current.theme);
+        const theme = (_current.theme === "light") ? "dark" : "light";
+        applyTheme(theme);
+        await _persistCurrentField({ theme });
     }
 
     /* ── Editar perfil ── */
-    function changeUsername(newName) {
+    async function changeUsername(newName) {
         newName = (newName || "").trim();
         if (!_current) return;
         if (!newName || newName.length < 3) { UI.showToast("Usuário precisa ter pelo menos 3 letras."); return; }
+        const oldName = _current.username;
+        if (newName.toLowerCase() === oldName.toLowerCase()) return;
+
+        if (GithubStorage.hasConfig()) {
+            const res = await _writeAccounts(list => {
+                if (list.some(a => a.id !== _current.id && a.username.toLowerCase() === newName.toLowerCase())) {
+                    return { ok:false, error:"Esse nome de usuário já existe (verificado no repositório)." };
+                }
+                const me = list.find(a => a.id === _current.id);
+                if (!me) return { ok:false, error:"Sua conta não foi encontrada no repositório." };
+                me.username = newName;
+                // Atualiza o nome nas listas de amizade e pedidos de todo mundo, pra não quebrar referências
+                list.forEach(a => {
+                    a.friends = (a.friends || []).map(f => f.toLowerCase() === oldName.toLowerCase() ? newName : f);
+                    a.incomingRequests = (a.incomingRequests || []).map(f => f.toLowerCase() === oldName.toLowerCase() ? newName : f);
+                    a.outgoingRequests = (a.outgoingRequests || []).map(f => f.toLowerCase() === oldName.toLowerCase() ? newName : f);
+                });
+                return { ok:true, list };
+            }, `Renomeia "${oldName}" para "${newName}"`);
+            if (!res.ok) { UI.showToast("⚠️ " + (res.error || "Não consegui atualizar o nome.")); return; }
+            _mergeLocalFromRepo(res.list);
+            _current = res.list.find(a => a.id === _current.id) || _current;
+            renderAll();
+            UI.showToast("Nome de usuário atualizado!");
+            return;
+        }
+
         const clash = _findByUsername(newName);
         if (clash && clash.id !== _current.id) { UI.showToast("Esse nome de usuário já existe."); return; }
-        const oldName = _current.username;
         _current.username = newName;
         _persistCurrent();
-        // Atualiza o nome nas listas de amizade de todo mundo, pra não quebrar referências
         const list = _loadAccounts();
         list.forEach(a => { a.friends = (a.friends || []).map(f => f === oldName ? newName : f); });
         _saveAccounts(list);
         renderAll();
         UI.showToast("Nome de usuário atualizado!");
     }
-    function changePassword(newPassword) {
+    /** Grava um campo (ou vários) da conta atual no cache local e, se
+     *  houver repositório configurado, também no accounts.json — assim
+     *  senha, foto e tema também acompanham a conta em qualquer navegador. */
+    async function _persistCurrentField(patch) {
+        Object.assign(_current, patch);
+        _persistCurrent();
+        if (GithubStorage.hasConfig()) {
+            const res = await _writeAccounts(list => {
+                const me = list.find(a => a.id === _current.id);
+                if (!me) return { ok:false, error:"Conta não encontrada no repositório." };
+                Object.assign(me, patch);
+                return { ok:true, list };
+            }, `Atualiza perfil de ${_current.username}`);
+            if (res.ok) { _mergeLocalFromRepo(res.list); }
+        }
+    }
+    async function changePassword(newPassword) {
         if (!_current) return;
         if (!newPassword || newPassword.length < 3) { UI.showToast("Senha precisa ter pelo menos 3 caracteres."); return; }
-        _current.passwordHash = _hash(newPassword);
-        _persistCurrent();
+        await _persistCurrentField({ passwordHash: _hash(newPassword) });
         UI.showToast("Senha atualizada!");
     }
-    function changePhoto(dataUrl) {
+    async function changePhoto(dataUrl) {
         if (!_current) return;
-        _current.photo = dataUrl;
-        _persistCurrent();
+        await _persistCurrentField({ photo: dataUrl });
         renderAll();
     }
     function onPhotoFileSelected(input) {
@@ -14060,26 +14280,102 @@ const Account = (() => {
         reader.readAsDataURL(file);
     }
 
-    /* ── Amigos ── */
-    function addFriend(username) {
+    /* ── Amigos ── (nova função) Agora é um PEDIDO de verdade — só vira
+       amizade quando a outra pessoa aceita, e o pedido fica guardado no
+       repositório do GitHub configurado (accounts.json), então ela pode
+       aceitar de qualquer navegador/computador em que entrar na conta dela. */
+    async function addFriend(username) {
         username = (username || "").trim();
         if (!_current) { UI.showToast("Entre numa conta primeiro."); return; }
         if (!username) return;
         if (username.toLowerCase() === _current.username.toLowerCase()) { UI.showToast("Você não pode se adicionar."); return; }
-        if (!_findByUsername(username)) { UI.showToast("Não existe nenhuma conta com esse nome de usuário."); return; }
-        if ((_current.friends || []).some(f => f.toLowerCase() === username.toLowerCase())) { UI.showToast("Já é seu amigo."); return; }
-        _current.friends = [...(_current.friends || []), username];
-        _persistCurrent();
+
+        if (!GithubStorage.hasConfig()) {
+            UI.showToast("⚠️ Configure um repositório GitHub nas Configurações (Repositório de dados) pra poder enviar pedidos de amizade.");
+            return;
+        }
+
+        UI.showToast("🔄 Enviando pedido de amizade...");
+        const res = await _writeAccounts(list => {
+            const me = list.find(a => a.id === _current.id);
+            const target = list.find(a => a.username.toLowerCase() === username.toLowerCase());
+            if (!me) return { ok:false, error:"Sua conta não foi encontrada no repositório — tente entrar de novo." };
+            if (!target) return { ok:false, error:"Não existe nenhuma conta com esse nome de usuário." };
+            if ((me.friends || []).some(f => f.toLowerCase() === username.toLowerCase())) return { ok:false, error:"Já é seu amigo." };
+            target.incomingRequests = target.incomingRequests || [];
+            me.outgoingRequests = me.outgoingRequests || [];
+            if (target.incomingRequests.some(r => r.toLowerCase() === me.username.toLowerCase())) return { ok:false, error:"Você já pediu amizade pra essa pessoa — aguarde ela aceitar." };
+            target.incomingRequests.push(me.username);
+            if (!me.outgoingRequests.some(r => r.toLowerCase() === target.username.toLowerCase())) me.outgoingRequests.push(target.username);
+            return { ok:true, list };
+        }, `Pedido de amizade de ${_current.username} para ${username}`);
+        if (!res.ok) { UI.showToast("⚠️ " + (res.error || "Não consegui enviar o pedido.")); return; }
+        _mergeLocalFromRepo(res.list);
+        _current = res.list.find(a => a.id === _current.id) || _current;
         UI.closeModal("account-add-friend-modal");
         renderAll();
-        UI.showToast(`"${username}" adicionado à lista de amizades!`);
+        UI.showToast(`📨 Pedido de amizade enviado pra "${username}"! Ela precisa aceitar.`);
     }
     function submitAddFriend() { addFriend(document.getElementById("account-add-friend-input").value); }
-    function removeFriend(username) {
+
+    /** (nova função) Aceita um pedido recebido — vira amizade dos dois lados. */
+    async function acceptFriendRequest(username) {
+        if (!_current) return;
+        if (!GithubStorage.hasConfig()) { UI.showToast("Configure o repositório do GitHub nas Configurações primeiro."); return; }
+        const res = await _writeAccounts(list => {
+            const me = list.find(a => a.id === _current.id);
+            if (!me) return { ok:false, error:"Sua conta não foi encontrada no repositório." };
+            const other = list.find(a => a.username.toLowerCase() === username.toLowerCase());
+            me.incomingRequests = (me.incomingRequests || []).filter(f => f.toLowerCase() !== username.toLowerCase());
+            me.friends = me.friends || [];
+            const otherName = other ? other.username : username;
+            if (!me.friends.some(f => f.toLowerCase() === otherName.toLowerCase())) me.friends.push(otherName);
+            if (other) {
+                other.outgoingRequests = (other.outgoingRequests || []).filter(f => f.toLowerCase() !== me.username.toLowerCase());
+                other.friends = other.friends || [];
+                if (!other.friends.some(f => f.toLowerCase() === me.username.toLowerCase())) other.friends.push(me.username);
+            }
+            return { ok:true, list };
+        }, `${_current.username} aceita amizade de ${username}`);
+        if (!res.ok) { UI.showToast("⚠️ " + (res.error || "Não consegui aceitar o pedido.")); return; }
+        _mergeLocalFromRepo(res.list);
+        _current = res.list.find(a => a.id === _current.id) || _current;
+        renderAll();
+        UI.showToast(`✅ Agora você e "${username}" são amigos!`);
+    }
+    /** (nova função) Recusa um pedido recebido — some da lista dos dois lados. */
+    async function declineFriendRequest(username) {
+        if (!_current) return;
+        if (!GithubStorage.hasConfig()) { UI.showToast("Configure o repositório do GitHub nas Configurações primeiro."); return; }
+        const res = await _writeAccounts(list => {
+            const me = list.find(a => a.id === _current.id);
+            if (!me) return { ok:false, error:"Sua conta não foi encontrada no repositório." };
+            me.incomingRequests = (me.incomingRequests || []).filter(f => f.toLowerCase() !== username.toLowerCase());
+            const other = list.find(a => a.username.toLowerCase() === username.toLowerCase());
+            if (other) other.outgoingRequests = (other.outgoingRequests || []).filter(f => f.toLowerCase() !== me.username.toLowerCase());
+            return { ok:true, list };
+        }, `${_current.username} recusa amizade de ${username}`);
+        if (!res.ok) { UI.showToast("⚠️ " + (res.error || "Não consegui recusar o pedido.")); return; }
+        _mergeLocalFromRepo(res.list);
+        _current = res.list.find(a => a.id === _current.id) || _current;
+        renderAll();
+        UI.showToast("Pedido de amizade recusado.");
+    }
+    async function removeFriend(username) {
         if (!_current) return;
         if (!confirm(`Remover "${username}" da lista de amizades?`)) return;
         _current.friends = (_current.friends || []).filter(f => f !== username);
         _persistCurrent();
+        if (GithubStorage.hasConfig()) {
+            const res = await _writeAccounts(list => {
+                const me = list.find(a => a.id === _current.id);
+                const other = list.find(a => a.username.toLowerCase() === username.toLowerCase());
+                if (me) me.friends = (me.friends || []).filter(f => f.toLowerCase() !== username.toLowerCase());
+                if (other) other.friends = (other.friends || []).filter(f => f.toLowerCase() !== _current.username.toLowerCase());
+                return { ok:true, list };
+            }, `${_current.username} desfaz amizade com ${username}`);
+            if (res.ok) { _mergeLocalFromRepo(res.list); _current = res.list.find(a => a.id === _current.id) || _current; }
+        }
         renderAll();
     }
 
@@ -14155,15 +14451,17 @@ const Account = (() => {
     /* ── Modais de Entrar / Cadastrar ── */
     function openLogin() { UI.closeModal("account-signup-modal"); UI.openModal("account-login-modal"); }
     function openSignup() { UI.closeModal("account-login-modal"); UI.openModal("account-signup-modal"); }
-    function submitLogin() {
-        const res = login(document.getElementById("account-login-username").value, document.getElementById("account-login-password").value);
+    async function submitLogin() {
+        UI.showToast("🔄 Entrando...");
+        const res = await login(document.getElementById("account-login-username").value, document.getElementById("account-login-password").value);
         if (!res.ok) { UI.showToast("⚠️ " + res.error); return; }
         UI.closeModal("account-login-modal");
         renderAll();
         UI.showToast(`Bem-vindo(a) de volta, ${_current.username}!`);
     }
-    function submitSignup() {
-        const res = signup(document.getElementById("account-signup-username").value, document.getElementById("account-signup-password").value);
+    async function submitSignup() {
+        UI.showToast("🔄 Criando conta...");
+        const res = await signup(document.getElementById("account-signup-username").value, document.getElementById("account-signup-password").value);
         if (!res.ok) { UI.showToast("⚠️ " + res.error); return; }
         UI.closeModal("account-signup-modal");
         renderAll();
@@ -14192,6 +14490,17 @@ const Account = (() => {
         const fb = document.getElementById("account-settings-avatar-fallback");
         if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
         else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
+        // (nova função) Status do repositório de dados (token/GitHub), agora
+        // configurado por aqui em vez de escondido dentro do Toolbox.
+        const ghStatus = document.getElementById("account-settings-github-status");
+        if (ghStatus) {
+            if (typeof GithubStorage !== "undefined" && GithubStorage.hasConfig()) {
+                const cfg = GithubStorage.getConfig();
+                ghStatus.textContent = `✅ Conectado a ${cfg.owner}/${cfg.repo} — sua conta, amizades e salas ficam salvas lá, então dá pra entrar de qualquer navegador/computador.`;
+            } else {
+                ghStatus.textContent = "⚠️ Sem repositório configurado — esta conta existe só neste navegador. Configure abaixo pra acessá-la de qualquer lugar.";
+            }
+        }
     }
 
     /* ── Meus itens publicados no Toolbox ── */
@@ -14289,6 +14598,27 @@ const Account = (() => {
         headerBadge.classList.toggle("hidden", unread === 0);
         headerBadge.textContent = unread > 9 ? "9+" : String(unread);
 
+        // (nova função) Pedidos de amizade recebidos — precisam aceitar/recusar
+        const reqSection = document.getElementById("account-friend-requests-section");
+        const reqList = document.getElementById("account-friend-requests-list");
+        const incoming = getIncomingRequests();
+        if (reqSection && reqList) {
+            reqSection.classList.toggle("hidden", incoming.length === 0);
+            reqList.innerHTML = "";
+            incoming.forEach(name => {
+                const row = document.createElement("div");
+                row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-1.5";
+                row.innerHTML = `
+                    <i class="fa-solid fa-user-plus text-sky-400"></i>
+                    <span class="flex-1 text-zinc-200 text-xs truncate"><b>${name}</b> quer ser sua amizade</span>
+                    <button data-accept class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] rounded font-bold">Aceitar</button>
+                    <button data-decline class="px-2 py-1 bg-red-900 hover:bg-red-800 text-red-200 text-[10px] rounded font-bold">Recusar</button>`;
+                row.querySelector("[data-accept]").onclick = () => acceptFriendRequest(name);
+                row.querySelector("[data-decline]").onclick = () => declineFriendRequest(name);
+                reqList.appendChild(row);
+            });
+        }
+
         // Lista de amizades na tela inicial
         const grid = document.getElementById("account-friends-list");
         const empty = document.getElementById("account-friends-empty");
@@ -14323,9 +14653,10 @@ const Account = (() => {
 
     return {
         _init, signup, login, logout, switchTo, isLoggedIn, getCurrentUserId, getDisplayName,
-        getCurrentPhoto, getFriendsList,
+        getCurrentPhoto, getFriendsList, getIncomingRequests,
         applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
-        addFriend, submitAddFriend, removeFriend, sendMessage, submitMessage, getConversation,
+        addFriend, submitAddFriend, removeFriend, acceptFriendRequest, declineFriendRequest,
+        sendMessage, submitMessage, getConversation,
         openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup,
         openSettingsSidebar, closeSettingsSidebar, openMyToolboxItems, openAccountSwitcher,
         closeAccountSwitcher, openAddFriend, renderAll,
@@ -14341,7 +14672,7 @@ const Account = (() => {
    da cena entre quem está na sala — é só o lobby: código da sala,
    quem está dentro, coroa (quem manda) e expulsar. Pra criar/entrar
    numa sala é preciso estar logado numa conta (ver módulo Account) e
-   ter o GitHub configurado (botão GitHub no Toolbox).
+   ter o repositório do GitHub configurado (Configurações da conta → Repositório de dados).
 
    Como a API do GitHub não é tempo real, cada aba faz:
      • "heartbeat" — atualiza a própria presença a cada HEARTBEAT_MS.
@@ -14516,7 +14847,7 @@ const Multiplayer = (() => {
     async function createRoom() {
         const me = _me();
         if (!me) { UI.showToast("⚠️ Entre numa conta antes de criar uma sala."); return; }
-        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o GitHub (botão GitHub no Toolbox) antes de usar o multiplayer."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o repositório do GitHub (Configurações da conta → Repositório de dados) antes de usar o multiplayer."); return; }
         UI.showToast("🔄 Criando sala...");
         let code = _genCode();
         for (let i = 0; i < 5; i++) {
@@ -14539,7 +14870,7 @@ const Multiplayer = (() => {
     async function joinRoom(codeInput, viewOnly) {
         const me = _me();
         if (!me) { UI.showToast("⚠️ Entre numa conta antes de entrar numa sala."); return; }
-        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o GitHub (botão GitHub no Toolbox) antes de usar o multiplayer."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o repositório do GitHub (Configurações da conta → Repositório de dados) antes de usar o multiplayer."); return; }
         const code = (codeInput || "").trim().toUpperCase();
         if (!code) { UI.showToast("Digite o código da sala."); return; }
         UI.showToast(viewOnly ? "🔄 Entrando na sala em modo visualização..." : "🔄 Entrando na sala...");
@@ -14822,7 +15153,7 @@ const Multiplayer = (() => {
     async function requestJoinFriend(username) {
         const me = _me();
         if (!me) { UI.showToast("⚠️ Entre numa conta antes de pedir pra entrar numa sala."); return; }
-        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o GitHub (botão GitHub no Toolbox) antes de usar o multiplayer."); return; }
+        if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o repositório do GitHub (Configurações da conta → Repositório de dados) antes de usar o multiplayer."); return; }
         const pres = getFriendPresence(username);
         if (!pres.online || !pres.inRoom) { UI.showToast(`${username} não está numa sala agora.`); return; }
         const res = await _writeUser(username, (current) => {
