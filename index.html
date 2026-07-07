@@ -13935,10 +13935,13 @@ const App = (() => {
    PUBLISHED_PROJECTS_KEY / NAMED_PROJECTS_KEY) e não têm nenhuma
    ligação com conta de usuário.
 
-   (Aviso: como o app inteiro roda só no navegador, sem servidor,
-   isso é uma SIMULAÇÃO local de conta — a "senha" só passa por uma
-   ofuscação simples, não é um sistema de autenticação seguro de
-   verdade. Mesmo nível do token do GitHub salvo mais acima.)
+   (Aviso: como o app inteiro roda só no navegador, sem servidor de
+   verdade, isso continua sendo uma simulação de conta — mas a partir
+   de agora a "senha" passa por SHA-256 de verdade (Web Crypto do
+   navegador) antes de ir pra qualquer lugar, local ou repositório.
+   Isso não é login "oficial" do GitHub — não existe um jeito seguro
+   de fazer OAuth de verdade sem um servidor guardando um segredo —
+   mas a senha em si não fica mais visível/reversível em texto puro.)
    ================================================================ */
 const Account = (() => {
 
@@ -13975,11 +13978,16 @@ const Account = (() => {
     function _uid() {
         return (crypto.randomUUID ? crypto.randomUUID() : "acc_" + Date.now() + "_" + Math.random().toString(36).slice(2));
     }
-    /* Ofuscação simples da senha — não é criptografia de verdade (ver aviso acima). */
-    function _hash(str) {
-        let h = 0;
-        for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-        return "h" + h;
+    /* (melhorado a pedido do usuário) A senha nunca é salva em texto puro —
+       agora é transformada com SHA-256 (hash criptográfico de verdade, via
+       Web Crypto do navegador) antes de ir pro repositório. Um hash não dá
+       pra "desfazer" — só dá pra comparar se outra senha bate com o mesmo
+       resultado, que é como o login confere a senha sem nunca precisar
+       guardar ela de verdade em lugar nenhum. */
+    async function _hash(str) {
+        const bytes = new TextEncoder().encode(String(str));
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
     }
     function _convKey(a, b) { return [a, b].sort((x,y) => x.localeCompare(y)).join("::"); }
     function _findByUsername(name) {
@@ -14088,7 +14096,7 @@ const Account = (() => {
         if (username.length < 3) return { ok:false, error:"Usuário precisa ter pelo menos 3 letras." };
 
         if (GithubStorage.hasConfig()) {
-            const acc = { id:_uid(), username, passwordHash:_hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
+            const acc = { id:_uid(), username, passwordHash: await _hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
             const res = await _writeAccounts(list => {
                 if (list.some(a => a.username.toLowerCase() === username.toLowerCase())) {
                     return { ok:false, error:"Esse nome de usuário já existe (verificado no repositório — não pode repetir em nenhum computador)." };
@@ -14104,7 +14112,7 @@ const Account = (() => {
 
         // (fallback) Sem repositório configurado — conta continua só neste navegador.
         if (_findByUsername(username)) return { ok:false, error:"Esse nome de usuário já existe." };
-        const acc = { id:_uid(), username, passwordHash:_hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
+        const acc = { id:_uid(), username, passwordHash: await _hash(password), photo:"", theme:"dark", friends:[], incomingRequests:[], outgoingRequests:[], createdAt:Date.now() };
         const list = _loadAccounts(); list.push(acc); _saveAccounts(list);
         _activate(acc);
         UI.showToast("⚠️ Sem repositório GitHub configurado — esta conta só existe neste navegador. Configure em Configurações → Repositório de dados pra acessá-la de qualquer lugar.");
@@ -14122,7 +14130,7 @@ const Account = (() => {
                 // pro repositório automaticamente no primeiro login, em vez
                 // de simplesmente dizer "usuário não encontrado".
                 const localAcc = _findByUsername(username);
-                if (localAcc && localAcc.passwordHash === _hash(password)) {
+                if (localAcc && localAcc.passwordHash === await _hash(password)) {
                     const res = await _writeAccounts(list => {
                         if (list.some(a => a.username.toLowerCase() === username.toLowerCase())) {
                             return { ok:false, error:"Esse nome de usuário já existe no repositório com outra senha." };
@@ -14138,14 +14146,14 @@ const Account = (() => {
                 }
                 return { ok:false, error:"Usuário não encontrado." };
             }
-            if (acc.passwordHash !== _hash(password)) return { ok:false, error:"Senha incorreta." };
+            if (acc.passwordHash !== await _hash(password)) return { ok:false, error:"Senha incorreta." };
             _mergeLocalFromRepo(fresh.data);
             _activate(acc);
             return { ok:true };
         }
         const acc = _findByUsername(username);
         if (!acc) return { ok:false, error:"Usuário não encontrado." };
-        if (acc.passwordHash !== _hash(password)) return { ok:false, error:"Senha incorreta." };
+        if (acc.passwordHash !== await _hash(password)) return { ok:false, error:"Senha incorreta." };
         _activate(acc);
         return { ok:true };
     }
@@ -14293,7 +14301,7 @@ const Account = (() => {
     async function changePassword(newPassword) {
         if (!_current) return;
         if (!newPassword || newPassword.length < 3) { UI.showToast("Senha precisa ter pelo menos 3 caracteres."); return; }
-        await _persistCurrentField({ passwordHash: _hash(newPassword) });
+        await _persistCurrentField({ passwordHash: await _hash(newPassword) });
         UI.showToast("Senha atualizada!");
     }
     async function changePhoto(dataUrl) {
