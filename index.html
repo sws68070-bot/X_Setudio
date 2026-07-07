@@ -14225,6 +14225,37 @@ const Account = (() => {
                 }
             } catch (_) { /* offline — segue com o cache local */ }
         }
+        _startFriendRequestPoll();
+    }
+
+    /* (nova função) Antes, pedidos de amizade só apareciam quando a página
+       recarregava ou quando o usuário fazia alguma ação (enviar/aceitar/
+       recusar outro pedido). Agora, com repositório configurado, fica
+       relendo accounts.json em segundo plano — igual ao loop de presença
+       que o Multiplayer já usa — e avisa na hora se chegou pedido novo,
+       sem precisar sair e entrar de novo ou dar F5. */
+    const FRIEND_POLL_MS = 15000;
+    let _friendPollTimer = null;
+    function _startFriendRequestPoll() {
+        if (_friendPollTimer) return;
+        _friendPollTimer = setInterval(async () => {
+            if (!_current || !GithubStorage.hasConfig()) return;
+            try {
+                const fresh = await _ghGetAccounts();
+                if (!fresh.ok) return;
+                const prevIncoming = (_current.incomingRequests || []).length;
+                _mergeLocalFromRepo(fresh.data);
+                const updated = (fresh.data || []).find(a => a.id === _current.id);
+                if (!updated) return;
+                const newIncoming = (updated.incomingRequests || []).length;
+                _current = updated;
+                if (newIncoming > prevIncoming) {
+                    const last = updated.incomingRequests[updated.incomingRequests.length - 1];
+                    UI.showToast(`👋 ${last || "Alguém"} te mandou um pedido de amizade!`);
+                }
+                renderAll();
+            } catch (_) { /* offline — tenta de novo no próximo ciclo */ }
+        }, FRIEND_POLL_MS);
     }
 
     /* ── Tema claro/escuro ── */
@@ -14416,23 +14447,158 @@ const Account = (() => {
         renderAll();
     }
 
-    /* ── Mensagens (com contador de não lidas na foto de perfil) ── */
-    function sendMessage(toUsername, text) {
+    /* ── Mensagens (com contador de não lidas na foto de perfil) ──
+       (nova função) Antes as mensagens viviam só no localStorage — cada
+       navegador só via as mensagens que ELE MESMO enviou, nunca as que
+       chegavam de outro dispositivo. Agora, quando há repositório do
+       GitHub configurado, cada usuário tem o PRÓPRIO arquivo de
+       mensagens em `messages/{usuario}.json` — igual ao `users/{usuario}.json`
+       que o Multiplayer já usa pra presença. Esse arquivo guarda, pra
+       cada contato, tanto as mensagens que EU mandei quanto as que ELE
+       me mandou (a conversa inteira), então só preciso ler o MEU
+       arquivo pra montar qualquer conversa minha — sem precisar mexer
+       num arquivo gigante compartilhado por todo mundo, o que também
+       evita conflito de escrita quando várias conversas acontecem ao
+       mesmo tempo. Ao mandar uma mensagem, grava uma cópia no meu
+       arquivo e outra no arquivo do destinatário. Sem repositório
+       configurado, continua funcionando só neste navegador (modo
+       antigo), como fallback. */
+    const MESSAGES_PATH = (username) => `messages/${String(username || "").trim().toLowerCase()}.json`;
+    function _msgsApiUrl(cfg, username) {
+        const cleanPath = MESSAGES_PATH(username).split("/").map(encodeURIComponent).join("/");
+        return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cleanPath}`;
+    }
+    /** Lê o arquivo de mensagens de UM usuário (messages/{usuario}.json).
+     *  Formato: { "contato-em-minúsculo": [ {from,to,text,at,read}, ... ] } */
+    async function _ghGetUserMessages(username) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok:false, error:"GitHub não configurado.", data:null, sha:null };
+        try {
+            const res = await fetch(`${_msgsApiUrl(cfg, username)}?ref=${encodeURIComponent(cfg.branch || "main")}`, {
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" },
+                cache: "no-store",
+            });
+            if (res.status === 404) return { ok:true, data:{}, sha:null };
+            if (!res.ok) return { ok:false, error:`Erro HTTP ${res.status} ao ler as mensagens.`, data:null, sha:null };
+            const json = await res.json();
+            let parsed = {};
+            try { parsed = JSON.parse(_b64ToUtf8Acc(json.content)); } catch (_) { parsed = {}; }
+            return { ok:true, data: (parsed && typeof parsed === "object") ? parsed : {}, sha: json.sha };
+        } catch (e) {
+            return { ok:false, error:"Falha de rede: " + e.message, data:null, sha:null };
+        }
+    }
+    /** Sobrescreve o arquivo de mensagens de UM usuário. */
+    async function _ghPutUserMessages(username, obj, sha, message) {
+        const cfg = GithubStorage.getConfig();
+        if (!cfg) return { ok:false, error:"GitHub não configurado." };
+        try {
+            const body = { message: message || "Atualiza mensagens", content: _utf8ToB64Acc(JSON.stringify(obj, null, 2)), branch: cfg.branch || "main" };
+            if (sha) body.sha = sha;
+            const res = await fetch(_msgsApiUrl(cfg, username), {
+                method: "PUT",
+                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+                keepalive: true,
+            });
+            if (!res.ok) return { ok:false, status: res.status, error: (res.status === 409) ? "Conflito (409)" : `Erro HTTP ${res.status}` };
+            const json = await res.json();
+            return { ok:true, sha: json.content?.sha || null };
+        } catch (e) {
+            return { ok:false, error:"Falha de rede: " + e.message };
+        }
+    }
+    /** Lê o arquivo de mensagens de `username` fresco, aplica `mutateFn(obj)`
+     *  — que deve devolver `{ ok:true, data }` (salva) ou `{ ok:false, error }`
+     *  — e tenta salvar, repetindo em caso de 409 (mesma ideia de _writeAccounts).
+     *  Como cada usuário tem seu próprio arquivo, só dá 409 se DUAS pessoas
+     *  mandarem mensagem pro MESMO destinatário ao mesmo tempo — bem raro. */
+    async function _writeUserMessages(username, mutateFn, message) {
+        for (let tries = 0; tries < 4; tries++) {
+            const fresh = await _ghGetUserMessages(username);
+            if (!fresh.ok) return fresh;
+            const result = mutateFn(fresh.data || {});
+            if (!result || result.ok === false) return result || { ok:false, error:"Operação cancelada." };
+            const put = await _ghPutUserMessages(username, result.data, fresh.sha, message);
+            if (put.ok) return result;
+            if (put.status !== 409) return put;
+        }
+        return { ok:false, error:"Muita gente mandando mensagem ao mesmo tempo — tente de novo." };
+    }
+    /** Mescla as conversas do MEU arquivo remoto (messages/{eu}.json) no
+     *  cache local, sem apagar mensagens locais ainda não sincronizadas.
+     *  Dedupe por from+text+at (não há id único por mensagem) — assim o
+     *  estado de "lida" já marcado localmente não é sobrescrito. */
+    function _mergeMessagesFromRepo(myUsername, remoteObj) {
+        const local = _loadMessages();
+        const merged = { ...local };
+        Object.keys(remoteObj || {}).forEach(contactLower => {
+            const key = _convKey(myUsername, contactLower);
+            const localList = merged[key] || [];
+            const seen = new Set(localList.map(m => m.from + "|" + m.text + "|" + m.at));
+            const combined = localList.slice();
+            (remoteObj[contactLower] || []).forEach(m => {
+                const sig = m.from + "|" + m.text + "|" + m.at;
+                if (!seen.has(sig)) { combined.push(m); seen.add(sig); }
+            });
+            combined.sort((a, b) => a.at - b.at);
+            merged[key] = combined;
+        });
+        _saveMessages(merged);
+        return merged;
+    }
+    /** Busca o que houver de novo no MEU arquivo de mensagens e atualiza a
+     *  tela — chamado ao abrir a conversa e num intervalo curto enquanto
+     *  ela estiver aberta (ver openMessagePanel). */
+    async function _refreshConversationFromGithub(withUsername) {
+        if (!_current || !GithubStorage.hasConfig()) return;
+        const fresh = await _ghGetUserMessages(_current.username);
+        if (!fresh.ok) return;
+        _mergeMessagesFromRepo(_current.username, fresh.data);
+        if (_currentConversation === withUsername) {
+            markConversationRead(withUsername);
+            _renderMessageList(withUsername);
+        }
+        renderAll();
+    }
+
+    async function sendMessage(toUsername, text) {
         text = (text || "").trim();
         if (!_current || !text) return;
         const msgs = _loadMessages();
         const key = _convKey(_current.username, toUsername);
         if (!msgs[key]) msgs[key] = [];
-        msgs[key].push({ from:_current.username, to:toUsername, text, at:Date.now(), read:false });
+        const msg = { from:_current.username, to:toUsername, text, at:Date.now(), read:false };
+        msgs[key].push(msg);
         _saveMessages(msgs);
         document.getElementById("account-message-input").value = "";
         _renderMessageList(toUsername);
         renderAll();
+        if (GithubStorage.hasConfig()) {
+            const meLower = _current.username.toLowerCase();
+            const toLower = toUsername.toLowerCase();
+            // Grava uma cópia no MEU arquivo (sob a chave do destinatário) e
+            // outra no arquivo DO DESTINATÁRIO (sob a minha chave) — assim
+            // cada um vê a conversa inteira só lendo o próprio arquivo.
+            const results = await Promise.all([
+                _writeUserMessages(_current.username, obj => {
+                    if (!obj[toLower]) obj[toLower] = [];
+                    obj[toLower].push(msg);
+                    return { ok:true, data: obj };
+                }, `${_current.username} envia mensagem pra ${toUsername}`),
+                _writeUserMessages(toUsername, obj => {
+                    if (!obj[meLower]) obj[meLower] = [];
+                    obj[meLower].push(msg);
+                    return { ok:true, data: obj };
+                }, `${_current.username} envia mensagem pra ${toUsername}`),
+            ]);
+            if (results.some(r => !r.ok)) UI.showToast("⚠️ Mensagem salva só neste navegador — não consegui sincronizar com o repositório.");
+        }
     }
-    function submitMessage() {
+    async function submitMessage() {
         const to = _currentConversation;
         if (!to) return;
-        sendMessage(to, document.getElementById("account-message-input").value);
+        await sendMessage(to, document.getElementById("account-message-input").value);
     }
     function getConversation(withUsername) {
         if (!_current) return [];
@@ -14456,7 +14622,8 @@ const Account = (() => {
     }
 
     let _currentConversation = null;
-    function openMessagePanel(withUsername) {
+    let _messagePollTimer = null;
+    async function openMessagePanel(withUsername) {
         if (!_current) return;
         _currentConversation = withUsername;
         markConversationRead(withUsername);
@@ -14465,8 +14632,23 @@ const Account = (() => {
         _renderMessageList(withUsername);
         UI.openModal("account-message-modal");
         setTimeout(() => document.getElementById("account-message-input")?.focus(), 50);
+        // (nova função) Busca mensagens novas do repositório assim que abre
+        // a conversa, e fica repetindo a cada 6s enquanto ela estiver
+        // aberta — assim uma mensagem mandada de outro navegador/computador
+        // aparece sem precisar recarregar a página.
+        if (_messagePollTimer) { clearInterval(_messagePollTimer); _messagePollTimer = null; }
+        if (GithubStorage.hasConfig()) {
+            await _refreshConversationFromGithub(withUsername);
+            _messagePollTimer = setInterval(() => {
+                if (_currentConversation === withUsername) _refreshConversationFromGithub(withUsername);
+            }, 6000);
+        }
     }
-    function closeMessagePanel() { UI.closeModal("account-message-modal"); _currentConversation = null; }
+    function closeMessagePanel() {
+        UI.closeModal("account-message-modal");
+        _currentConversation = null;
+        if (_messagePollTimer) { clearInterval(_messagePollTimer); _messagePollTimer = null; }
+    }
     function _renderMessageList(withUsername) {
         const box = document.getElementById("account-message-list");
         const conv = getConversation(withUsername);
