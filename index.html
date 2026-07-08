@@ -16482,9 +16482,21 @@ const Multiplayer = (() => {
      *  toda vez que algo muda no projeto. Agenda o ENVIO DIRETO (WebRTC)
      *  da cena com um pequeno atraso, pra juntar várias mudanças seguidas
      *  (arrastar um objeto, digitar um script...) num envio só, em vez de
-     *  um por evento — sem gravar nada no GitHub. */
+     *  um por evento — sem gravar nada no GitHub.
+     *
+     *  (CORREÇÃO a pedido do usuário) Durante o PLAY, isto disparava sem
+     *  querer: qualquer Script mexendo em Position de um NPC/veículo/
+     *  plataforma chama markDirty() a cada frame, o que mandava A ÁRVORE
+     *  INTEIRA do mapa pela rede a cada 120ms — o design já documentado
+     *  aqui embaixo (Play/Stop sincronizado) diz claramente que o Play NÃO
+     *  é física compartilhada, só o boneco do jogador (via notifyPlayerTransform,
+     *  um pacote minúsculo) e o momento de começar/parar são sincronizados.
+     *  Então agora, com Simulation ativo, a árvore inteira NUNCA é
+     *  reenviada — só os dados importantes (posição/rotação/animação de
+     *  cada jogador) continuam viajando, do jeito que já funcionava. */
     function notifySceneChanged() {
         if (!_code || _applyingRemoteScene || _amIViewOnly()) return;
+        if (typeof Simulation !== "undefined" && Simulation.active) return;
         const now = Date.now();
         const sinceLast = now - _lastBroadcastAt;
         if (sinceLast >= SCENE_BROADCAST_THROTTLE_MS) {
@@ -16511,6 +16523,10 @@ const Multiplayer = (() => {
         _sceneBroadcastTimer = null;
         _lastBroadcastAt = Date.now();
         if (!_code) return;
+        // (CORREÇÃO) Mesma trava de notifySceneChanged, mas aqui também —
+        // cobre o caso de um envio "trailing" (SCENE_BROADCAST_TRAILING_MS)
+        // que já estava agendado no instante exato em que o Play começou.
+        if (typeof Simulation !== "undefined" && Simulation.active) return;
         const me = _me();
         if (!me) return;
         let treeStr;
@@ -16564,10 +16580,32 @@ const Multiplayer = (() => {
         if (!_code) return;
         const me = _me();
         if (!me) return;
+        _p2pEnsureConnected();
+        // (nova função a pedido do usuário) "Espera todos os dados do mapa
+        // sincronizar" — ao APERTAR Play (não ao parar), manda uma última
+        // cópia GARANTIDA e completa do mapa pra sala inteira ANTES do
+        // aviso de "play" sair atrás dela. Como a conexão é "reliable"
+        // (ordem garantida), quem receber vai processar essa cena final
+        // primeiro e só DEPOIS o "play" — ou seja, todo mundo entra no
+        // Play já com o mapa 100% igual ao de quem apertou o botão, mesmo
+        // que alguma edição recente ainda não tivesse sido replicada. Isso
+        // ignora o throttle normal de propósito (é só uma vez, no momento
+        // mais importante: o início da partida).
+        if (active) {
+            const sceneMsg = { type: "scene", tree: State.tree, by: me.username };
+            let sceneTreeStr;
+            try { sceneTreeStr = JSON.stringify(State.tree); } catch (_) { sceneTreeStr = null; }
+            if (_isHost) {
+                _peerConns.forEach((c) => { if (c.open) { try { c.send(sceneMsg); } catch (_) {} } });
+            } else if (_hostConn && _hostConn.open) {
+                try { _hostConn.send(sceneMsg); } catch (_) {}
+            }
+            if (sceneTreeStr) { _lastBroadcastSceneSig = sceneTreeStr; _lastAppliedSceneSig = sceneTreeStr; }
+            _pushSceneFallback(true); // garante isso também pra quem só usa a reserva via GitHub
+        }
         const ts = Date.now();
         const msg = { type: "play", active, by: me.username, ts };
         _lastAppliedPlaySig = active + ":" + ts;
-        _p2pEnsureConnected();
         if (_isHost) {
             _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
         } else if (_hostConn && _hostConn.open) {
