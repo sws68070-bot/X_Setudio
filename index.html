@@ -2417,6 +2417,11 @@ const ThreeManager = (() => {
     // ── Perf: dirty-flag para sync seletivo ─────────────────────
     let   _sceneDirty      = false;
     let   _constraintsDirty = false;
+    // Otimização · degradação extrema — guarda o strength original do bloom
+    // e se a sombra foi desligada automaticamente (ver _renderLoop), pra dar
+    // pra restaurar exatamente como estava quando o FPS se recupera.
+    let   _extremeBloomBackup = null;
+    let   _extremeShadowOff   = false;
 
     // ── FPS counter ──────────────────────────────────────────────
     let   _frameCount = 0, _fpsTimer = 0, _lastFps = 60;
@@ -2455,7 +2460,12 @@ const ThreeManager = (() => {
         camera = new THREE.PerspectiveCamera(45, vp.clientWidth / vp.clientHeight, 0.1, 2000);
         camera.position.set(0, 15, 30);
 
-        renderer = new THREE.WebGLRenderer({ antialias:true });
+        // Otimização · em notebooks com placa integrada + dedicada, sem isso
+        // o navegador às vezes escolhe a GPU integrada (mais fraca) sozinho.
+        // "high-performance" pede explicitamente a GPU dedicada quando existe
+        // — melhora bastante o pior caso de FPS nessas máquinas, sem custo
+        // nenhum em quem só tem uma GPU.
+        renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference: "high-performance" });
         renderer.setSize(vp.clientWidth, vp.clientHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
@@ -2780,7 +2790,11 @@ const ThreeManager = (() => {
             const fps = _lastFps || 60;
             const maxPr = Math.min(window.devicePixelRatio, 2);
             let pr = renderer.getPixelRatio();
-            if (fps < 30 && pr > 0.5)      pr = Math.max(0.5, pr - 0.25);
+            // Otimização · piso de resolução mais baixo (0.35 em vez de 0.5) —
+            // em cenas extremas (muitos objetos, GPU fraca) 0.5 ainda podia
+            // não ser suficiente pra sair do sufoco; um piso mais baixo dá
+            // mais uma margem antes de precisar cortar sombra/bloom abaixo.
+            if (fps < 30 && pr > 0.35)      pr = Math.max(0.35, pr - 0.25);
             else if (fps > 55 && pr < maxPr) pr = Math.min(maxPr, pr + 0.25);
             if (pr !== renderer.getPixelRatio()) {
                 renderer.setPixelRatio(pr);
@@ -2798,6 +2812,35 @@ const ThreeManager = (() => {
             if (ssaoPass && _gfx.ssao !== false) {
                 if (fps < 24 && ssaoPass.enabled)       ssaoPass.enabled = false;
                 else if (fps > 50 && !ssaoPass.enabled) ssaoPass.enabled = true;
+            }
+            // Otimização · degradação extrema (nova função) — se mesmo com
+            // resolução no piso e SSAO desligado o FPS continuar muito baixo
+            // (cena realmente pesada demais pra essa GPU), corta mais dois
+            // itens caros: Bloom (pass de tela cheia extra) e o próprio
+            // shadow map (recalcular sombra é uma das operações mais caras
+            // da GPU). Isso é o "modo sobrevivência": prioriza manter a
+            // engine usável (editável) em vez de bonita. Volta tudo sozinho
+            // assim que o FPS se recupera — nenhuma configuração é perdida,
+            // só fica temporariamente desligada.
+            if (fps < 18) {
+                if (bloomPass && bloomPass.strength > 0 && _extremeBloomBackup === null) {
+                    _extremeBloomBackup = bloomPass.strength;
+                    bloomPass.strength = 0;
+                }
+                if (renderer.shadowMap.enabled) {
+                    renderer.shadowMap.enabled = false;
+                    _extremeShadowOff = true;
+                }
+            } else if (fps > 45) {
+                if (bloomPass && _extremeBloomBackup !== null) {
+                    bloomPass.strength = _extremeBloomBackup;
+                    _extremeBloomBackup = null;
+                }
+                if (_extremeShadowOff) {
+                    renderer.shadowMap.enabled = true;
+                    renderer.shadowMap.needsUpdate = true;
+                    _extremeShadowOff = false;
+                }
             }
         }
 
@@ -16159,6 +16202,7 @@ const Multiplayer = (() => {
     /** Fecha qualquer conexão/Peer aberta desta sessão P2P (usado ao sair
      *  da sala, trocar de sala, ou antes de tentar reconectar do zero). */
     function _p2pTeardown() {
+        _p2pRetryAttempt = 0; // nova sessão P2P (nova sala, ou reentrando) começa com backoff do zero
         if (_p2pRetryTimer) { clearTimeout(_p2pRetryTimer); _p2pRetryTimer = null; }
         if (_sceneBroadcastTimer) { clearTimeout(_sceneBroadcastTimer); _sceneBroadcastTimer = null; }
         if (_sceneTrailingTimer) { clearTimeout(_sceneTrailingTimer); _sceneTrailingTimer = null; }
@@ -16199,6 +16243,7 @@ const Multiplayer = (() => {
             _peer = peer;
             peer.on("open", () => {
                 _isHost = true; _p2pConnecting = false;
+                _p2pResetRetryBackoff(); // virei host com sucesso — volta o backoff pro valor base
                 UI.log(`🟢 Você é o host da sincronização da sala ${_code} (WebRTC).`, "info");
                 _pushSceneFallback(true); // (nova função) garante que quem só usa a reserva (sem WebRTC) já pega a cena certa com o novo host
             });
@@ -16252,18 +16297,38 @@ const Multiplayer = (() => {
         }
     }
 
+    // Otimização · timeout de conexão (nova função) — em algumas redes bem
+    // fechadas, nem o STUN nem o TURN conseguem fechar o handshake e o
+    // evento "open" simplesmente nunca chega (nem "error"). Sem um timeout,
+    // essa aba ficava "pendurada" achando que ainda estava tentando, e só
+    // ia sincronizar de novo quando o poll de 6s desse sala mudasse algo que
+    // disparasse _p2pEnsureConnected() de outro jeito. Agora, se não abrir
+    // em P2P_CONNECT_TIMEOUT_MS, descartamos essa tentativa e tentamos de
+    // novo — via reserva GitHub, nada trava.
+    const P2P_CONNECT_TIMEOUT_MS = 8000;
     function _p2pConnectToHost() {
         if (!_peer || !_code) return;
         let conn;
         try { conn = _peer.connect(P2P_HOST_ID(_code), { reliable: true }); }
         catch (_) { _p2pScheduleRetry(); return; }
         _hostConn = conn;
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            if (_hostConn !== conn || conn.open) return;
+            timedOut = true;
+            try { conn.close(); } catch (_) {}
+            if (_hostConn === conn) _hostConn = null;
+            console.warn("[Multiplayer P2P] timeout conectando no host — tentando de novo.");
+            _p2pScheduleRetry();
+        }, P2P_CONNECT_TIMEOUT_MS);
         conn.on("open", () => {
+            clearTimeout(timeoutId);
+            _p2pResetRetryBackoff(); // conectou de primeira — volta o backoff pro valor base
             UI.log(`🟢 Conectado direto (WebRTC) com o host da sala ${_code}.`, "info");
         });
         conn.on("data", (msg) => _p2pOnClientReceive(msg));
-        conn.on("close", () => { if (_hostConn === conn) _hostConn = null; _p2pScheduleRetry(); });
-        conn.on("error", () => { if (_hostConn === conn) _hostConn = null; _p2pScheduleRetry(); });
+        conn.on("close", () => { clearTimeout(timeoutId); if (timedOut) return; if (_hostConn === conn) _hostConn = null; _p2pScheduleRetry(); });
+        conn.on("error", () => { clearTimeout(timeoutId); if (timedOut) return; if (_hostConn === conn) _hostConn = null; _p2pScheduleRetry(); });
     }
 
     function _p2pRemoveConn(conn) {
@@ -16347,10 +16412,25 @@ const Multiplayer = (() => {
         _applyRemoteScene(res.data.tree, sig, res.data.by);
     }
 
+    // Otimização · backoff exponencial com jitter (nova função) — antes cada
+    // falha esperava sempre os mesmos 4s pra tentar de novo, mesmo depois de
+    // 10 falhas seguidas (rede realmente fora do ar) — o que só gera tráfego
+    // inútil sem ajudar a conectar mais rápido. Agora o intervalo cresce a
+    // cada falha consecutiva (4s → 6s → 9s → ... até um teto de 20s) e tem
+    // uma variação aleatória pequena (jitter) pra evitar que todo mundo da
+    // sala tente reconectar exatamente no mesmo instante. Assim que conecta
+    // com sucesso (_p2pResetRetryBackoff, chamado nos "open" de host/cliente),
+    // volta pro intervalo base — a próxima queda começa rápida de novo.
+    const P2P_RETRY_MAX_MS = 20000;
+    let _p2pRetryAttempt = 0;
+    function _p2pResetRetryBackoff() { _p2pRetryAttempt = 0; }
     function _p2pScheduleRetry() {
         if (!_code) return;
         if (_p2pRetryTimer) clearTimeout(_p2pRetryTimer);
-        _p2pRetryTimer = setTimeout(() => { _p2pRetryTimer = null; _p2pEnsureConnected(); }, P2P_RETRY_MS);
+        const base = Math.min(P2P_RETRY_MAX_MS, P2P_RETRY_MS * Math.pow(1.5, _p2pRetryAttempt));
+        _p2pRetryAttempt++;
+        const jitter = base * 0.2 * Math.random();
+        _p2pRetryTimer = setTimeout(() => { _p2pRetryTimer = null; _p2pEnsureConnected(); }, base + jitter);
     }
 
     /** (host) Recebeu uma mensagem de um membro conectado — aplica local e
