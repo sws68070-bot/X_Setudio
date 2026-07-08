@@ -816,6 +816,7 @@
     <!-- Play/Stop -->
     <div class="flex items-center gap-2 mr-2">
         <span id="fps-counter" class="text-zinc-600 font-mono text-[10px]">60 fps</span>
+        <button onclick="UI.openGraphicsSettings()" class="p-1.5 bg-studio-panel hover:bg-zinc-700 rounded border studio-border text-gray-300" title="Configurações gráficas"><i class="fa-solid fa-sliders text-cyan-400"></i></button>
         <span id="group-mode-badge" class="hidden text-amber-400 font-mono text-[10px] bg-amber-950/40 border border-amber-700/50 px-1.5 py-0.5 rounded"><i class="fa-solid fa-box-archive mr-1"></i><span id="group-mode-count">0</span> peças (grupo)</span>
         <button id="btn-play-toggle" onclick="Simulation.toggle()" class="px-4 py-1.5 bg-green-700 hover:bg-green-600 text-white font-bold rounded shadow flex items-center gap-1.5 transition-all">
             <i class="fa-solid fa-play"></i> <span>▶️ Play</span>
@@ -1050,6 +1051,50 @@
 </main>
 
 <!-- ══ MODAIS ══════════════════════════════════════════════════════ -->
+
+<!-- (novo, a pedido do usuário) Configurações gráficas — deixa a pessoa
+     ajustar manualmente o quanto o navegador dela vai gastar de GPU/CPU
+     pra renderizar (sombra, SSAO, antialiasing, resolução), em vez de
+     depender só do ajuste automático por FPS. Fica salvo no localStorage,
+     então continua igual da próxima vez que abrir. -->
+<div id="graphics-settings-modal" class="fixed inset-0 bg-black/60 z-50 items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-sm rounded-lg shadow-2xl flex flex-col max-h-[85vh]">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-sliders text-cyan-400"></i> Configurações Gráficas</span>
+            <button onclick="UI.closeModal('graphics-settings-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-4 space-y-4 overflow-y-auto text-sm">
+            <div>
+                <label class="text-zinc-300 font-semibold flex items-center justify-between">
+                    Qualidade / resolução
+                    <span id="gfx-quality-label" class="text-cyan-400 font-mono text-xs">Auto</span>
+                </label>
+                <input type="range" id="gfx-quality-slider" min="0" max="4" step="1" value="4" class="w-full mt-1" oninput="UI.setGfxQualityFromSlider(parseInt(this.value))">
+                <div class="flex justify-between text-[10px] text-zinc-500 mt-0.5">
+                    <span>Baixa</span><span>Média</span><span>Alta</span><span>Máxima</span><span>Auto</span>
+                </div>
+                <p class="text-[11px] text-zinc-500 mt-1">"Auto" deixa o editor baixar/subir a resolução sozinho conforme o FPS (recomendado). As outras opções travam num nível fixo.</p>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-zinc-300">Sombras</span>
+                <input type="checkbox" id="gfx-shadows" checked class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('shadows', this.checked)">
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-zinc-300">SSAO (sombreamento de contato)</span>
+                <input type="checkbox" id="gfx-ssao" checked class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('ssao', this.checked)">
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-zinc-300">Antialiasing (bordas suaves)</span>
+                <input type="checkbox" id="gfx-aa" checked class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('aa', this.checked)">
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-zinc-300">Efeito Bloom</span>
+                <input type="checkbox" id="gfx-bloom" checked class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('bloom', this.checked)">
+            </div>
+            <button onclick="UI.resetGraphicsSettings()" class="w-full mt-2 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 text-xs">↺ Restaurar padrão (Auto)</button>
+        </div>
+    </div>
+</div>
 
 <!-- Insert Object -->
 <div id="insert-modal" class="fixed inset-0 bg-black/60 z-50 items-center justify-center p-4" style="display:none">
@@ -2175,6 +2220,58 @@ const ThreeManager = (() => {
     let clock;
     let composer, bloomPass, fxaaPass; // (correção) pipeline de pós-processamento p/ o BloomEffect funcionar de verdade
     let ssaoPass, aaPass, pmremGenerator, _checkerTexCache; // Melhorias gráficas v4 — SSAO, SMAA/FXAA e ambiente reflexivo
+
+    /* (nova função a pedido do usuário) Configurações gráficas MANUAIS —
+       botão "🎚️ Configurações Gráficas" no header. Por padrão tudo fica em
+       "Auto" (o ajuste automático por FPS já existente continua no controle),
+       mas a pessoa pode travar num nível fixo ou desligar efeitos caros na
+       mão, se preferir performance previsível em vez de qualidade variável. */
+    const GFX_SETTINGS_KEY = "graphics_settings_v1";
+    let _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto" };
+    function _loadGfxSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(GFX_SETTINGS_KEY) || "null");
+            if (saved) _gfx = Object.assign({}, _gfx, saved);
+        } catch (_) {}
+    }
+    function _saveGfxSettings() {
+        try { localStorage.setItem(GFX_SETTINGS_KEY, JSON.stringify(_gfx)); } catch (_) {}
+    }
+    /** Aplica de fato as configurações atuais (_gfx) no pipeline de render.
+     *  Chamada no init() e toda vez que o usuário mexe num controle do modal. */
+    function _applyGfxSettings() {
+        if (!renderer) return;
+        renderer.shadowMap.enabled = _gfx.shadows !== false;
+        if (ssaoPass)  ssaoPass.enabled = _gfx.ssao  !== false;
+        if (aaPass)    aaPass.enabled   = _gfx.aa    !== false;
+        if (fxaaPass)  fxaaPass.enabled = _gfx.aa    !== false;
+        if (_gfx.quality !== "auto") {
+            // Nível fixo escolhido pela pessoa — desliga o ajuste automático
+            // por FPS (ver _renderLoop) e trava o pixelRatio nesse valor.
+            const steps = { low: 0.5, medium: 0.75, high: 1, ultra: Math.min(window.devicePixelRatio, 2) };
+            const pr = steps[_gfx.quality] ?? Math.min(window.devicePixelRatio, 2);
+            renderer.setPixelRatio(pr);
+            composer?.setPixelRatio?.(pr);
+        }
+        markDirty();
+    }
+    /** Chamada pelo botão de UI — recebe só os campos que mudaram. */
+    function setGraphicsSettings(partial) {
+        Object.assign(_gfx, partial);
+        _saveGfxSettings();
+        _applyGfxSettings();
+    }
+    function getGraphicsSettings() { return Object.assign({}, _gfx); }
+    function resetGraphicsSettings() {
+        _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto" };
+        _saveGfxSettings();
+        _applyGfxSettings();
+    }
+    /** Só quando a qualidade está em "Auto" o ajuste dinâmico por FPS do
+     *  _renderLoop pode mexer no pixelRatio/SSAO sozinho — se a pessoa
+     *  travou um nível fixo na mão, respeitamos a escolha dela. */
+    function isAutoQuality() { return _gfx.quality === "auto"; }
+    function isBloomAllowed() { return _gfx.bloom !== false; }
     let hemi, sun; // referências guardadas no escopo do módulo p/ o controle de Brilho do Céu poder ajustá-las depois do init()
     const BASE_EXPOSURE = 1.1, BASE_HEMI = 0.65, BASE_SUN = 1.6; // valores-base (Brightness=1) usados pelo slider de brilho ambiente
     const objectMap   = new Map();   // id → Three.Object3D
@@ -2622,6 +2719,12 @@ const ThreeManager = (() => {
             // recria os render targets internos dele via composer.setSize().
         }).observe(vp);
 
+        // (nova função a pedido do usuário) Carrega as preferências gráficas
+        // salvas (se a pessoa já mexeu no botão "🎚️ Configurações Gráficas"
+        // antes) e aplica agora, antes do primeiro frame.
+        _loadGfxSettings();
+        _applyGfxSettings();
+
         _renderLoop();
     }
 
@@ -2673,7 +2776,7 @@ const ThreeManager = (() => {
         // aliviar a GPU e evitar travamento; se sobra folga, volta a subir
         // até o teto do dispositivo. Só reavalia 1x/seg (junto do contador
         // de FPS) pra não ficar oscilando a cada frame.
-        if (_fpsTimer === 0 && _frameCount === 0) {
+        if (_fpsTimer === 0 && _frameCount === 0 && isAutoQuality()) {
             const fps = _lastFps || 60;
             const maxPr = Math.min(window.devicePixelRatio, 2);
             let pr = renderer.getPixelRatio();
@@ -2690,7 +2793,9 @@ const ThreeManager = (() => {
             // desligamos o SSAO temporariamente — a cena continua correta,
             // só perde o sombreamento de contato — e religamos assim que
             // sobrar folga de novo, sem precisar mexer em nada manualmente.
-            if (ssaoPass) {
+            // (Só entra em ação se a pessoa não desligou o SSAO na mão em
+            // "Configurações Gráficas" — _gfx.ssao === false já é respeitado.)
+            if (ssaoPass && _gfx.ssao !== false) {
                 if (fps < 24 && ssaoPass.enabled)       ssaoPass.enabled = false;
                 else if (fps > 50 && !ssaoPass.enabled) ssaoPass.enabled = true;
             }
@@ -2842,7 +2947,7 @@ const ThreeManager = (() => {
      *  fica em 0 e a cena renderiza exatamente como antes. */
     function _applyBloom(p) {
         if (!bloomPass) return;
-        if (!p) { bloomPass.strength = 0; return; }
+        if (!isBloomAllowed() || !p) { bloomPass.strength = 0; return; }
         bloomPass.strength  = Math.max(0, p.Intensity ?? 1);
         bloomPass.threshold = Math.max(0, Math.min(1, p.Threshold ?? 0.9));
         // "Size" no painel de Propriedades vai de 0–~64; mapeamos para o
@@ -4085,6 +4190,7 @@ const ThreeManager = (() => {
         cleanupNode, playSound, pauseSound, setRaycastEnabled, setFOV,
         getObjectMap, getScene, getCamera, getOrbit, getTransform, raycastDistance, raycastHit,
         buildHeldMeshFromTool, setGui3DVisible, isGui3DVisible,
+        setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings,
     };
 })();
 
@@ -12869,6 +12975,38 @@ const UI = (() => {
     function openModal(id) { document.getElementById(id).style.display = "flex"; }
     function closeModal(id) { document.getElementById(id).style.display = "none"; }
 
+    /* (nova função a pedido do usuário) Modal de Configurações Gráficas —
+       lê o estado atual do ThreeManager, preenche os controles do modal, e
+       liga cada controle pra já aplicar/salvar a mudança na hora (sem botão
+       de "salvar" separado — o localStorage guarda tudo em tempo real). */
+    const GFX_QUALITY_LABELS = { low:"Baixa", medium:"Média", high:"Alta", ultra:"Máxima", auto:"Auto" };
+    const GFX_QUALITY_STEPS  = ["low", "medium", "high", "ultra", "auto"];
+    function openGraphicsSettings() {
+        const gfx = ThreeManager.getGraphicsSettings();
+        document.getElementById("gfx-shadows").checked = gfx.shadows !== false;
+        document.getElementById("gfx-ssao").checked     = gfx.ssao   !== false;
+        document.getElementById("gfx-aa").checked       = gfx.aa     !== false;
+        document.getElementById("gfx-bloom").checked    = gfx.bloom  !== false;
+        const idx = Math.max(0, GFX_QUALITY_STEPS.indexOf(gfx.quality));
+        document.getElementById("gfx-quality-slider").value = idx;
+        document.getElementById("gfx-quality-label").textContent = GFX_QUALITY_LABELS[gfx.quality] || "Auto";
+        openModal("graphics-settings-modal");
+    }
+    function setGfxQualityFromSlider(idx) {
+        const quality = GFX_QUALITY_STEPS[idx] ?? "auto";
+        document.getElementById("gfx-quality-label").textContent = GFX_QUALITY_LABELS[quality];
+        ThreeManager.setGraphicsSettings({ quality });
+        showToast(quality === "auto" ? "🎚️ Qualidade: automática (ajusta sozinha pelo FPS)" : `🎚️ Qualidade travada em: ${GFX_QUALITY_LABELS[quality]}`);
+    }
+    function setGfxToggle(key, checked) {
+        ThreeManager.setGraphicsSettings({ [key]: checked });
+    }
+    function resetGraphicsSettings() {
+        ThreeManager.resetGraphicsSettings();
+        openGraphicsSettings(); // repopula os controles do modal com o padrão restaurado
+        showToast("↺ Configurações gráficas restauradas (Auto).");
+    }
+
     function openScriptEditor(node) {
         State.editingScript = node;
         document.getElementById("script-editor-title").innerHTML =
@@ -13390,7 +13528,8 @@ const UI = (() => {
     }
 
     return { log, clearConsole, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
-              openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D };
+              openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
+              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, resetGraphicsSettings };
 })();
 
 /* ================================================================
@@ -15640,6 +15779,31 @@ const Multiplayer = (() => {
     const SCENE_BROADCAST_THROTTLE_MS = 120; // ritmo de envio durante mudança contínua (arrastar etc.)
     const SCENE_BROADCAST_TRAILING_MS = 250; // envio de garantia com o estado final, após parar de mudar
     const P2P_RETRY_MS = 4000; // intervalo pra tentar (re)conectar no host quando ainda não conseguiu
+
+    /** (nova função a pedido do usuário) Configuração de ICE pro WebRTC —
+     *  sem isso, o PeerJS usa só o STUN público padrão do Google, que
+     *  resolve a maioria das conexões mas FALHA em redes mais fechadas
+     *  (NAT simétrico, várias redes corporativas/de operadora móvel, alguns
+     *  Wi-Fi de hotel/faculdade). Adicionando mais servidores STUN (mais
+     *  chance de descobrir o IP público certo) e um TURN público de
+     *  fallback (retransmite o tráfego quando a conexão DIRETA é impossível)
+     *  a sala consegue conectar num universo bem maior de redes — com o
+     *  custo de que, quando cai no TURN, o tráfego passa por um servidor
+     *  intermediário (mais lento que P2P direto, mas ainda funciona). */
+    const P2P_ICE_CONFIG = {
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun.relay.metered.ca:80" },
+            // TURN público (Open Relay Project) — só entra em uso quando a
+            // conexão direta via STUN não é possível.
+            { urls: "turn:global.relay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:global.relay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+        ],
+        iceCandidatePoolSize: 4, // pré-calcula candidatos antes de precisar deles — conecta mais rápido
+    };
     let _sceneBroadcastTimer = null;
     let _sceneTrailingTimer = null;
     let _lastBroadcastAt = 0; // Date.now() do último envio real (pro throttle)
@@ -15929,6 +16093,17 @@ const Multiplayer = (() => {
         _heartbeatTimer = null; _pollTimer = null;
     }
 
+    // (nova função a pedido do usuário) Reconecta o WebRTC NA HORA (em vez
+    // de esperar até 4s do retry timer ou até 6s do próximo poll da sala)
+    // quando: a internet volta depois de cair, ou a aba volta a ficar
+    // visível (Chrome/celular costumam congelar/derrubar conexões de abas
+    // em segundo plano). Sem custo nenhum se não estiver numa sala — a
+    // própria _p2pEnsureConnected() já verifica isso e não faz nada.
+    window.addEventListener("online", () => { if (_code) _p2pEnsureConnected(); });
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && _code) _p2pEnsureConnected();
+    });
+
     async function _heartbeat() {
         if (!_code) return;
         const me = _me();
@@ -16019,7 +16194,7 @@ const Multiplayer = (() => {
             if (!_isHost && (_peer || _hostConn)) _p2pTeardown();
             _p2pConnecting = true;
             let peer;
-            try { peer = new Peer(P2P_HOST_ID(_code)); }
+            try { peer = new Peer(P2P_HOST_ID(_code), { config: P2P_ICE_CONFIG }); }
             catch (_) { _p2pConnecting = false; return; }
             _peer = peer;
             peer.on("open", () => {
@@ -16062,7 +16237,7 @@ const Multiplayer = (() => {
             if (!_peer || _peer.destroyed) {
                 _p2pConnecting = true;
                 let peer;
-                try { peer = new Peer(); }
+                try { peer = new Peer({ config: P2P_ICE_CONFIG }); }
                 catch (_) { _p2pConnecting = false; return; }
                 _peer = peer;
                 peer.on("open", () => { _p2pConnecting = false; _p2pConnectToHost(); });
