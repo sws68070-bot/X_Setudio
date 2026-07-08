@@ -8109,6 +8109,22 @@ const AnimatorRuntime = (() => {
     function stopAll() { _playing.clear(); }
     function isPlaying(animatorId) { return _playing.has(animatorId); }
 
+    /** (nova função a pedido do usuário · sincronização multiplayer) Dado o
+     *  id do Model do rig do player local, devolve o NOME do Animator que
+     *  está tocando nele agora (ex.: "Andar", "Pular") ou null se nenhum.
+     *  Usado só pra mandar 1 palavra pela rede — nada de posição de Part
+     *  nem malha: quem recebe já tem os MESMOS keyframes na própria árvore
+     *  (a cena é compartilhada) e reconstrói a pose sozinho, do zero. */
+    function getPlayingAnimatorNameForModel(modelId) {
+        if (!modelId) return null;
+        for (const animatorId of _playing.keys()) {
+            const node = Tree.find(animatorId);
+            if (!node) continue;
+            if (_findTargetModel(node)?.id === modelId) return node.name;
+        }
+        return null;
+    }
+
     function _lerp(a, b, f) { return a + (b - a) * f; }
 
     function _applyKeyframes(node, state, t) {
@@ -8193,7 +8209,7 @@ const AnimatorRuntime = (() => {
         ThreeManager.markDirty();
     }
 
-    return { play, stop, stopAll, isPlaying, tick };
+    return { play, stop, stopAll, isPlaying, tick, getPlayingAnimatorNameForModel };
 })();
 
 /* ================================================================
@@ -16158,7 +16174,7 @@ const Multiplayer = (() => {
             _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
         } else if (msg.type === "playerpos") {
             if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
-                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY); } catch (_) {}
+                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim); } catch (_) {}
             }
             _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
         }
@@ -16180,7 +16196,7 @@ const Multiplayer = (() => {
             _applyRemotePlayState(msg.active, msg.by);
         } else if (msg.type === "playerpos") {
             if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
-                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY); } catch (_) {}
+                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim); } catch (_) {}
             }
         }
     }
@@ -16301,11 +16317,15 @@ const Multiplayer = (() => {
      *  gravar no GitHub: é posição em tempo real, não vale a pena esperar o
      *  poll de alguns segundos). Chamado pelo Simulation a cada frame do
      *  Play, já com o próprio throttle dele. */
-    function notifyPlayerTransform(pos, rotY) {
+    function notifyPlayerTransform(pos, rotY, anim) {
         if (!_code || _amIViewOnly()) return;
         const me = _me();
         if (!me) return;
-        const msg = { type: "playerpos", by: me.username, pos, rotY };
+        // (nova função) `anim` é só um NOME curto ("Andar", "Pular"...) — o
+        // pacote continua minúsculo; quem recebe já tem os keyframes dessa
+        // animação na própria cena e monta a pose sozinho, sem esperar nada
+        // pesado vir pela rede.
+        const msg = { type: "playerpos", by: me.username, pos, rotY, anim };
         if (_isHost) {
             _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
         } else if (_hostConn && _hostConn.open) {
@@ -16914,6 +16934,7 @@ const Simulation = (() => {
     let _playerRigParts  = {};          // nome-da-Part -> mesh (todas as partes do rig, p/ Tool.Grip genérico)
     let _playerRigNodes  = {};          // nome-da-Part -> node da árvore (p/ ler a pose animada por Animator:Play() — função nova)
     let _playerRigMinY   = 0;           // mesmo offset de reancoragem usado na hora de montar o rig (ver _buildPlayerRigFromStarterPlayer)
+    let _playerRigModelId = null;       // (nova função a pedido do usuário) id do Model usado no rig — basta isso pra descobrir, a qualquer momento, QUAL Animator dele está tocando (Parado/Andar/Correr/Pular), sem duplicar nenhum dado de posição
     let _equippedTool    = null;        // { toolId, mesh } — Tool atualmente na mão do player
     let _equippedSlotKey = null;        // slot do inventário que gerou o Tool equipado atual
 
@@ -17646,8 +17667,16 @@ const Simulation = (() => {
         const scale = sprops.CharacterScale || 1;
         const rig = _buildPlayerRigFromStarterPlayer();
         const g = new THREE.Group();
+        let byName = null; // (nova função) exposto pra fora — é o que deixa a
+                            // gente tocar Parado/Andar/Correr/Pular no boneco
+                            // do OUTRO jogador usando os MESMOS keyframes já
+                            // presentes na cena compartilhada, sem mandar
+                            // nenhuma pose pela rede (só o nome da animação).
+        let minY = 0;       // mesmo offset de reancoragem usado ao montar o rig — precisa ser reaplicado a cada pose de animação
         if (rig) {
             g.add(rig.group);
+            byName = rig.byName;
+            minY = rig.minY;
         } else {
             const mat   = new THREE.MeshStandardMaterial({ color:sprops.BodyColor || 0x00aaff, roughness:0.4 });
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6,2,0.8), mat);
@@ -17665,20 +17694,31 @@ const Simulation = (() => {
             g.add(torso, head, la, ra, ll, rl);
         }
         g.scale.setScalar(scale);
-        return g;
+        return { group: g, byName, minY };
     }
 
-    /** Manda minha posição/rotação atual pros outros da sala (throttled). */
+    /** Manda minha posição/rotação atual pros outros da sala (throttled).
+     *  (nova função a pedido do usuário) Vai junto só o NOME da animação que
+     *  está tocando no MEU rig agora (ex.: "Andar"/"Pular") — nunca a pose
+     *  calculada nem a malha em si. Isso mantém o pacote minúsculo (poucos
+     *  bytes, ~a cada 120ms) e joga todo o trabalho pesado — montar a malha,
+     *  calcular a pose dos keyframes, desenhar o quadro — pro NAVEGADOR DE
+     *  CADA UM, que já tem os mesmos keyframes na própria cena (ela é
+     *  compartilhada). Ninguém trava esperando processamento alheio. */
     function _broadcastPlayerTransformThrottled() {
         if (!_playerBody) return;
         if (typeof Multiplayer === "undefined" || !Multiplayer.notifyPlayerTransform || !Multiplayer.isInRoom || !Multiplayer.isInRoom()) return;
         const now = Date.now();
         if (now - _lastPlayerBroadcastAt < REMOTE_PLAYER_BROADCAST_MS) return;
         _lastPlayerBroadcastAt = now;
+        const anim = (typeof AnimatorRuntime !== "undefined" && _playerRigModelId)
+            ? (AnimatorRuntime.getPlayingAnimatorNameForModel(_playerRigModelId) || "Parado")
+            : "Parado";
         try {
             Multiplayer.notifyPlayerTransform(
                 { x: _player.position.x, y: _player.position.y, z: _player.position.z },
-                _player.rotation.y
+                _player.rotation.y,
+                anim
             );
         } catch (_) {}
     }
@@ -17686,21 +17726,34 @@ const Simulation = (() => {
     /** Chamado pelo módulo Multiplayer quando chega a posição de outro
      *  jogador — cria o boneco dele se ainda não existir, e atualiza o alvo
      *  pro qual ele vai suavizar (lerp) até a próxima atualização chegar. */
-    function applyRemotePlayerTransform(username, pos, rotY) {
+    function applyRemotePlayerTransform(username, pos, rotY, anim) {
         if (!username || !_active || !pos) return;
         let rp = _remotePlayers.get(username);
         if (!rp) {
-            const group = _buildAvatarGroup();
-            ThreeManager.getScene().add(group);
-            group.position.set(pos.x, pos.y, pos.z);
-            group.rotation.y = rotY || 0;
-            rp = { group, targetPos: new THREE.Vector3(pos.x, pos.y, pos.z), targetRotY: rotY || 0, lastUpdate: Date.now() };
+            const built = _buildAvatarGroup();
+            ThreeManager.getScene().add(built.group);
+            built.group.position.set(pos.x, pos.y, pos.z);
+            built.group.rotation.y = rotY || 0;
+            rp = {
+                group: built.group,
+                byName: built.byName,           // nome-da-Part -> mesh (null se for o boneco simples de caixas)
+                minY: built.minY,                // offset de reancoragem do rig remoto, pra aplicar a pose animada certinho
+                targetPos: new THREE.Vector3(pos.x, pos.y, pos.z),
+                targetRotY: rotY || 0,
+                lastUpdate: Date.now(),
+                animName: anim || "Parado",     // só o NOME recebido — a pose é recalculada aqui do zero
+                animStartedAt: Date.now(),
+            };
             _remotePlayers.set(username, rp);
             return;
         }
         rp.targetPos.set(pos.x, pos.y, pos.z);
         rp.targetRotY = rotY || 0;
         rp.lastUpdate = Date.now();
+        if (anim && anim !== rp.animName) {
+            rp.animName = anim;
+            rp.animStartedAt = Date.now(); // reinicia o "cronômetro" local da animação a cada troca de estado
+        }
     }
 
     /** Remove o boneco de um jogador específico (ele saiu da sala/do Play). */
@@ -17717,9 +17770,66 @@ const Simulation = (() => {
         _remotePlayers.clear();
     }
 
+    /** (nova função a pedido do usuário) Acha, na cena JÁ compartilhada, o
+     *  Animator com este nome dentro do StarterPlayer (Parado/Andar/Correr/
+     *  Pular) — os keyframes dele são os MESMOS de qualquer um da sala, por
+     *  isso não precisam trafegar de novo, só o nome já resolve. */
+    const _remoteAnimNodeCache = new Map(); // nome -> nó Animator (evita andar na árvore todo frame)
+    function _findAnimatorNodeByName(name) {
+        if (_remoteAnimNodeCache.has(name)) {
+            const cached = _remoteAnimNodeCache.get(name);
+            if (cached && Tree.find(cached.id)) return cached;
+            _remoteAnimNodeCache.delete(name);
+        }
+        const sply = Tree.find("sply");
+        if (!sply) return null;
+        let found = null;
+        (function walk(n) {
+            if (found) return;
+            if (n.className === "Animator" && n.name === name) { found = n; return; }
+            (n.children || []).forEach(walk);
+        })(sply);
+        if (found) _remoteAnimNodeCache.set(name, found);
+        return found;
+    }
+
+    function _lerpRemote(a, b, f) { return a + (b - a) * f; }
+
+    /** (nova função a pedido do usuário) Calcula a pose no instante `t` a
+     *  partir dos keyframes do Animator e aplica DIRETO nas malhas do
+     *  boneco do outro jogador (rp.byName) — o mesmo cálculo que o
+     *  AnimatorRuntime faz pro MEU personagem, só que sem tocar em nenhum
+     *  node da árvore (o boneco remoto é só visual). */
+    function _applyRemoteAnimPose(rp, animatorNode, t) {
+        if (!rp.byName || !animatorNode) return;
+        const kfMap = animatorNode.properties.keyframes || {};
+        Object.entries(kfMap).forEach(([partName, kfs]) => {
+            const mesh = rp.byName[partName];
+            if (!mesh || !kfs || !kfs.length) return;
+            let a = kfs[0], b = kfs[kfs.length - 1];
+            for (let i = 0; i < kfs.length - 1; i++) {
+                if (t >= kfs[i].t && t <= kfs[i + 1].t) { a = kfs[i]; b = kfs[i + 1]; break; }
+            }
+            const span = (b.t - a.t) || 1;
+            const f = Math.max(0, Math.min(1, (t - a.t) / span));
+            mesh.position.set(
+                _lerpRemote(a.pos.x, b.pos.x, f),
+                _lerpRemote(a.pos.y, b.pos.y, f) - (rp.minY || 0), // mesmo offset de reancoragem aplicado na hora de montar o rig
+                _lerpRemote(a.pos.z, b.pos.z, f)
+            );
+            mesh.rotation.set(
+                THREE.MathUtils.degToRad(_lerpRemote(a.rot.x, b.rot.x, f)),
+                THREE.MathUtils.degToRad(_lerpRemote(a.rot.y, b.rot.y, f)),
+                THREE.MathUtils.degToRad(_lerpRemote(a.rot.z, b.rot.z, f))
+            );
+        });
+    }
+
     /** Chamado a cada frame do Play — suaviza o movimento dos bonecos até a
-     *  posição mais recente recebida, e limpa quem ficou "mudo" por tempo
-     *  demais (provavelmente saiu ou a conexão caiu). */
+     *  posição mais recente recebida, toca a animação correspondente (lida
+     *  localmente dos mesmos keyframes da cena, sem receber pose pela rede),
+     *  e limpa quem ficou "mudo" por tempo demais (provavelmente saiu ou a
+     *  conexão caiu). */
     function _updateRemotePlayers(dt) {
         if (!_remotePlayers.size) return;
         const now = Date.now();
@@ -17729,6 +17839,17 @@ const Simulation = (() => {
             let dr = rp.targetRotY - rp.group.rotation.y;
             dr = Math.atan2(Math.sin(dr), Math.cos(dr)); // caminho angular mais curto
             rp.group.rotation.y += dr * REMOTE_PLAYER_LERP;
+
+            if (rp.byName && rp.animName) {
+                const animatorNode = _findAnimatorNodeByName(rp.animName);
+                if (animatorNode) {
+                    const duration = animatorNode.properties.Duration || 2;
+                    const looped   = !!animatorNode.properties.Looped;
+                    const raw = (now - rp.animStartedAt) / 1000;
+                    const t   = (looped || raw < duration) ? (looped ? raw % duration : raw) : duration;
+                    _applyRemoteAnimPose(rp, animatorNode, t);
+                }
+            }
         });
     }
 
@@ -18053,7 +18174,7 @@ const Simulation = (() => {
         // Reancora o grupo pra que y=0 fique nos "pés" do modelo, não
         // importa onde as Parts foram posicionadas na árvore.
         group.children.forEach(m => { m.position.y -= minY; });
-        return { group, byName, nodeByName, minY, totalHeight: Math.max(0.5, maxY - minY) };
+        return { group, byName, nodeByName, minY, totalHeight: Math.max(0.5, maxY - minY), modelId: modelNode.id };
     }
 
     /* ── Spawn do Player ───────────────────────────────────────── */
@@ -18082,6 +18203,7 @@ const Simulation = (() => {
             _playerRigParts  = rig.byName;
             _playerRigNodes  = rig.nodeByName;
             _playerRigMinY   = rig.minY;
+            _playerRigModelId = rig.modelId;
             totalHeight = rig.totalHeight;
             // (correção) Se houver mais de um Model com Parts dentro de
             // StarterPlayer, o spawn sempre usa o PRIMEIRO encontrado — mas um
@@ -18115,6 +18237,7 @@ const Simulation = (() => {
             _playerHead    = head;
             _playerLeftArm = la; _playerRightArm = ra;
             _playerRigParts = { "Torso":torso, "Head":head, "Left Arm":la, "Right Arm":ra, "Left Leg":ll, "Right Leg":rl };
+            _playerRigModelId = null; // sem rig custom, não tem Animator pra procurar
             totalHeight = HALF_H * 2;
         }
         _player.scale.setScalar(scale);
