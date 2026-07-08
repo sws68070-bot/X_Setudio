@@ -15607,6 +15607,7 @@ const Multiplayer = (() => {
     let _lastBroadcastAt = 0; // Date.now() do último envio real (pro throttle)
     let _lastBroadcastSceneSig = null; // último JSON de State.tree que EU já mandei/apliquei
     let _lastAppliedSceneSig = null;   // último JSON de State.tree aplicado no meu editor (meu ou de outro membro)
+    let _lastAppliedPlaySig = null;    // (nova função) último "active:ts" de Play/Stop já aplicado (meu ou de outro membro)
     let _applyingRemoteScene = false;  // true enquanto aplico a cena de outro membro — evita eco (reenviar o que acabei de receber)
     let _peer = null;               // minha instância PeerJS (Peer) nesta sala
     let _isHost = false;            // true se EU sou quem está hospedando (dono do ID fixo da sala)
@@ -15995,6 +15996,12 @@ const Multiplayer = (() => {
                     // pessoa começar já sincronizada (substitui o antigo
                     // "_syncSceneOnEnter" via GitHub).
                     try { conn.send({ type: "scene", tree: State.tree, by: (_me() || {}).username }); } catch (_) {}
+                    // (nova função) Se o Play já estiver rolando na sala, quem
+                    // acabou de entrar também já entra direto em modo Play —
+                    // não fica parado vendo o resto rodando sem ele.
+                    if (typeof Simulation !== "undefined" && Simulation.active) {
+                        try { conn.send({ type: "play", active: true, by: (_me() || {}).username, ts: Date.now() }); } catch (_) {}
+                    }
                 });
                 conn.on("data", (msg) => _p2pOnHostReceive(conn, msg));
                 conn.on("close", () => _p2pRemoveConn(conn));
@@ -16083,18 +16090,45 @@ const Multiplayer = (() => {
         }
     }
 
+    /** (nova função) Publica que EU apertei Play/Stop em rooms/{code}-scene.json,
+     *  junto com a cena atual — usada por quem não tem WebRTC ativo (o poll
+     *  normal da sala, a cada POLL_MS, é quem vai pegar essa mudança). Relê
+     *  antes de gravar pra não apagar a cena mais recente publicada por
+     *  cima — Play/Stop é raro, então vale a pena essa leitura extra. */
+    async function _pushPlayStateFallback(active, byUsername, ts) {
+        if (!_code || !GithubStorage.hasConfig()) return;
+        const fresh = await _ghGet(SCENE_FALLBACK_PATH(_code));
+        const base = (fresh.ok && fresh.data) ? fresh.data : { tree: State.tree, by: byUsername, ts };
+        const put = await _ghPut(SCENE_FALLBACK_PATH(_code),
+            { ...base, play: { active, by: byUsername, ts } },
+            fresh.ok ? fresh.sha : _fallbackSha,
+            active ? `Play iniciado na sala (${byUsername})` : `Play parado na sala (${byUsername})`);
+        if (put.ok) _fallbackSha = put.sha;
+    }
+
     /** (nova função) Só chamada quando EU não tenho WebRTC ativo agora —
      *  relê rooms/{code}-scene.json e aplica se for diferente do que já
-     *  tenho (e não for a última coisa que EU mesmo publiquei). */
+     *  tenho (e não for a última coisa que EU mesmo publiquei). Também
+     *  aplica o Play/Stop publicado por outro membro, se houver um mais
+     *  novo do que o último que eu já apliquei. */
     async function _pullSceneFallbackIfNeeded() {
         if (!_code || _p2pIsLive() || !GithubStorage.hasConfig()) return;
         const res = await _ghGet(SCENE_FALLBACK_PATH(_code));
         if (!res.ok || !res.data) return;
         _fallbackSha = res.sha;
+        const me = _me();
+        if (res.data.play) {
+            const playSig = res.data.play.active + ":" + res.data.play.ts;
+            if (playSig !== _lastAppliedPlaySig) {
+                _lastAppliedPlaySig = playSig;
+                if (!(me && res.data.play.by === me.username)) {
+                    _applyRemotePlayState(res.data.play.active, res.data.play.by);
+                }
+            }
+        }
         let sig;
         try { sig = JSON.stringify(res.data.tree); } catch (_) { return; }
         if (sig === _lastAppliedSceneSig) return; // já é o que eu tenho
-        const me = _me();
         if (me && res.data.by === me.username) { _lastAppliedSceneSig = sig; _lastBroadcastSceneSig = sig; return; } // é a minha própria última publicação
         if (_applyingRemoteScene) return;
         _applyRemoteScene(res.data.tree, sig, res.data.by);
@@ -16109,21 +16143,46 @@ const Multiplayer = (() => {
     /** (host) Recebeu uma mensagem de um membro conectado — aplica local e
      *  retransmite pros outros, exceto pra quem mandou (evita eco). */
     function _p2pOnHostReceive(fromConn, msg) {
-        if (!msg || msg.type !== "scene") return;
-        let sig;
-        try { sig = JSON.stringify(msg.tree); } catch (_) { return; }
-        if (sig === _lastAppliedSceneSig) return;
-        _applyRemoteScene(msg.tree, sig, msg.by);
-        _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        if (!msg) return;
+        if (msg.type === "scene") {
+            let sig;
+            try { sig = JSON.stringify(msg.tree); } catch (_) { return; }
+            if (sig === _lastAppliedSceneSig) return;
+            _applyRemoteScene(msg.tree, sig, msg.by);
+            _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (msg.type === "play") {
+            const playSig = msg.active + ":" + msg.ts;
+            if (playSig === _lastAppliedPlaySig) return;
+            _lastAppliedPlaySig = playSig;
+            _applyRemotePlayState(msg.active, msg.by);
+            _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (msg.type === "playerpos") {
+            if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
+                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY); } catch (_) {}
+            }
+            _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        }
     }
 
-    /** (cliente) Recebeu a cena atualizada do host — só aplica. */
+    /** (cliente) Recebeu a cena atualizada (ou o Play/Stop, ou a posição de
+     *  outro jogador) do host — só aplica. */
     function _p2pOnClientReceive(msg) {
-        if (!msg || msg.type !== "scene") return;
-        let sig;
-        try { sig = JSON.stringify(msg.tree); } catch (_) { return; }
-        if (sig === _lastAppliedSceneSig) return;
-        _applyRemoteScene(msg.tree, sig, msg.by);
+        if (!msg) return;
+        if (msg.type === "scene") {
+            let sig;
+            try { sig = JSON.stringify(msg.tree); } catch (_) { return; }
+            if (sig === _lastAppliedSceneSig) return;
+            _applyRemoteScene(msg.tree, sig, msg.by);
+        } else if (msg.type === "play") {
+            const playSig = msg.active + ":" + msg.ts;
+            if (playSig === _lastAppliedPlaySig) return;
+            _lastAppliedPlaySig = playSig;
+            _applyRemotePlayState(msg.active, msg.by);
+        } else if (msg.type === "playerpos") {
+            if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
+                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY); } catch (_) {}
+            }
+        }
     }
 
     /** Chamado (via App.notifyChanged, ligado ao ThreeManager.markDirty)
@@ -16198,6 +16257,63 @@ const Multiplayer = (() => {
         } finally {
             _applyingRemoteScene = false;
         }
+    }
+
+    /* ── (nova função a pedido do usuário) Play/Stop sincronizado ──────────
+       Quando alguém aperta Play, a sala inteira entra em modo Play junto e
+       os Scripts de cada pessoa começam a rodar — cada um roda a própria
+       simulação local (física, câmera, personagem), não é um jogo com física
+       compartilhada; o que é sincronizado é só o MOMENTO de começar/parar. */
+
+    /** Chamado pelo módulo Simulation sempre que EU aperto Play ou Stop
+     *  (não quando o Play é iniciado remotamente — ver Simulation.toggle). */
+    function notifyPlayStateChanged(active) {
+        if (!_code) return;
+        const me = _me();
+        if (!me) return;
+        const ts = Date.now();
+        const msg = { type: "play", active, by: me.username, ts };
+        _lastAppliedPlaySig = active + ":" + ts;
+        _p2pEnsureConnected();
+        if (_isHost) {
+            _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (_hostConn && _hostConn.open) {
+            try { _hostConn.send(msg); } catch (_) {}
+        }
+        // (nova função) Publica também na sincronização reserva — quem não
+        // conseguiu abrir WebRTC ainda recebe o Play/Stop no próximo poll.
+        _pushPlayStateFallback(active, me.username, ts);
+    }
+
+    /** Aplica um Play/Stop que chegou de outro membro da sala — chama o
+     *  Simulation de verdade (ligando/desligando a simulação local), sem
+     *  reavisar a sala de novo (evita eco infinito). */
+    function _applyRemotePlayState(active, byUsername) {
+        if (typeof Simulation === "undefined" || !Simulation.applyRemotePlayState) return;
+        Simulation.applyRemotePlayState(active);
+        UI.showToast(active
+            ? `▶️ ${byUsername || "Alguém"} apertou Play — sua cena também entrou em modo Play.`
+            : `⏹️ ${byUsername || "Alguém"} parou o Play — sua cena voltou ao modo Edição.`);
+    }
+
+    /** (nova função a pedido do usuário) Manda minha posição/rotação atual
+     *  (durante o Play) pros outros membros da sala — só via WebRTC (sem
+     *  gravar no GitHub: é posição em tempo real, não vale a pena esperar o
+     *  poll de alguns segundos). Chamado pelo Simulation a cada frame do
+     *  Play, já com o próprio throttle dele. */
+    function notifyPlayerTransform(pos, rotY) {
+        if (!_code || _amIViewOnly()) return;
+        const me = _me();
+        if (!me) return;
+        const msg = { type: "playerpos", by: me.username, pos, rotY };
+        if (_isHost) {
+            _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (_hostConn && _hostConn.open) {
+            try { _hostConn.send(msg); } catch (_) {}
+        }
+        // Sem WebRTC ainda aberto: a posição fica só localmente por enquanto
+        // (não tem fallback via GitHub pra isso — movimento em tempo real
+        // não combina com o poll de alguns segundos do fallback).
     }
 
     /** Chamado assim que entro numa sala (criando ou entrando): conecta o
@@ -16487,7 +16603,7 @@ const Multiplayer = (() => {
         _room = null; _code = null;
         _p2pTeardown();
         _lastBroadcastSceneSig = null; _lastAppliedSceneSig = null;
-        _fallbackSha = null; _lastFallbackPushAt = 0; // (nova função) limpa cache da sincronização reserva da sala anterior
+        _fallbackSha = null; _lastFallbackPushAt = 0; _lastAppliedPlaySig = null; // (nova função) limpa cache da sincronização reserva da sala anterior
         _roomChat = []; _lastRoomChatSig = null; // (nova função) limpa cache do chat da sala anterior
         const badge = document.getElementById("mp-room-badge");
         if (badge) { badge.classList.add("hidden"); badge.classList.remove("flex"); }
@@ -16752,6 +16868,10 @@ const Multiplayer = (() => {
         inviteFriend,
         // (nova função) sincronização do editor entre membros da sala
         notifySceneChanged,
+        // (nova função a pedido do usuário) sincronização do Play/Stop entre membros da sala
+        notifyPlayStateChanged,
+        // (nova função a pedido do usuário) posição/rotação do meu jogador durante o Play
+        notifyPlayerTransform,
         sendRoomChat, submitRoomChat,
         // (nova função) arquivo de amizade por pessoa, usado pelo Account
         readUserFile, writeUserFile,
@@ -17480,7 +17600,137 @@ const Simulation = (() => {
     }
 
     /* ── Play / Stop ───────────────────────────────────────────── */
-    function toggle() { if (!_active) _start(); else _stop(); }
+    let _remoteTriggered = false; // (nova função) true enquanto aplico um Play/Stop que veio de outro membro da sala — evita reavisar a sala do que ela mesma acabou de mandar (eco infinito)
+
+    function toggle() {
+        if (!_active) _start(); else _stop();
+        // (nova função a pedido do usuário) Avisa a sala inteira que o Play
+        // mudou — só quando fui EU que apertei o botão (não quando esse
+        // Play/Stop já veio de outro membro via applyRemotePlayState).
+        if (!_remoteTriggered && typeof Multiplayer !== "undefined" && Multiplayer.notifyPlayStateChanged) {
+            try { Multiplayer.notifyPlayStateChanged(_active); } catch (_) {}
+        }
+    }
+
+    /** (nova função) Chamado pelo módulo Multiplayer quando outro membro da
+     *  sala aperta Play/Stop — liga/desliga a simulação AQUI TAMBÉM (cada
+     *  pessoa roda sua própria simulação local; física e câmera não são
+     *  compartilhadas, só o início/fim é sincronizado), sem reavisar a sala
+     *  de novo. Não faz nada se eu já estiver no estado pedido. */
+    function applyRemotePlayState(active) {
+        if (active === _active) return;
+        _remoteTriggered = true;
+        try { active ? _start() : _stop(); }
+        finally { _remoteTriggered = false; }
+    }
+
+    /* ── (nova função a pedido do usuário) Bonecos dos outros jogadores ────
+       Durante o Play, cada pessoa manda a própria posição/rotação pra sala
+       (via WebRTC — só isso, sem gravar no GitHub, porque é posição em
+       tempo real e não vale a pena esperar o poll de segundos) e desenha um
+       boneco simples (mesmo rig do StarterPlayer) na posição de cada outro
+       membro. NÃO é física compartilhada: o boneco dos outros é só visual,
+       suavizado (lerp) entre uma atualização e outra — colisão entre
+       jogadores não existe. */
+    const _remotePlayers = new Map(); // username -> { group, targetPos, targetRotY, lastUpdate }
+    const REMOTE_PLAYER_BROADCAST_MS = 120; // ritmo de envio da minha posição
+    const REMOTE_PLAYER_STALE_MS = 5000;    // some com o boneco se não chegar nada dele por esse tempo (saiu/caiu a conexão)
+    const REMOTE_PLAYER_LERP = 0.25;        // suavização do movimento do boneco (0-1 por frame)
+    let _lastPlayerBroadcastAt = 0;
+
+    /** Monta um boneco visual simples (mesmo rig do StarterPlayer, sem
+     *  física/colisão) — usado pra representar CADA OUTRO jogador da sala. */
+    function _buildAvatarGroup() {
+        const sply = Tree.find("sply");
+        const sprops = sply?.properties || {};
+        const scale = sprops.CharacterScale || 1;
+        const rig = _buildPlayerRigFromStarterPlayer();
+        const g = new THREE.Group();
+        if (rig) {
+            g.add(rig.group);
+        } else {
+            const mat   = new THREE.MeshStandardMaterial({ color:sprops.BodyColor || 0x00aaff, roughness:0.4 });
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6,2,0.8), mat);
+            torso.position.y = 2.1; torso.castShadow = true;
+            const head  = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), new THREE.MeshStandardMaterial({ color:sprops.HeadColor || 0xffcc99 }));
+            head.position.y = 3.5; head.castShadow = true;
+            const armM = new THREE.MeshStandardMaterial({ color:sprops.ArmColor || sprops.HeadColor || 0xffcc99 });
+            const ag   = new THREE.BoxGeometry(0.5,1.7,0.5);
+            const la   = new THREE.Mesh(ag, armM); la.position.set(-1.15,2.2,0); la.castShadow = true;
+            const ra   = new THREE.Mesh(ag, armM); ra.position.set( 1.15,2.2,0); ra.castShadow = true;
+            const legM = new THREE.MeshStandardMaterial({ color:sprops.LegColor || 0x333333 });
+            const lg   = new THREE.BoxGeometry(0.7,2,0.7);
+            const ll   = new THREE.Mesh(lg, legM); ll.position.set(-0.45,0.6,0); ll.castShadow = true;
+            const rl   = new THREE.Mesh(lg, legM); rl.position.set( 0.45,0.6,0); rl.castShadow = true;
+            g.add(torso, head, la, ra, ll, rl);
+        }
+        g.scale.setScalar(scale);
+        return g;
+    }
+
+    /** Manda minha posição/rotação atual pros outros da sala (throttled). */
+    function _broadcastPlayerTransformThrottled() {
+        if (!_playerBody) return;
+        if (typeof Multiplayer === "undefined" || !Multiplayer.notifyPlayerTransform || !Multiplayer.isInRoom || !Multiplayer.isInRoom()) return;
+        const now = Date.now();
+        if (now - _lastPlayerBroadcastAt < REMOTE_PLAYER_BROADCAST_MS) return;
+        _lastPlayerBroadcastAt = now;
+        try {
+            Multiplayer.notifyPlayerTransform(
+                { x: _player.position.x, y: _player.position.y, z: _player.position.z },
+                _player.rotation.y
+            );
+        } catch (_) {}
+    }
+
+    /** Chamado pelo módulo Multiplayer quando chega a posição de outro
+     *  jogador — cria o boneco dele se ainda não existir, e atualiza o alvo
+     *  pro qual ele vai suavizar (lerp) até a próxima atualização chegar. */
+    function applyRemotePlayerTransform(username, pos, rotY) {
+        if (!username || !_active || !pos) return;
+        let rp = _remotePlayers.get(username);
+        if (!rp) {
+            const group = _buildAvatarGroup();
+            ThreeManager.getScene().add(group);
+            group.position.set(pos.x, pos.y, pos.z);
+            group.rotation.y = rotY || 0;
+            rp = { group, targetPos: new THREE.Vector3(pos.x, pos.y, pos.z), targetRotY: rotY || 0, lastUpdate: Date.now() };
+            _remotePlayers.set(username, rp);
+            return;
+        }
+        rp.targetPos.set(pos.x, pos.y, pos.z);
+        rp.targetRotY = rotY || 0;
+        rp.lastUpdate = Date.now();
+    }
+
+    /** Remove o boneco de um jogador específico (ele saiu da sala/do Play). */
+    function removeRemotePlayer(username) {
+        const rp = _remotePlayers.get(username);
+        if (!rp) return;
+        try { ThreeManager.getScene().remove(rp.group); } catch (_) {}
+        _remotePlayers.delete(username);
+    }
+
+    /** Remove TODOS os bonecos de outros jogadores (eu saí do Play/da sala). */
+    function _clearRemotePlayers() {
+        _remotePlayers.forEach((rp) => { try { ThreeManager.getScene().remove(rp.group); } catch (_) {} });
+        _remotePlayers.clear();
+    }
+
+    /** Chamado a cada frame do Play — suaviza o movimento dos bonecos até a
+     *  posição mais recente recebida, e limpa quem ficou "mudo" por tempo
+     *  demais (provavelmente saiu ou a conexão caiu). */
+    function _updateRemotePlayers(dt) {
+        if (!_remotePlayers.size) return;
+        const now = Date.now();
+        _remotePlayers.forEach((rp, username) => {
+            if (now - rp.lastUpdate > REMOTE_PLAYER_STALE_MS) { removeRemotePlayer(username); return; }
+            rp.group.position.lerp(rp.targetPos, REMOTE_PLAYER_LERP);
+            let dr = rp.targetRotY - rp.group.rotation.y;
+            dr = Math.atan2(Math.sin(dr), Math.cos(dr)); // caminho angular mais curto
+            rp.group.rotation.y += dr * REMOTE_PLAYER_LERP;
+        });
+    }
 
     function _start() {
         if (typeof AnimEditor !== "undefined" && AnimEditor.active) AnimEditor.close();
@@ -17605,6 +17855,7 @@ const Simulation = (() => {
         _destroyPhysics();
 
         if (_player) { ThreeManager.getScene().remove(_player); _player = null; }
+        _clearRemotePlayers(); // (nova função) some com os bonecos dos outros jogadores da sala também
         if (_equippedTool?.videoEl) { _equippedTool.videoEl.pause(); _equippedTool.videoEl.src = ""; }
         _equippedTool = null; _equippedSlotKey = null; _playerRigParts = {}; _playerRigNodes = {}; _playerRigMinY = 0;
         _keys = {};
@@ -18222,6 +18473,13 @@ const Simulation = (() => {
             _player.rotation.y += facingDiff * Math.min(1, dt * 12);
         }
 
+        // (nova função a pedido do usuário) Se eu estiver numa sala
+        // multiplayer, manda minha posição/rotação pros outros membros
+        // (throttle próprio, separado do throttle da cena) e atualiza os
+        // bonecos dos outros jogadores que já mandaram a deles.
+        _broadcastPlayerTransformThrottled();
+        _updateRemotePlayers(dt);
+
         // (removido) O auto-follow que girava a câmera atrás do personagem
         // conforme ele andava não faz mais sentido agora que o personagem
         // sempre olha pra onde a câmera olha (yaw já é a mesma coisa) —
@@ -18339,7 +18597,11 @@ const Simulation = (() => {
     function refreshEquippedTool() { _equippedSlotKey = null; }
 
     return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, get active() { return _active; },
-             getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId };
+             getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId,
+             // (nova função a pedido do usuário) Play/Stop sincronizado entre membros da sala
+             applyRemotePlayState,
+             // (nova função a pedido do usuário) bonecos dos outros jogadores da sala durante o Play
+             applyRemotePlayerTransform, removeRemotePlayer };
 })();
 
 /* ================================================================
