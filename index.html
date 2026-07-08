@@ -2683,6 +2683,17 @@ const ThreeManager = (() => {
                 renderer.setPixelRatio(pr);
                 composer?.setPixelRatio?.(pr);
             }
+            // Otimização · qualidade adaptativa de pós-processamento — SSAO é
+            // a pass de tela cheia mais cara do pipeline (amostra a cena
+            // várias vezes por pixel). Já reduzimos a resolução acima; se
+            // ainda assim o FPS continuar baixo (GPU realmente no limite),
+            // desligamos o SSAO temporariamente — a cena continua correta,
+            // só perde o sombreamento de contato — e religamos assim que
+            // sobrar folga de novo, sem precisar mexer em nada manualmente.
+            if (ssaoPass) {
+                if (fps < 24 && ssaoPass.enabled)       ssaoPass.enabled = false;
+                else if (fps > 50 && !ssaoPass.enabled) ssaoPass.enabled = true;
+            }
         }
 
         // Otimização · culling por distância — sistemas de partículas e
@@ -3294,7 +3305,18 @@ const ThreeManager = (() => {
             if (url?.trim()) {
                 if (cache[k] !== url) {
                     cache[k] = url;
-                    textureLoader.load(url, t => { t.encoding = THREE.sRGBEncoding; mat.map = t; mat.needsUpdate = true; });
+                    textureLoader.load(url, t => {
+                        t.encoding = THREE.sRGBEncoding;
+                        // Otimização de renderização · filtragem anisotrópica —
+                        // sem isso, texturas vistas de ângulo raso (chão, paredes
+                        // distantes) ficam borradas ou "chapiscadas"; com
+                        // mipmaps + anisotropia o GPU escolhe automaticamente a
+                        // versão certa da textura pra cada distância, o que
+                        // além de ficar mais nítido também é MAIS BARATO que
+                        // amostrar a textura em resolução total sempre.
+                        t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        mat.map = t; mat.needsUpdate = true;
+                    });
                 }
             } else if (isBaseplate) {
                 // Item 3 — sem textura customizada nesta face, aplica o
