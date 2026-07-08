@@ -8,6 +8,12 @@
     <title>Roblox Studio Engine v3 — Pro Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- (nova função) CodeMirror 5 — editor de código real pro Script/LocalScript/
+         ModuleScript (highlight de sintaxe Lua, números de linha, parênteses
+         combinando). Antes o editor era um <textarea> puro sem nenhuma ajuda
+         visual, o que dificultava muito escrever/revisar scripts grandes. -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <style>
         body { margin:0; padding:0; background:#1a1a1a; color:#e5e5e5; font-family:'Segoe UI',sans-serif; overflow:hidden; user-select:none; }
         .studio-border { border-color:#2a2a2a; }
@@ -22,6 +28,17 @@
         .tree-indent { margin-left:12px; border-left:1px dotted #444; }
         #script-editor-overlay { display:none; }
         #script-editor-overlay.visible { display:flex; }
+        /* ── CodeMirror do editor de Script — preenche o wrapper inteiro,
+           mesma fonte monoespaçada do resto do editor. ── */
+        #script-editor-cm-wrap .CodeMirror {
+            height: 100%; width: 100%;
+            font-family: 'Consolas','Monaco',monospace;
+            font-size: 12px; line-height: 1.6;
+            background: #1a1a1a;
+        }
+        #script-editor-cm-wrap .CodeMirror-gutters { background:#1a1a1a; border-right:1px solid #2a2a2a; }
+        #script-editor-cm-wrap .CodeMirror-linenumber { color:#555; }
+        #script-editor-cm-wrap .CodeMirror-activeline-background { background: rgba(0,122,204,0.08); }
         #anim-editor-overlay { display:none; }
         #anim-editor-overlay.visible { display:flex; }
         #tool-pose-editor-overlay { display:none; }
@@ -125,6 +142,57 @@
             white-space: nowrap;
         }
         #physics-badge.visible { display: block; }
+
+        /* ── (nova função) Indicador de dispositivo de controle ativo
+           (teclado / controle Xbox-PlayStation / celular) — some sozinho, o
+           app detecta e escolhe o rótulo certo. ── */
+        #control-device-badge {
+            display: none;
+            position: absolute; top: 30px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(139,92,246,0.18);
+            border: 1px solid rgba(139,92,246,0.45);
+            color: #c4b5fd; font-size: 9px;
+            font-family: monospace; font-weight: bold;
+            padding: 3px 10px; border-radius: 4px;
+            pointer-events: none; z-index: 15;
+            white-space: nowrap;
+        }
+        #control-device-badge.visible { display: block; }
+
+        /* ── (nova função) Controles de toque — joystick virtual + botões,
+           aparecem sozinhos em celular/tablet quando não há controle físico
+           conectado (ver Simulation._updateControlDeviceBadge). ── */
+        #touch-controls { display: none; position: absolute; inset: 0; z-index: 16; pointer-events: none; }
+        #touch-controls.visible { display: block; }
+        #touch-joystick-base {
+            position: absolute; left: 28px; bottom: 28px;
+            width: 110px; height: 110px; border-radius: 50%;
+            background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25);
+            pointer-events: auto; touch-action: none;
+        }
+        #touch-joystick-knob {
+            position: absolute; left: 50%; top: 50%; width: 46px; height: 46px;
+            border-radius: 50%; background: rgba(255,255,255,0.35); border: 2px solid rgba(255,255,255,0.6);
+            transform: translate(-50%, -50%); pointer-events: none;
+        }
+        #touch-jump-btn {
+            position: absolute; right: 30px; bottom: 44px;
+            width: 74px; height: 74px; border-radius: 50%;
+            background: rgba(56,189,248,0.22); border: 2px solid rgba(56,189,248,0.55);
+            color: #7dd3fc; font-size: 10px; font-family: monospace; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+            pointer-events: auto; touch-action: none; user-select: none;
+        }
+        #touch-sprint-btn {
+            position: absolute; right: 118px; bottom: 60px;
+            width: 54px; height: 54px; border-radius: 50%;
+            background: rgba(251,191,36,0.18); border: 2px solid rgba(251,191,36,0.5);
+            color: #fcd34d; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: auto; touch-action: none; user-select: none;
+        }
+        #touch-jump-btn.pressed, #touch-sprint-btn.pressed { filter: brightness(1.6); }
 
         /* ── Header sempre por cima de tudo (exceto modais) ── */
         #app-header { position: relative; z-index: 50; }
@@ -883,6 +951,17 @@
         <!-- Indicador de física em modo Play -->
         <div id="physics-badge">⚙ Cannon.js Physics ativo</div>
 
+        <!-- (nova função) Indicador de qual dispositivo de controle está ativo agora -->
+        <div id="control-device-badge">⌨️ Teclado</div>
+
+        <!-- (nova função) Joystick de toque + botões — some sozinho em celular/tablet
+             sem controle físico conectado (ver Simulation._updateControlDeviceBadge) -->
+        <div id="touch-controls">
+            <div id="touch-joystick-base"><div id="touch-joystick-knob"></div></div>
+            <div id="touch-sprint-btn" title="Correr">🏃</div>
+            <div id="touch-jump-btn">PULAR</div>
+        </div>
+
         <!-- Script Editor -->
         <div id="script-editor-overlay" class="absolute inset-0 bg-zinc-950 text-emerald-400 font-mono p-4 z-20 flex-col">
             <div class="flex justify-between items-center border-b border-zinc-800 pb-2 mb-2">
@@ -893,7 +972,9 @@
                     <button onclick="UI.closeScriptEditor()" class="px-3 py-1 bg-red-900 hover:bg-red-800 text-white font-bold rounded">✕ Fechar</button>
                 </div>
             </div>
-            <textarea id="script-editor-textarea" spellcheck="false" class="flex-1 w-full bg-zinc-900 text-zinc-100 p-3 rounded font-mono border border-zinc-800 focus:outline-none focus:border-blue-500 text-xs leading-relaxed resize-none"></textarea>
+            <div id="script-editor-cm-wrap" class="flex-1 w-full min-h-0 rounded border border-zinc-800 overflow-hidden">
+                <textarea id="script-editor-textarea" spellcheck="false" class="w-full h-full bg-zinc-900 text-zinc-100 p-3 font-mono focus:outline-none text-xs leading-relaxed resize-none"></textarea>
+            </div>
         </div>
 
         <!-- Animator Editor (keyframes) — abre com duplo clique num Animator.
@@ -1032,7 +1113,13 @@
         <footer id="app-console" class="h-28 bg-studio-dark border-t studio-border flex flex-col z-10 flex-shrink-0 transition-all">
             <div class="bg-studio-panel px-3 py-1 font-bold text-gray-400 border-b studio-border flex justify-between items-center">
                 <span>Output / Console</span>
-                <button onclick="UI.clearConsole()" class="text-[10px] bg-zinc-700 px-2 py-0.5 rounded hover:bg-zinc-600 text-gray-300">Limpar</button>
+                <div class="flex items-center gap-2">
+                    <label class="text-[10px] font-normal flex items-center gap-1 cursor-pointer" title="Loga no console toda vez que um script muda uma propriedade de um objeto selecionado no Explorer">
+                        <input type="checkbox" id="console-watch-toggle" class="rounded accent-blue-500" onchange="LuaEngine.setWatchEnabled(this.checked)">
+                        Monitorar propriedades
+                    </label>
+                    <button onclick="UI.clearConsole()" class="text-[10px] bg-zinc-700 px-2 py-0.5 rounded hover:bg-zinc-600 text-gray-300">Limpar</button>
+                </div>
             </div>
             <div id="console-output" class="flex-1 overflow-y-auto p-2 font-mono text-zinc-400 text-[11px] space-y-0.5 select-text"></div>
         </footer>
@@ -1168,6 +1255,23 @@
                 <input type="checkbox" id="gfx-detailed-stats" class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('detailedStats', this.checked)">
             </div>
             <p class="text-[11px] text-zinc-500 -mt-2">Mostra um painel extra junto ao contador de FPS com número de draw calls, triângulos e memória de geometrias/texturas — útil pra diagnosticar exatamente o que está pesando numa cena específica.</p>
+
+            <!-- (nova função a pedido do usuário) Controles — mostra qual dispositivo
+                 (teclado/gamepad/celular) o app detectou automaticamente durante o Play. -->
+            <div class="flex items-center justify-between border-t studio-border pt-3">
+                <span class="text-zinc-300">Dispositivo de controle</span>
+                <span id="gfx-control-device-label" class="text-purple-400 font-mono text-xs">Teclado</span>
+            </div>
+            <p class="text-[11px] text-zinc-500 -mt-2">Detectado sozinho ao entrar em Play: teclado, controle de Xbox/PlayStation (via Gamepad API — basta conectar e apertar um botão) ou toque, em celular/tablet.</p>
+
+            <!-- (nova função a pedido do usuário) VR — por enquanto é só um teste de
+                 configuração (fica salvo), o modo VR de verdade ainda não existe. -->
+            <div class="flex items-center justify-between">
+                <span class="text-zinc-300">🥽 VR (teste)</span>
+                <input type="checkbox" id="gfx-vr-test" class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('vrTest', this.checked)">
+            </div>
+            <p class="text-[11px] text-zinc-500 -mt-2">Ainda não liga um modo VR de verdade — é só um teste de configuração por enquanto (fica salvo pra quando essa função existir de fato).</p>
+
             <button onclick="UI.resetGraphicsSettings()" class="w-full mt-2 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 text-xs">↺ Restaurar padrão de fábrica (Auto)</button>
         </div>
     </div>
@@ -1647,6 +1751,13 @@
 <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
 <!-- Fengari — VM de Lua 5.3 real (não é um "fake" em JS), compilada para rodar no navegador -->
 <script src="https://cdn.jsdelivr.net/npm/fengari-web@0.1.4/dist/fengari-web.js"></script>
+<!-- (nova função) CodeMirror 5 + modo Lua + addons — editor de código de verdade
+     pra Script/LocalScript/ModuleScript (ver UI._ensureScriptCM mais abaixo). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/lua/lua.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
 <!-- (nova função) JSZip — usado só pra montar o pacote de "Publicar projeto"
      (pasta com descrição.txt, capa/, demonstracoes/ e projeto.json) num
      único .zip pra baixar, já que o navegador não deixa salvar uma pasta
@@ -2343,7 +2454,9 @@ const ThreeManager = (() => {
     // e memória de geometrias/texturas (via renderer.info). Desligado por
     // padrão porque ler renderer.info tem um custo pequeno mas real; só vale
     // a pena pra quem está de fato investigando um gargalo específico.
-    let _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto", fpsCap: 0, renderDistance: "longa", detailedStats: false, shadowQuality: "alta" };
+    // (nova função a pedido do usuário) vrTest — só um flag salvo por enquanto,
+    // ainda não liga um modo VR de verdade (ver comentário no modal).
+    let _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto", fpsCap: 0, renderDistance: "longa", detailedStats: false, shadowQuality: "alta", vrTest: false };
     // Otimização · filtragem anisotrópica por nível de qualidade — em
     // "Extremo"/"Baixa" a amostragem anisotrópica alta custa GPU à toa (a
     // resolução já está tão baixa que o ganho de nitidez não compensa); em
@@ -8846,6 +8959,36 @@ const LuaEngine = (() => {
         }
     }
 
+    /** (novo) "Monitorar propriedades" — quando ligado no checkbox do
+     *  Console, toda mudança de propriedade feita por um script fica
+     *  logada no console (ex.: "🔎 Parte.Position = 3, 5, 0"). Com
+     *  throttle por objeto+propriedade pra não inundar o console quando um
+     *  script de movimento muda Position/Rotation todo frame (60x/s) —
+     *  mesmo cuidado de performance do comentário logo acima. */
+    let _watchEnabled = false;
+    const _watchThrottleMs = 400;
+    const _watchLast = new Map(); // "nodeId:prop" -> { t, val }
+    function setWatchEnabled(on) {
+        _watchEnabled = !!on;
+        if (_watchEnabled) UI.log("🔎 Monitor de propriedades ligado.", "info");
+    }
+    function _fmtPropVal(v) {
+        if (v && typeof v === "object" && "x" in v && "y" in v && "z" in v) {
+            return `${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)}`;
+        }
+        if (typeof v === "number") return v.toFixed(3).replace(/\.?0+$/, "") || "0";
+        return String(v);
+    }
+    function _notifyPropChange(node, prop, val) {
+        if (!_watchEnabled) return;
+        const key = node.id + ":" + prop;
+        const now = performance.now();
+        const prev = _watchLast.get(key);
+        if (prev && (now - prev.t) < _watchThrottleMs) { prev.t = now; prev.val = val; return; }
+        _watchLast.set(key, { t: now, val });
+        UI.log(`🔎 <span class="text-zinc-300">${node.name}</span>.${prop} = ${_fmtPropVal(val)}`, "info");
+    }
+
     function _isNoneOrNil(L, idx) { return lua.lua_type(L, idx) <= 0; }
 
     /** Empurra qualquer valor de propriedade (number/boolean/string/Vector3)
@@ -8910,6 +9053,32 @@ const LuaEngine = (() => {
             return 1;
         });
 
+        // (função nova) getConsoleLog — devolve as últimas N mensagens do
+        // console como uma tabela Lua de strings (1..N), pra um script poder
+        // ler o que já foi logado (inclusive avisos de propriedade do
+        // monitor). Texto sem tags HTML.
+        def("getConsoleLog", (LT) => {
+            const n = lua.lua_isnumber(LT, 1) ? lua.lua_tonumber(LT, 1) : 20;
+            const lines = UI.getLogHistory(n).map(s => String(s).replace(/<[^>]+>/g, ""));
+            lua.lua_newtable(LT);
+            lines.forEach((line, i) => {
+                lua.lua_pushstring(LT, to_luastring(line));
+                lua.lua_rawseti(LT, -2, i + 1);
+            });
+            return 1;
+        });
+
+        // (função nova) showToast — mostra um toast rápido pro jogador,
+        // igual aos avisos nativos do editor (ex.: "Chave salva!"). Serve de
+        // base pra categoria NOTIFICAÇÃO (Notify.Show no Lua), pra um
+        // script avisar o jogador de algo sem precisar montar GUI na mão.
+        def("showToast", (LT) => {
+            const msg = lua.lua_tojsstring(LT, 1);
+            const dur = lua.lua_isnumber(LT, 2) ? lua.lua_tonumber(LT, 2) * 1000 : undefined;
+            UI.showToast(msg, dur);
+            return 0;
+        });
+
         def("setProp", (LT) => {
             const id   = lua.lua_tojsstring(LT, 1);
             const prop = lua.lua_tojsstring(LT, 2);
@@ -8943,10 +9112,24 @@ const LuaEngine = (() => {
             // não tinham esse problema, mas o ScreenGui (HUD em HTML) precisa
             // desse empurrão explícito.
             if (prop === "Enabled" && typeof rebuildHUD === "function") rebuildHUD();
+            // (novo — pedido do usuário: "player seja um modelo controlado
+            // pelos scripts") Se o que mudou foi a Position do
+            // HumanoidRootPart do PRÓPRIO player (via Humanoid:MoveTo,
+            // parte:Nudge, ou atribuição direta), move o corpo físico de
+            // verdade — sem isso o número mudava nas Properties mas o
+            // personagem continuava parado na tela (a posição real vivia
+            // só na física, sem ligação nenhuma com este node).
+            if (prop === "Position" && kind === "vec" &&
+                typeof Simulation !== "undefined" && Simulation.getPlayerRootNodeId &&
+                Simulation.getPlayerRootNodeId() === node.id) {
+                const p = node.properties[prop];
+                Simulation.teleportPlayerTo(p.x, p.y, p.z);
+            }
             // (correção de performance) Position/Health/Color etc. mudando via
             // script NÃO precisam reconstruir o Explorer inteiro — só Name
             // (tratado acima, antes deste bloco) muda o que aparece na árvore.
             _markChanged({ structural: false, nodeId: node.id });
+            _notifyPropChange(node, prop, node.properties[prop]);
             return 0;
         });
 
@@ -9236,6 +9419,16 @@ Vector3.__div = function(a,b)
     if type(b) == "number" then return Vector3.new(a.x/b, a.y/b, a.z/b) end
     return Vector3.new(a.x/b.x, a.y/b.y, a.z/b.z)
 end
+
+-- (novas funções) WithX/WithY/WithZ — trocam só UM eixo e devolvem um vetor
+-- novo com o resto igual. Serve pra scripts de movimento não precisarem
+-- reescrever o Vector3 inteiro toda vez que só um eixo muda, ex.:
+--   parte.Position = parte.Position:WithY(parte.Position.y + 1)
+-- em vez de:
+--   parte.Position = Vector3.new(parte.Position.x, parte.Position.y + 1, parte.Position.z)
+function Vector3:WithX(x) return Vector3.new(x, self.y, self.z) end
+function Vector3:WithY(y) return Vector3.new(self.x, y, self.z) end
+function Vector3:WithZ(z) return Vector3.new(self.x, self.y, z) end
 
 Color3 = {}
 Color3.__index = Color3
@@ -12303,6 +12496,185 @@ InstanceMT.__index = function(self, key)
 end
 
 -- ============================================================
+-- EXTRA · Instance:Nudge (função nova) — edita só UM eixo de uma
+-- propriedade vetorial (Position, Rotation, Size...) sem precisar
+-- reescrever o Vector3 inteiro. Funciona com número absoluto ou com
+-- delta (soma no valor atual). Ex.:
+--   parte:Nudge("Position", "y", 1, true)   -- soma 1 no Y atual
+--   parte:Nudge("Position", "y", 5)         -- define Y = 5 direto
+-- ============================================================
+local __oldInstanceIndex3 = InstanceMT.__index
+InstanceMT.__index = function(self, key)
+    if key == "Nudge" then
+        return function(s, propName, axis, value, isDelta)
+            local cur = s[propName]
+            if type(cur) ~= "table" or cur[axis] == nil then
+                error("Nudge: propriedade '" .. tostring(propName) .. "' não tem o eixo '" .. tostring(axis) .. "'")
+            end
+            local novo = isDelta and (cur[axis] + value) or value
+            if axis == "x" then s[propName] = cur:WithX(novo)
+            elseif axis == "y" then s[propName] = cur:WithY(novo)
+            elseif axis == "z" then s[propName] = cur:WithZ(novo)
+            else error("Nudge: eixo inválido '" .. tostring(axis) .. "' (use x, y ou z)") end
+        end
+    end
+    return __oldInstanceIndex3(self, key)
+end
+
+-- ============================================================
+-- EXTRA · Instance:Toggle / Instance:AddNumber (categoria PROPRIEDADE)
+-- Mais dois atalhos pro script que só mexe em propriedade (número/texto/
+-- ativa-desativa), sem precisar ler e escrever na mão:
+--   parte:Toggle("Anchored")        -- inverte true/false
+--   parte:AddNumber("Transparency", 0.1)  -- soma num número qualquer
+-- ============================================================
+local __oldInstanceIndex4 = InstanceMT.__index
+InstanceMT.__index = function(self, key)
+    if key == "Toggle" then
+        return function(s, propName)
+            local cur = s[propName]
+            if type(cur) ~= "boolean" then
+                error("Toggle: propriedade '" .. tostring(propName) .. "' não é booleana (Enabled/Anchored/CanCollide/Visible...)")
+            end
+            s[propName] = not cur
+            return not cur
+        end
+    elseif key == "AddNumber" then
+        return function(s, propName, delta)
+            local cur = s[propName]
+            if type(cur) ~= "number" then
+                error("AddNumber: propriedade '" .. tostring(propName) .. "' não é numérica")
+            end
+            local novo = cur + (delta or 0)
+            s[propName] = novo
+            return novo
+        end
+    end
+    return __oldInstanceIndex4(self, key)
+end
+
+-- ============================================================
+-- EXTRA · Calc — mais funções pra categoria CÁLCULO (o Calc já existia
+-- acima, com sum/average/round/clamp/etc via math.*; aqui só ENTRO com o
+-- que faltava, sem recriar a tabela).
+-- ============================================================
+-- Calc.mapRange já existe como math.mapRange; exponho também em Calc pra
+-- ficar junto das outras funções de cálculo, ex.:
+--   Calc.mapRange(saude, 0, 100, 0, 1) -- vira porcentagem de 0 a 1
+Calc.mapRange = math.mapRange
+-- Calc.newStopwatch() — cronômetro simples pra medir tempo decorrido
+-- dentro de um script, ex.:
+--   local cron = Calc.newStopwatch()
+--   wait(2)
+--   print(cron:Elapsed())  -- ~2
+function Calc.newStopwatch()
+    local start = os.clock()
+    local sw = {}
+    function sw:Elapsed() return os.clock() - start end
+    function sw:Reset() start = os.clock() end
+    return sw
+end
+
+-- ============================================================
+-- EXTRA · Spawner (categoria SPAWN/EXCLUIR) — criar e destruir com menos
+-- código, direto no Explorador (qualquer coisa criada aqui aparece lá).
+-- ============================================================
+Spawner = {}
+-- Spawner.At(classe, pai, posicao, propsExtras) — cria, já parenteia,
+-- posiciona e aplica outras propriedades num só passo, ex.:
+--   Spawner.At("Part", workspace, Vector3.new(0,10,0), {Anchored = true})
+function Spawner.At(className, parent, position, extraProps)
+    local inst = Instance.new(className, parent)
+    if position ~= nil then inst.Position = position end
+    if extraProps ~= nil then
+        for k, v in pairs(extraProps) do inst[k] = v end
+    end
+    return inst
+end
+-- Spawner.DestroyAll(pai, classe) — destrói todo filho de um certo tipo
+-- (ou TODOS os filhos, se classe for nil/omitido), devolve quantos destruiu.
+-- Ex.: Spawner.DestroyAll(workspace, "Part")
+function Spawner.DestroyAll(parent, className)
+    local count = 0
+    for _, child in ipairs(parent:GetChildren()) do
+        local ok, cls = pcall(function() return child.ClassName end)
+        if className == nil or (ok and cls == className) then
+            child:Destroy()
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- ============================================================
+-- EXTRA · Memory (categoria SALVAR) — guarda valores só durante a sessão
+-- atual de Play (some ao parar/dar F5). É pra dado temporário que vários
+-- scripts precisam compartilhar sem precisar de DataStore de verdade.
+-- Pra persistência REAL entre sessões, use DataStoreService/SaveSystem
+-- (que já existe no motor).
+-- ============================================================
+Memory = {}
+local __memoryData = {}
+function Memory.Set(key, value) __memoryData[key] = value end
+function Memory.Get(key, default)
+    local v = __memoryData[key]
+    if v == nil then return default end
+    return v
+end
+function Memory.Has(key) return __memoryData[key] ~= nil end
+function Memory.Remove(key) __memoryData[key] = nil end
+function Memory.Clear() __memoryData = {} end
+-- Memory.GetAll() — devolve uma CÓPIA de toda a tabela guardada até agora,
+-- usada pelo SaveSystem:PersistMemory pra salvar tudo de uma vez.
+function Memory.GetAll()
+    local copy = {}
+    for k, v in pairs(__memoryData) do copy[k] = v end
+    return copy
+end
+
+-- ============================================================
+-- EXTRA · Trigger (categoria EVENTO/GATILHO) — a 5ª categoria, pra
+-- completar: script que reage a alguma coisa acontecendo (toque, tempo,
+-- clique) em vez de mexer em propriedade/cálculo/spawn/salvar direto.
+-- ============================================================
+Trigger = {}
+-- Trigger.Debounce(fn, cooldown) — embrulha uma função pra ela não poder
+-- ser chamada de novo antes de "cooldown" segundos passarem desde a
+-- última vez (evita disparo repetido de Touched, clique, etc.). Ex.:
+--   local abrirPorta = Trigger.Debounce(function() ... end, 2)
+--   parte.Touched:Connect(abrirPorta)
+function Trigger.Debounce(fn, cooldown)
+    local ready = true
+    return function(...)
+        if not ready then return end
+        ready = false
+        fn(...)
+        delay(cooldown or 1, function() ready = true end)
+    end
+end
+-- Trigger.OnTouch(parte, callback, cooldown) — atalho pra parte.Touched
+-- já com debounce embutido (padrão mais comum de trap/botão/coletável),
+-- ex.: Trigger.OnTouch(moeda, function(hit) ... coleta ... end, 1)
+function Trigger.OnTouch(part, callback, cooldown)
+    return part.Touched:Connect(Trigger.Debounce(callback, cooldown))
+end
+-- Trigger.Every(intervalo, fn) — chama fn() repetidamente a cada
+-- "intervalo" segundos até alguém chamar :Stop() na conexão devolvida.
+-- Ex.:
+--   local cron = Trigger.Every(5, function() print("passaram 5s") end)
+--   cron:Stop()  -- pra parar
+function Trigger.Every(interval, fn)
+    local running = true
+    spawn(function()
+        while running do
+            wait(interval)
+            if running then fn() end
+        end
+    end)
+    return { Stop = function() running = false end }
+end
+
+-- ============================================================
 -- EXTRA · MarketplaceService (função nova) — compras/gamepasses simulados
 -- ============================================================
 -- Não existe economia real neste motor (sem servidor/Robux de verdade),
@@ -12564,6 +12936,18 @@ function switchCase(value, cases, default2)
     if default2 then return default2() end
 end
 function printf(fmt, ...) print(string.format(fmt, ...)) end
+
+-- (função nova) Console.GetLines(n) — devolve uma tabela com as últimas n
+-- mensagens já logadas no console (padrão 20), incluindo avisos do monitor
+-- de propriedades. Serve pra um script "ler o console", ex.:
+--   for _, linha in ipairs(Console.GetLines(10)) do print(linha) end
+Console = {}
+function Console.GetLines(n) return __HOST.getConsoleLog(n or 20) end
+
+-- (categoria NOTIFICAÇÃO) Notify — script avisa o jogador de algo na tela
+-- sem precisar montar GUI na mão, ex.: Notify.Show("Você venceu!", 3)
+Notify = {}
+function Notify.Show(text, duration) __HOST.showToast(text, duration) end
 function assertType(value, expectedType, msg)
     if type(value) ~= expectedType then
         error(msg or ("esperado " .. expectedType .. ", recebeu " .. type(value)))
@@ -13444,6 +13828,24 @@ function SaveSystem:SaveCalc(playerKey, slot, calcName, calcArgs, storeName)
     return result
 end
 
+-- (novas funções) SaveSystem:PersistMemory / RestoreMemory — a ponte entre
+-- a categoria SALVAR temporário (Memory, que some ao fechar/dar F5) e a
+-- persistência real (DataStoreService por baixo). Serve pra "salvar tudo"
+-- de uma vez no fim de uma sessão de jogo, e recuperar tudo de volta na
+-- próxima vez que o jogador entrar. Ex.:
+--   SaveSystem:PersistMemory("jogador1")            -- salva TUDO que tá no Memory
+--   SaveSystem:RestoreMemory("jogador1")            -- devolve pro Memory tudo que foi salvo
+function SaveSystem:PersistMemory(playerKey, storeName)
+    return self:Save(playerKey, "memory", Memory.GetAll(), storeName)
+end
+function SaveSystem:RestoreMemory(playerKey, storeName)
+    local data = self:Load(playerKey, "memory", storeName)
+    if type(data) == "table" then
+        for k, v in pairs(data) do Memory.Set(k, v) end
+    end
+    return data
+end
+
 -- ============================================================
 -- EXTRA · Achievement.* (função nova) — conquistas com progresso e
 -- desbloqueio persistido em memória (combine com SaveSystem pra manter
@@ -13882,6 +14284,66 @@ function Localization.Get(key, vars)
 end
 function Localization.Has(key) local dict = __locales[__currentLocale] or {} return dict[key] ~= nil end
 
+-- ============================================================
+-- EXTRA (nova função) · require() real para ModuleScript.
+-- Antes, "require" ficava travado (setglobal nil) por segurança —
+-- então a classe ModuleScript existia no Explorer mas não servia
+-- pra nada, e todo script virava um arquivo monolítico sem reuso.
+-- Agora require(algumModuleScript) roda de verdade:
+--   • só aceita uma Instance (nunca string de caminho/URL — mantém
+--     o sandbox: não dá pra ler arquivo nenhum do disco/rede);
+--   • exige que a instância seja um ModuleScript de verdade;
+--   • roda o Source do módulo com load()+pcall() e cacheia o
+--     retorno — chamar require() várias vezes no MESMO Script pro
+--     MESMO módulo devolve sempre o mesmo valor, sem re-executar;
+--   • detecta dependência circular (A dá require em B que dá
+--     require em A) e dispara um erro claro em vez de travar;
+--   • exige 'return algumaCoisa' no fim do módulo, igual ao Roblox
+--     real (senão o erro seria só um nil confuso mais na frente).
+--
+-- Limitação assumida (documentada, não escondida): cada Script/
+-- LocalScript roda na sua própria lua_State (ver LuaEngine.run em
+-- JS), então o cache de require() é POR SCRIPT — dois Scripts
+-- diferentes que dão require() no mesmo ModuleScript executam o
+-- módulo uma vez cada um e recebem tabelas equivalentes, mas não a
+-- MESMA referência de tabela (não dá pra usar require() pra
+-- guardar estado compartilhado ENTRE Scripts; pra isso use
+-- DataStore, atributos numa Instance, ou RemoteEvent).
+-- ============================================================
+local __moduleCache   = {}
+local __moduleLoading = {}
+function require(moduleScript)
+    if type(moduleScript) ~= "table" or not rawget(moduleScript, "__id") then
+        error("require espera uma instância de ModuleScript (ex.: require(script.Parent.Utils)), recebi: " .. tostring(moduleScript), 2)
+    end
+    local id = rawget(moduleScript, "__id")
+    if __moduleCache[id] ~= nil then return __moduleCache[id] end
+    if __moduleLoading[id] then
+        error("require: dependência circular detectada em '" .. tostring(__HOST.getProp(id, "Name")) .. "'", 2)
+    end
+    local className = __HOST.getProp(id, "ClassName")
+    if className ~= "ModuleScript" then
+        error("require: '" .. tostring(__HOST.getProp(id, "Name")) .. "' não é um ModuleScript (é " .. tostring(className) .. ")", 2)
+    end
+    local name   = __HOST.getProp(id, "Name") or "ModuleScript"
+    local source = __HOST.getProp(id, "Source") or ""
+    local chunk, loadErr = load(source, "=" .. tostring(name))
+    if not chunk then
+        error("require: erro de sintaxe em '" .. tostring(name) .. "': " .. tostring(loadErr), 2)
+    end
+    __moduleLoading[id] = true
+    local ok, result = pcall(chunk)
+    __moduleLoading[id] = nil
+    if not ok then
+        error("require: erro ao executar '" .. tostring(name) .. "': " .. tostring(result), 2)
+    end
+    if result == nil then
+        error("require: o ModuleScript '" .. tostring(name) .. "' precisa terminar com 'return algumaCoisa'.", 2)
+    end
+    __moduleCache[id] = result
+    return result
+end
+
 `;
 
     /** Retorna as threads que pertencem a `owner`. Sem argumento, retorna
@@ -13958,8 +14420,11 @@ function Localization.Has(key) local dict = __locales[__currentLocale] or {} ret
         const L = lauxlib.luaL_newstate();
         lualib.luaL_openlibs(L);
 
-        // Sandbox: remove APIs sem sentido/perigosas no navegador (como o Roblox real também não expõe io/dofile/require)
-        ["dofile", "loadfile", "require"].forEach(n => { lua.lua_pushnil(L); lua.lua_setglobal(L, to_luastring(n)); });
+        // Sandbox: remove APIs sem sentido/perigosas no navegador (como o Roblox real também não expõe io/dofile).
+        // (ATUALIZADO) "require" saiu dessa lista de pé frio — agora é uma função real,
+        // definida no PRELUDE em Lua puro, que só aceita instâncias ModuleScript da
+        // árvore do jogo (nunca caminho de arquivo/URL), então continua tudo dentro do sandbox.
+        ["dofile", "loadfile"].forEach(n => { lua.lua_pushnil(L); lua.lua_setglobal(L, to_luastring(n)); });
         lua.lua_pushnil(L); lua.lua_setglobal(L, to_luastring("io"));
         lua.lua_getglobal(L, to_luastring("os"));
         ["execute", "remove", "rename", "exit", "tmpname", "getenv"].forEach(f => {
@@ -14041,7 +14506,7 @@ function Localization.Has(key) local dict = __locales[__currentLocale] or {} ret
         });
     }
 
-    return { run, stop, fireEvent, heartbeat };
+    return { run, stop, fireEvent, heartbeat, setWatchEnabled };
 })();
 
 /* ================================================================
@@ -14049,6 +14514,10 @@ function Localization.Has(key) local dict = __locales[__currentLocale] or {} ret
    ================================================================ */
 const UI = (() => {
     const MAX_LOG_LINES = 300;
+    // (novo) histórico das mensagens de console em memória (texto puro, sem
+    // HTML), pra scripts Lua poderem ler o console via Console.GetLines(n) —
+    // o DOM já limita em MAX_LOG_LINES, aqui mantemos o mesmo limite.
+    const _logHistory = [];
     function log(msg, type="default") {
         const out = document.getElementById("console-output");
         const cls = { info:"text-blue-400", error:"text-red-400", success:"text-green-400" }[type] || "text-zinc-300";
@@ -14056,12 +14525,22 @@ const UI = (() => {
         d.className = `${cls} py-0.5 border-b border-zinc-900`;
         d.innerHTML = `<span class="text-zinc-600">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
         out.appendChild(d);
+        _logHistory.push(msg);
+        if (_logHistory.length > MAX_LOG_LINES) _logHistory.shift();
         // Corrige crescimento ilimitado do DOM do console em sessões longas
         while (out.childElementCount > MAX_LOG_LINES) out.removeChild(out.firstChild);
         out.scrollTop = out.scrollHeight;
     }
 
-    function clearConsole() { document.getElementById("console-output").innerHTML = ""; }
+    /** (nova função) Devolve as últimas N mensagens do console (mais recente
+     *  por último), pra Console.GetLines(n) no Lua conseguir ler o que já
+     *  foi logado — inclusive avisos de mudança de propriedade. */
+    function getLogHistory(n) {
+        if (!n || n >= _logHistory.length) return _logHistory.slice();
+        return _logHistory.slice(_logHistory.length - n);
+    }
+
+    function clearConsole() { document.getElementById("console-output").innerHTML = ""; _logHistory.length = 0; }
 
     function showToast(msg, dur = 2000) {
         const t = document.getElementById("toast");
@@ -14089,6 +14568,9 @@ const UI = (() => {
         document.getElementById("gfx-bloom").checked    = gfx.bloom  !== false;
         document.getElementById("gfx-detailed-stats").checked = gfx.detailedStats === true;
         _toggleDetailedStatsPanel(gfx.detailedStats === true);
+        // (nova função a pedido do usuário) VR (teste) e dispositivo de controle detectado
+        document.getElementById("gfx-vr-test").checked = gfx.vrTest === true;
+        if (typeof Simulation !== "undefined" && Simulation.refreshControlDeviceLabel) Simulation.refreshControlDeviceLabel();
         const idx = Math.max(0, GFX_QUALITY_STEPS.indexOf(gfx.quality));
         document.getElementById("gfx-quality-slider").value = idx;
         document.getElementById("gfx-quality-label").textContent = GFX_QUALITY_LABELS[gfx.quality] || "Auto";
@@ -14114,6 +14596,13 @@ const UI = (() => {
     function setGfxToggle(key, checked) {
         ThreeManager.setGraphicsSettings({ [key]: checked });
         if (key === "detailedStats") _toggleDetailedStatsPanel(checked);
+        // (nova função a pedido do usuário) VR ainda é só um teste de
+        // configuração — avisa que não liga um modo VR de verdade ainda.
+        if (key === "vrTest") {
+            showToast(checked
+                ? "🥽 VR (teste) ligado — só a configuração fica salva, o modo VR de verdade ainda não existe."
+                : "🥽 VR (teste) desligado.");
+        }
     }
     // (nova função a pedido do usuário) Painel de estatísticas detalhadas —
     // mostra/esconde o texto de draw calls/triângulos junto ao contador de
@@ -14158,26 +14647,99 @@ const UI = (() => {
         showToast("↺ Configurações gráficas restauradas (Auto).");
     }
 
+    /** (nova função) Cria (uma única vez) o CodeMirror que substitui o
+     *  <textarea> puro do editor de Script — highlight de sintaxe Lua,
+     *  números de linha, parênteses combinando e auto-fechamento.
+     *  Se o CDN do CodeMirror não carregar (sem internet, bloqueado etc.),
+     *  retorna null e todo o resto do editor cai de volta pro textarea
+     *  puro sozinho — nada quebra, só perde o highlight. */
+    /** (nova função — corrige lacuna de UX) Salva o Source atual no node
+     *  sem fechar o editor, pra poder ser chamada tanto pelo Ctrl+S quanto
+     *  por closeScriptEditor() sem duplicar lógica. */
+    function _saveScriptSource(opts) {
+        opts = opts || {};
+        if (!State.editingScript) return;
+        if (!State.editingScript.properties) State.editingScript.properties = {};
+        State.editingScript.properties.Source = _scriptEditorGetValue();
+        if (opts.log !== false) log(`Script [${State.editingScript.name}] salvo.`, "info");
+        if (opts.toast) showToast("💾 Script salvo.");
+    }
+
+    let _scriptCM = null;
+    function _ensureScriptCM() {
+        if (_scriptCM) return _scriptCM;
+        const ta = document.getElementById("script-editor-textarea");
+        if (typeof CodeMirror === "undefined" || !ta) return null;
+        try {
+            _scriptCM = CodeMirror.fromTextArea(ta, {
+                mode: "lua",
+                theme: "dracula",
+                lineNumbers: true,
+                matchBrackets: true,
+                autoCloseBrackets: true,
+                styleActiveLine: true,
+                indentUnit: 4,
+                tabSize: 4,
+                indentWithTabs: false,
+                lineWrapping: false,
+                // (CORREÇÃO de UX) Antes, Ctrl+S dentro do editor de Script não
+                // fazia NADA — o atalho global (setupKeyboard) ignora de propósito
+                // qualquer tecla enquanto o foco está num campo de texto (pra não
+                // atropelar "w"/"e"/"r" sendo digitados dentro do próprio código),
+                // e como o CodeMirror usa um <textarea> interno escondido pra
+                // capturar teclado, ele conta como "campo de texto" pra essa
+                // regra. Resultado: só dava pra salvar/rodar clicando nos botões
+                // com o mouse. Agora Ctrl+S salva e Ctrl+Enter roda, sem precisar
+                // tirar a mão do teclado — igual a qualquer editor de código real.
+                extraKeys: {
+                    "Ctrl-S": (cm) => { _saveScriptSource({ toast: true }); },
+                    "Cmd-S":  (cm) => { _saveScriptSource({ toast: true }); },
+                    "Ctrl-Enter": (cm) => { runScriptPreview(); },
+                    "Cmd-Enter":  (cm) => { runScriptPreview(); },
+                },
+            });
+        } catch (err) {
+            console.error("[Engine] Falha ao iniciar o CodeMirror, caindo pro textarea puro:", err);
+            _scriptCM = null;
+        }
+        return _scriptCM;
+    }
+    // Lê/escreve o código atual do editor, usando o CodeMirror quando
+    // disponível e o <textarea> cru como fallback — chamado nos 3 pontos
+    // que antes liam/escreviam direto no textarea (abrir, fechar, executar).
+    function _scriptEditorGetValue() {
+        const cm = _ensureScriptCM();
+        if (cm) return cm.getValue();
+        return document.getElementById("script-editor-textarea").value;
+    }
+    function _scriptEditorSetValue(code) {
+        const cm = _ensureScriptCM();
+        if (cm) { cm.setValue(code || ""); return; }
+        document.getElementById("script-editor-textarea").value = code || "";
+    }
+
     function openScriptEditor(node) {
         State.editingScript = node;
         document.getElementById("script-editor-title").innerHTML =
             `<i class="fa-solid fa-file-code text-yellow-500"></i> ${node.name}`;
-        document.getElementById("script-editor-textarea").value = node.properties?.Source || "";
+        _scriptEditorSetValue(node.properties?.Source || "");
         document.getElementById("script-editor-overlay").classList.add("visible");
+        // O CodeMirror mede alturas/larguras de linha durante a criação; se o
+        // container ainda estava com display:none nesse momento (overlay
+        // fechado), o texto aparece cortado/desalinhado até o próximo resize.
+        // Um refresh() logo depois de ficar visível corrige isso de vez.
+        const cm = _ensureScriptCM();
+        if (cm) requestAnimationFrame(() => { cm.refresh(); cm.focus(); });
     }
 
     function closeScriptEditor() {
-        if (State.editingScript) {
-            if (!State.editingScript.properties) State.editingScript.properties = {};
-            State.editingScript.properties.Source = document.getElementById("script-editor-textarea").value;
-            log(`Script [${State.editingScript.name}] salvo.`, "info");
-        }
+        _saveScriptSource({ log: true, toast: false });
         document.getElementById("script-editor-overlay").classList.remove("visible");
         State.editingScript = null;
     }
 
     function runScriptPreview() {
-        const code = document.getElementById("script-editor-textarea").value;
+        const code = _scriptEditorGetValue();
         // owner:"preview" → nunca derruba os Scripts que já estão rodando no
         // Play, mesmo se o editor for aberto (duplo-clique) durante a simulação.
         LuaEngine.run(code, State.editingScript, { owner: "preview" });
@@ -14678,7 +15240,7 @@ const UI = (() => {
         d.appendChild(g); return d;
     }
 
-    return { log, clearConsole, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
+    return { log, clearConsole, getLogHistory, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
               openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
               openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxFpsCap, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
 })();
@@ -18663,6 +19225,14 @@ const Simulation = (() => {
     let _backup = null;
     let _savedCamera = null;
     let _keys   = {};
+    // (nova função a pedido do usuário) Suporte a controle (Xbox/PS4/PS5,
+    // via Gamepad API) e joystick de toque (celular/tablet) — ambos escrevem
+    // neste mapa auxiliar, separado de _keys (teclado), e são combinados só
+    // na leitura (ver _kd/isKeyDown), pra teclado e controle nunca "brigarem"
+    // entre si mesmo se os dois estiverem ativos ao mesmo tempo.
+    let _padKeys       = {};
+    let _padDeviceType = null;  // 'xbox' | 'ps' | 'generic' | null — controle físico conectado
+    let _touchActive   = false; // joystick de toque sendo arrastado neste instante
 
     /* ── Estado físico ─────────────────────────────────────────── */
     let _world           = null;
@@ -19658,6 +20228,10 @@ const Simulation = (() => {
         document.getElementById("viewport-section").classList.add("play-fullscreen-viewport");
         document.getElementById("play-mode-stop-bar").classList.remove("hidden");
         document.getElementById("physics-badge").classList.add("visible");
+        // (nova função a pedido do usuário) Mostra o indicador de qual
+        // dispositivo de controle está ativo (teclado/gamepad/celular),
+        // e o joystick de toque se for o caso.
+        _updateControlDeviceBadge();
         // (nova função a pedido do usuário) Chat/voz da sala só aparecem no
         // Play quando o usuário está mesmo numa sala multiplayer.
         if (typeof Multiplayer !== "undefined" && Multiplayer.isInRoom && Multiplayer.isInRoom()) {
@@ -19754,6 +20328,8 @@ const Simulation = (() => {
             ["viewport-section", ["play-fullscreen-viewport"]],
             ["play-mode-stop-bar", null], // tratado abaixo (add, não remove)
             ["physics-badge",      null], // tratado abaixo (remove "visible")
+            ["control-device-badge", null], // tratado abaixo (remove "visible")
+            ["touch-controls",     null], // tratado abaixo (remove "visible")
             ["play-chat-overlay",  null], // tratado abaixo (add, não remove)
         ].forEach(([id, classes]) => {
             try {
@@ -19761,6 +20337,8 @@ const Simulation = (() => {
                 if (!el) return;
                 if (id === "play-mode-stop-bar") { el.classList.add("hidden"); return; }
                 if (id === "physics-badge")      { el.classList.remove("visible"); return; }
+                if (id === "control-device-badge") { el.classList.remove("visible"); return; }
+                if (id === "touch-controls")     { el.classList.remove("visible"); return; }
                 if (id === "play-chat-overlay")  { el.classList.add("hidden"); return; }
                 el.classList.remove(...classes);
             } catch (err) {
@@ -20197,6 +20775,7 @@ const Simulation = (() => {
         // StarterPlayer, por isso fica antes do early-return também.
         AnimatorRuntime.tick(dt);
         if (!_player || !_world) return;
+        _pollGamepad();
         Plugins.runHook("tick", dt);
         _updateEquippedTool();
         _applyEquippedToolPose();
@@ -20209,7 +20788,7 @@ const Simulation = (() => {
         const sply = Tree.find("sply");
         // Segurar Shift = correr (1.6x WalkSpeed) — combina com a animação
         // "Correr" tocada pelo ControladorDeAnimacao dentro do rig R6.
-        const sprinting = !!_keys["shift"];
+        const sprinting = _kd("shift");
         const spd  = (sply?.properties?.WalkSpeed ?? 12) * (sprinting ? 1.6 : 1);
         const jp   = sply?.properties?.JumpPower ?? 14;
         const maxJumps = Math.max(1, Math.round(sply?.properties?.MaxJumps ?? 1));
@@ -20219,20 +20798,20 @@ const Simulation = (() => {
         // elas ficam livres pra olhar ao redor, tipo um "mouse por
         // teclado", sem mexer no movimento (que fica só com W/A/S/D).
         const ARROW_TURN_SPEED = 2.2; // rad/s (yaw)
-        if (_keys["arrowleft"])  _yaw += ARROW_TURN_SPEED * dt;
-        if (_keys["arrowright"]) _yaw -= ARROW_TURN_SPEED * dt;
-        if (_keys["arrowup"])    _pitch = Math.min(PITCH_MAX, _pitch + ARROW_TURN_SPEED * 0.55 * dt);
-        if (_keys["arrowdown"])  _pitch = Math.max(PITCH_MIN, _pitch - ARROW_TURN_SPEED * 0.55 * dt);
+        if (_kd("arrowleft"))  _yaw += ARROW_TURN_SPEED * dt;
+        if (_kd("arrowright")) _yaw -= ARROW_TURN_SPEED * dt;
+        if (_kd("arrowup"))    _pitch = Math.min(PITCH_MAX, _pitch + ARROW_TURN_SPEED * 0.55 * dt);
+        if (_kd("arrowdown"))  _pitch = Math.max(PITCH_MIN, _pitch - ARROW_TURN_SPEED * 0.55 * dt);
 
         // ── Movimento relativo à direção da câmera (função nova) ──
         // W anda "para onde a câmera está olhando", S anda pra trás, e
         // A/D estrafegam pros lados (perpendicular a isso) SEM virar o
         // personagem — como em jogos de câmera de ombro/3ª pessoa padrão.
         let inputF = 0, inputR = 0;
-        if (_keys["w"]) inputF += 1;
-        if (_keys["s"]) inputF -= 1;
-        if (_keys["d"]) inputR += 1;
-        if (_keys["a"]) inputR -= 1;
+        if (_kd("w")) inputF += 1;
+        if (_kd("s")) inputF -= 1;
+        if (_kd("d")) inputR += 1;
+        if (_kd("a")) inputR -= 1;
 
         const sinY = Math.sin(_yaw), cosY = Math.cos(_yaw);
         // Vetor "frente" da câmera projetado no plano horizontal
@@ -20285,7 +20864,7 @@ const Simulation = (() => {
         _playerGrounded    = wasGrounded;
         if (wasGrounded) _jumpsUsed = 0;
 
-        const spaceDown       = !!_keys[" "];
+        const spaceDown       = _kd(" ");
         const jumpPressedEdge = spaceDown && !_spaceWasDown;
         _spaceWasDown          = spaceDown;
 
@@ -20370,6 +20949,25 @@ const Simulation = (() => {
             _playerBody.position.y - _playerHalfH,
             _playerBody.position.z
         );
+        // (novo — pedido do usuário: "player seja um modelo controlado")
+        // Sincroniza a posição FÍSICA de verdade de volta pro node.properties
+        // do HumanoidRootPart, pra character.HumanoidRootPart.Position (ou
+        // Humanoid.RootPart.Position) num script SEMPRE refletir onde o
+        // player está de verdade — antes esse node ficava com um valor
+        // parado, sem relação nenhuma com o corpo físico. Escrito direto
+        // (sem passar por _markChanged) de propósito — é 60x/s e já existe
+        // o mesmo cuidado de performance documentado em LuaEngine._markChanged.
+        {
+            const rootNode = _playerRigNodes && _playerRigNodes["HumanoidRootPart"];
+            if (rootNode) {
+                if (!rootNode.properties) rootNode.properties = {};
+                rootNode.properties.Position = {
+                    x: _playerBody.position.x,
+                    y: _playerBody.position.y,
+                    z: _playerBody.position.z
+                };
+            }
+        }
         const cameraMode = sply?.properties?.CameraMode || "ThirdPerson";
         // (ajuste) O personagem SEMPRE fica de frente pra onde a câmera
         // está olhando — parado ou andando pra qualquer lado (W/S andam
@@ -20481,12 +21079,154 @@ const Simulation = (() => {
     const _KEYCODE_TO_INTERNAL = { space:" ", up:"arrowup", down:"arrowdown", left:"arrowleft", right:"arrowright" };
     function isKeyDown(name) {
         const n = String(name).toLowerCase();
-        return !!_keys[_KEYCODE_TO_INTERNAL[n] || n];
+        const key = _KEYCODE_TO_INTERNAL[n] || n;
+        return !!(_keys[key] || _padKeys[key]);
     }
     /** Solta todas as teclas de uma vez — usado quando a janela perde o
      *  foco (ex.: trocar de aba enquanto segura W) pra não deixar o
      *  personagem "andando sozinho" depois que o foco volta. */
-    function _clearKeys() { _keys = {}; }
+    function _clearKeys() { _keys = {}; _padKeys = {}; }
+
+    /* ── (nova função a pedido do usuário) Controle (Xbox/PS4/PS5) + joystick
+       de toque (celular) ──────────────────────────────────────────────────
+       Ideia: teclado continua 100% como já era (_keys, keyDown/keyUp). Um
+       controle físico (Gamepad API) ou o joystick de toque escrevem só em
+       _padKeys, um mapa "gêmeo" no mesmo formato. Na leitura (_kd) os dois
+       são somados com OR — então dá pra trocar de teclado pro controle (ou
+       usar os dois) sem nenhum conflito. O app detecta sozinho qual
+       dispositivo está conectado e mostra isso no HUD (#control-device-badge)
+       e no modal de Configurações Gráficas. */
+    function _kd(n) { return !!(_keys[n] || _padKeys[n]); }
+
+    function _detectGamepadType(id) {
+        const s = String(id || "").toLowerCase();
+        if (s.includes("054c") || s.includes("dualshock") || s.includes("dualsense") || s.includes("playstation") || s.includes("wireless controller")) return "ps";
+        if (s.includes("xbox") || s.includes("045e") || s.includes("xinput")) return "xbox";
+        return "generic";
+    }
+    function _isTouchDevice() {
+        return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+    }
+    /** Atualiza o badge do HUD (#control-device-badge) e o rótulo dentro do
+     *  modal de Configurações Gráficas (#gfx-control-device-label). Também
+     *  liga/desliga o joystick de toque: só aparece quando NÃO há controle
+     *  físico conectado e o dispositivo realmente tem tela de toque. */
+    function _updateControlDeviceBadge() {
+        let icon = "⌨️", label = "Teclado";
+        if (_padDeviceType === "ps")           { icon = "🎮"; label = "Controle PlayStation"; }
+        else if (_padDeviceType === "xbox")    { icon = "🎮"; label = "Controle Xbox"; }
+        else if (_padDeviceType === "generic") { icon = "🎮"; label = "Controle (genérico)"; }
+        else if (_isTouchDevice())             { icon = "📱"; label = "Celular / Toque"; }
+        const badge = document.getElementById("control-device-badge");
+        if (badge) { badge.textContent = `${icon} ${label}`; badge.classList.toggle("visible", _active); }
+        const gfxLabel = document.getElementById("gfx-control-device-label");
+        if (gfxLabel) gfxLabel.textContent = label;
+        const touchEl = document.getElementById("touch-controls");
+        if (touchEl) touchEl.classList.toggle("visible", _active && !_padDeviceType && _isTouchDevice());
+    }
+    function refreshControlDeviceLabel() { _updateControlDeviceBadge(); }
+
+    const GAMEPAD_DEADZONE = 0.22;
+    /** Lê o primeiro controle físico conectado (Gamepad API) a cada frame do
+     *  Play e joga o resultado em _padKeys — reaproveita literalmente todo o
+     *  código de movimento/câmera/pulo que já existe pro teclado (ver update()). */
+    function _pollGamepad() {
+        if (!_active || !navigator.getGamepads) return;
+        const pads = navigator.getGamepads();
+        let pad = null;
+        for (let i = 0; i < pads.length; i++) { if (pads[i]) { pad = pads[i]; break; } }
+        if (!pad) return; // sem controle físico — joystick de toque (se houver) já escreveu em _padKeys direto
+        if (!_padDeviceType) { _padDeviceType = _detectGamepadType(pad.id); _updateControlDeviceBadge(); }
+        const lx = pad.axes[0] || 0, ly = pad.axes[1] || 0;
+        const rx = pad.axes[2] || 0, ry = pad.axes[3] || 0;
+        _padKeys["w"] = ly < -GAMEPAD_DEADZONE;
+        _padKeys["s"] = ly >  GAMEPAD_DEADZONE;
+        _padKeys["a"] = lx < -GAMEPAD_DEADZONE;
+        _padKeys["d"] = lx >  GAMEPAD_DEADZONE;
+        // Analógico direito = olhar ao redor, reaproveitando o giro de câmera
+        // que já existia pras setas do teclado (ver update()).
+        _padKeys["arrowleft"]  = rx < -GAMEPAD_DEADZONE;
+        _padKeys["arrowright"] = rx >  GAMEPAD_DEADZONE;
+        _padKeys["arrowup"]    = ry < -GAMEPAD_DEADZONE;
+        _padKeys["arrowdown"]  = ry >  GAMEPAD_DEADZONE;
+        const btn = i => !!(pad.buttons[i] && pad.buttons[i].pressed);
+        // Botão de baixo (✕ Xbox / ✕ PS) = pular. Dispara InputBegan/InputEnded
+        // pra Scripts que ligam a animação de pulo na borda (igual ao Espaço).
+        const jumpNow = btn(0);
+        if (jumpNow && !_padKeys[" "]) LuaEngine.fireEvent("__UserInputService", "InputBegan", [" "]);
+        if (!jumpNow && _padKeys[" "]) LuaEngine.fireEvent("__UserInputService", "InputEnded", [" "]);
+        _padKeys[" "] = jumpNow;
+        // Clique do analógico esquerdo (L3) OU botão direito (B Xbox/Círculo PS) = correr
+        _padKeys["shift"] = btn(10) || btn(1);
+    }
+    /** Liga os listeners de conectar/desconectar controle + o joystick de
+     *  toque. Chamado uma vez só, no boot do app (ver DOMContentLoaded). */
+    function setupControlsUI() {
+        window.addEventListener("gamepadconnected", e => {
+            _padDeviceType = _detectGamepadType(e.gamepad.id);
+            const nome = _padDeviceType === "ps" ? "PlayStation" : _padDeviceType === "xbox" ? "Xbox" : "genérico";
+            if (typeof UI !== "undefined" && UI.showToast) UI.showToast(`🎮 Controle conectado (${nome}) — já dá pra jogar com ele.`);
+            _updateControlDeviceBadge();
+        });
+        window.addEventListener("gamepaddisconnected", () => {
+            _padDeviceType = null;
+            _padKeys = {};
+            if (typeof UI !== "undefined" && UI.showToast) UI.showToast("🎮 Controle desconectado.");
+            _updateControlDeviceBadge();
+        });
+        _updateControlDeviceBadge();
+
+        // ── Joystick de toque (celular/tablet) ──
+        const base = document.getElementById("touch-joystick-base");
+        const knob = document.getElementById("touch-joystick-knob");
+        const jumpBtn = document.getElementById("touch-jump-btn");
+        const sprintBtn = document.getElementById("touch-sprint-btn");
+        if (!base || !knob || !jumpBtn || !sprintBtn) return;
+        const MAXR = 42;
+        let stickId = null, baseRect = null;
+        function moveStick(x, y) {
+            if (!baseRect) return;
+            const cx = baseRect.left + baseRect.width / 2, cy = baseRect.top + baseRect.height / 2;
+            let dx = x - cx, dy = y - cy;
+            const dist = Math.min(MAXR, Math.hypot(dx, dy));
+            const ang = Math.atan2(dy, dx);
+            const kx = Math.cos(ang) * dist, ky = Math.sin(ang) * dist;
+            knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+            const nx = kx / MAXR, ny = ky / MAXR, DEAD = 0.28;
+            _padKeys["d"] = nx >  DEAD; _padKeys["a"] = nx < -DEAD;
+            _padKeys["s"] = ny >  DEAD; _padKeys["w"] = ny < -DEAD;
+        }
+        function endStick() {
+            stickId = null; baseRect = null; _touchActive = false;
+            knob.style.transform = "translate(-50%, -50%)";
+            _padKeys["w"] = _padKeys["a"] = _padKeys["s"] = _padKeys["d"] = false;
+        }
+        base.addEventListener("touchstart", e => {
+            e.preventDefault();
+            const t = e.changedTouches[0];
+            stickId = t.identifier; baseRect = base.getBoundingClientRect(); _touchActive = true;
+            moveStick(t.clientX, t.clientY);
+        }, { passive: false });
+        base.addEventListener("touchmove", e => {
+            e.preventDefault();
+            for (const t of e.changedTouches) if (t.identifier === stickId) moveStick(t.clientX, t.clientY);
+        }, { passive: false });
+        base.addEventListener("touchend", e => { for (const t of e.changedTouches) if (t.identifier === stickId) endStick(); });
+        base.addEventListener("touchcancel", endStick);
+
+        jumpBtn.addEventListener("touchstart", e => {
+            e.preventDefault(); jumpBtn.classList.add("pressed");
+            if (_active && !_padKeys[" "]) LuaEngine.fireEvent("__UserInputService", "InputBegan", [" "]);
+            _padKeys[" "] = true;
+        }, { passive: false });
+        jumpBtn.addEventListener("touchend", e => {
+            e.preventDefault(); jumpBtn.classList.remove("pressed");
+            if (_active && _padKeys[" "]) LuaEngine.fireEvent("__UserInputService", "InputEnded", [" "]);
+            _padKeys[" "] = false;
+        });
+        sprintBtn.addEventListener("touchstart", e => { e.preventDefault(); sprintBtn.classList.add("pressed"); _padKeys["shift"] = true; }, { passive: false });
+        sprintBtn.addEventListener("touchend", e => { e.preventDefault(); sprintBtn.classList.remove("pressed"); _padKeys["shift"] = false; });
+    }
 
     /** (funções novas) Acesso direto ao corpo físico (Cannon.js) de uma Part
      *  a partir de um Script — permite jogos de tiro, empurrões, explosões
@@ -20537,14 +21277,51 @@ const Simulation = (() => {
     // — usado pelo __HOST da LuaEngine pra montar Players.LocalPlayer.Character
     // de verdade, em vez do jogo Lua nunca ter acesso a quem é o personagem.
     function getLocalPlayerCharacterId() { return _active ? _playerRigModelId : null; }
+
+    // ============================================================
+    // (novas funções — pedido do usuário: "o player seja um modelo sendo
+    // controlado pra os scripts poderem mexer nele") Antes, o
+    // HumanoidRootPart do player era só um node "de mentira": a posição
+    // real de verdade vivia inteiramente em _playerBody (físico), sem
+    // nenhuma ligação com node.properties.Position. Um script fazendo
+    // character.HumanoidRootPart.Position = Vector3.new(...) (ou
+    // Humanoid:MoveTo(...), que por baixo dos panos faz a mesma coisa)
+    // não tinha NENHUM efeito visual — só mudava um número solto.
+    //
+    // Essas duas funções fecham o laço dos dois lados:
+    //   - getPlayerRootNodeId(): id do node HumanoidRootPart do player,
+    //     pra LuaEngine saber QUANDO um setProp é sobre o player.
+    //   - teleportPlayerTo(x,y,z): move o corpo físico de verdade —
+    //     chamada pela LuaEngine assim que um script escreve Position
+    //     nesse node (ver setProp em LuaEngine).
+    // O outro lado (físico → node.properties, pra character.HumanoidRootPart
+    // .Position sempre LER a posição real também) é feito a cada frame em
+    // update(dt), junto da sincronização visual que já existia.
+    // ============================================================
+    function getPlayerRootNodeId() {
+        const node = _playerRigNodes && _playerRigNodes["HumanoidRootPart"];
+        return node ? node.id : null;
+    }
+    function teleportPlayerTo(x, y, z) {
+        if (!_playerBody) return false;
+        _playerBody.position.set(x, y, z);
+        _playerBody.velocity.set(0, 0, 0);
+        _coyoteTimer = 0; _jumpBufferTimer = 0;
+        return true;
+    }
+
     return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, getLocalPlayerCharacterId, get active() { return _active; },
              getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId,
+             // (novas funções) ponte de controle do player pra scripts — ver comentário acima
+             getPlayerRootNodeId, teleportPlayerTo,
              // (nova função a pedido do usuário) Play/Stop sincronizado entre membros da sala
              applyRemotePlayState,
              // (nova função a pedido do usuário) bonecos dos outros jogadores da sala durante o Play
              applyRemotePlayerTransform, removeRemotePlayer,
              // (nova função a pedido do usuário) posições pro chat de voz por proximidade
-             getLocalPlayerPosition, getRemotePlayerPosition };
+             getLocalPlayerPosition, getRemotePlayerPosition,
+             // (nova função a pedido do usuário) suporte a controle Xbox/PS4/PS5 + joystick de toque
+             setupControlsUI, refreshControlDeviceLabel };
 })();
 
 /* ================================================================
@@ -21128,6 +21905,7 @@ window.addEventListener('DOMContentLoaded', () => {
     _initStep("carregar conta de usuário (nova função)", Account._init);
     _initStep("iniciar status online/offline do multiplayer (nova função)", Multiplayer._initPresence);
     _initStep("configurar o teclado", setupKeyboard);
+    _initStep("configurar controle (Xbox/PS4/PS5) e joystick de toque", Simulation.setupControlsUI);
     _initStep("configurar redimensionador Explorer/Properties", setupExplorerPropertiesResizer);
     _initStep("carregar plugins salvos", Plugins.loadAllStored);
     _initStep("iniciar o autosave", App._startAutosaveLoop);
