@@ -816,6 +816,8 @@
     <!-- Play/Stop -->
     <div class="flex items-center gap-2 mr-2">
         <span id="fps-counter" class="text-zinc-600 font-mono text-[10px]">60 fps</span>
+        <span id="perf-mode-badge" class="hidden text-amber-400 font-mono text-[9px] bg-amber-950/40 border border-amber-700/50 px-1.5 py-0.5 rounded" title="Mostra quando a engine está economizando GPU/CPU automaticamente e por quê"></span>
+        <span id="detailed-stats" class="text-zinc-600 font-mono text-[9px]" style="display:none" title="Draw calls · Triângulos · Geometrias/Texturas em memória">—</span>
         <button onclick="UI.openGraphicsSettings()" class="p-1.5 bg-studio-panel hover:bg-zinc-700 rounded border studio-border text-gray-300" title="Configurações gráficas"><i class="fa-solid fa-sliders text-cyan-400"></i></button>
         <span id="group-mode-badge" class="hidden text-amber-400 font-mono text-[10px] bg-amber-950/40 border border-amber-700/50 px-1.5 py-0.5 rounded"><i class="fa-solid fa-box-archive mr-1"></i><span id="group-mode-count">0</span> peças (grupo)</span>
         <button id="btn-play-toggle" onclick="Simulation.toggle()" class="px-4 py-1.5 bg-green-700 hover:bg-green-600 text-white font-bold rounded shadow flex items-center gap-1.5 transition-all">
@@ -832,14 +834,28 @@
         <div id="viewport-3d" class="w-full flex-1 relative outline-none" tabindex="0">
             <div id="raycast-crosshair"></div>
 
-            <!-- Botão flutuante de Stop — visível apenas em modo imersivo (Play), no canto -->
+            <!-- Barra flutuante do modo imersivo (Play), no canto — o botão de
+                 Stop foi removido daqui a pedido do usuário (Esc já para o
+                 Play; ver KEYBOARD → Escape). Fica só o toggle de câmera e,
+                 quando a sala é multiplayer, o toggle de microfone. -->
             <div id="play-mode-stop-bar" class="hidden absolute top-3 right-3 z-40 flex items-center gap-2">
-                <button id="cam-free-toggle-btn" onclick="Simulation.toggleFreeCam()" class="px-3 py-2 bg-cyan-800/90 hover:bg-cyan-700 backdrop-blur text-white font-bold rounded-full shadow-2xl flex items-center gap-2 border border-cyan-400/40 transition-all" title="Destrava a câmera em 3ª pessoa pra olhar ao redor livremente sem segurar o botão direito (tecla C)">
-                    <i class="fa-solid fa-lock" id="cam-free-toggle-icon"></i> <span id="cam-free-toggle-label">Câmera (C)</span>
+                <button id="mp-voice-toggle-btn" onclick="Multiplayer.toggleVoice()" class="hidden px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl items-center gap-2 border border-white/20 transition-all" title="Ativar/desativar chat de voz por proximidade da sala">
+                    <i class="fa-solid fa-microphone-slash" id="mp-voice-toggle-icon"></i> <span id="mp-voice-toggle-label">Voz</span>
                 </button>
-                <button onclick="Simulation.toggle()" class="px-4 py-2 bg-red-700/90 hover:bg-red-600 backdrop-blur text-white font-bold rounded-full shadow-2xl flex items-center gap-2 border border-red-400/40 transition-all">
-                    <i class="fa-solid fa-square"></i> <span>⏹️ Stop (Esc)</span>
-                </button>
+            </div>
+
+            <!-- (nova função a pedido do usuário) Chat de texto da sala,
+                 visível durante o Play — reaproveita o mesmo chat do painel
+                 da sala (Multiplayer.sendRoomChat/_roomChat), só que num
+                 balãozinho no canto do viewport pra não precisar abrir
+                 modal nenhum enquanto joga. Aperte Enter pra escrever. -->
+            <div id="play-chat-overlay" class="hidden absolute bottom-3 left-3 z-40 flex flex-col gap-1.5 w-72 max-w-[70vw]">
+                <div id="play-chat-list" class="flex flex-col gap-1 max-h-52 overflow-y-auto"></div>
+                <div class="flex gap-1.5">
+                    <input type="text" id="play-chat-input" placeholder="Enter para conversar na sala..." autocomplete="off"
+                           class="flex-1 bg-black/55 backdrop-blur border border-white/15 rounded-full px-3 py-1.5 text-white text-[11px] placeholder-zinc-400 outline-none"
+                           onkeydown="event.stopPropagation(); if(event.key==='Enter'){ event.preventDefault(); Multiplayer.submitPlayChat(); event.target.blur(); } else if(event.key==='Escape'){ event.target.blur(); }">
+                </div>
             </div>
 
             <!-- (nova função) Editor de Vértices — barra flutuante que aparece
@@ -1064,20 +1080,76 @@
             <button onclick="UI.closeModal('graphics-settings-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
         </div>
         <div class="p-4 space-y-4 overflow-y-auto text-sm">
+            <!-- (nova função a pedido do usuário) Preset rápido — aplica de uma vez
+                 uma combinação equilibrada (leve o suficiente pra rodar bem na
+                 maioria das máquinas, mas sem perder o visual "bonito": sombra,
+                 AA e bloom continuam ligados, só o SSAO e a resolução extra é
+                 que saem, que são os itens mais caros e menos perceptíveis). -->
+            <button onclick="UI.applyBalancedGfxPreset()" class="w-full px-3 py-2 bg-emerald-800 hover:bg-emerald-700 rounded text-emerald-100 text-xs font-bold flex items-center justify-center gap-2">
+                <i class="fa-solid fa-leaf"></i> Padrão leve e bonito (recomendado)
+            </button>
             <div>
                 <label class="text-zinc-300 font-semibold flex items-center justify-between">
                     Qualidade / resolução
                     <span id="gfx-quality-label" class="text-cyan-400 font-mono text-xs">Auto</span>
                 </label>
-                <input type="range" id="gfx-quality-slider" min="0" max="4" step="1" value="4" class="w-full mt-1" oninput="UI.setGfxQualityFromSlider(parseInt(this.value))">
-                <div class="flex justify-between text-[10px] text-zinc-500 mt-0.5">
-                    <span>Baixa</span><span>Média</span><span>Alta</span><span>Máxima</span><span>Auto</span>
+                <input type="range" id="gfx-quality-slider" min="0" max="5" step="1" value="5" class="w-full mt-1" oninput="UI.setGfxQualityFromSlider(parseInt(this.value))">
+                <div class="flex justify-between text-[9px] text-zinc-500 mt-0.5">
+                    <span>Extremo</span><span>Baixa</span><span>Média</span><span>Alta</span><span>Máxima</span><span>Auto</span>
                 </div>
-                <p class="text-[11px] text-zinc-500 mt-1">"Auto" deixa o editor baixar/subir a resolução sozinho conforme o FPS (recomendado). As outras opções travam num nível fixo.</p>
+                <p class="text-[11px] text-zinc-500 mt-1">"Extremo" é pra máquinas bem fracas (resolução bem reduzida). "Auto" deixa o editor baixar/subir sozinho conforme o FPS (recomendado). As outras opções travam num nível fixo.</p>
+            </div>
+            <!-- (nova função a pedido do usuário) Limite de FPS — trava o
+                 editor num teto de quadros por segundo, mesmo que a máquina
+                 aguentasse mais. Útil pra não fritar notebook/bateria numa
+                 cena leve que rodaria a 200fps sem necessidade nenhuma. -->
+            <div>
+                <label class="text-zinc-300 font-semibold flex items-center justify-between">
+                    Limite de FPS
+                    <span id="gfx-fpscap-label" class="text-cyan-400 font-mono text-xs">Ilimitado</span>
+                </label>
+                <select id="gfx-fpscap" onchange="UI.setGfxFpsCap(parseInt(this.value))" class="w-full mt-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs">
+                    <option value="0">Ilimitado</option>
+                    <option value="30">30 fps</option>
+                    <option value="60">60 fps</option>
+                    <option value="120">120 fps</option>
+                    <option value="144">144 fps</option>
+                </select>
+                <p class="text-[11px] text-zinc-500 mt-1">Travar em 30–60fps economiza bastante bateria/calor em notebooks, sem perda de qualidade visual.</p>
+            </div>
+            <!-- (nova função a pedido do usuário) Distância de renderização —
+                 controla até onde a névoa/objetos aparecem (fog + far plane
+                 da câmera). Cenas com mapas grandes e muitos objetos ganham
+                 bastante FPS reduzindo isso, já que a GPU processa menos
+                 coisa fora da tela útil. -->
+            <div>
+                <label class="text-zinc-300 font-semibold flex items-center justify-between">
+                    Distância de renderização
+                    <span id="gfx-renderdist-label" class="text-cyan-400 font-mono text-xs">Longa</span>
+                </label>
+                <select id="gfx-renderdist" onchange="UI.setGfxRenderDistance(this.value)" class="w-full mt-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs">
+                    <option value="curta">Curta (mapas pequenos / GPU fraca)</option>
+                    <option value="media">Média</option>
+                    <option value="longa">Longa (padrão)</option>
+                    <option value="extrema">Extrema (mapas grandes)</option>
+                </select>
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-zinc-300">Sombras</span>
                 <input type="checkbox" id="gfx-shadows" checked class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('shadows', this.checked)">
+            </div>
+            <div>
+                <label class="text-zinc-300 font-semibold flex items-center justify-between">
+                    Qualidade da sombra
+                    <span id="gfx-shadowquality-label" class="text-cyan-400 font-mono text-xs">Alta</span>
+                </label>
+                <select id="gfx-shadowquality" onchange="UI.setGfxShadowQuality(this.value)" class="w-full mt-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs">
+                    <option value="baixa">Baixa (512px — GPU fraca)</option>
+                    <option value="media">Média (1024px)</option>
+                    <option value="alta">Alta (2048px — padrão)</option>
+                    <option value="ultra">Ultra (4096px — GPU forte)</option>
+                </select>
+                <p class="text-[11px] text-zinc-500 mt-1">Resolução do mapa de sombra. Baixar isso alivia bastante a GPU (a sombra fica com bordas um pouco mais serrilhadas em troca) sem afetar o resto da cena.</p>
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-zinc-300">SSAO (sombreamento de contato)</span>
@@ -1091,7 +1163,12 @@
                 <span class="text-zinc-300">Efeito Bloom</span>
                 <input type="checkbox" id="gfx-bloom" checked class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('bloom', this.checked)">
             </div>
-            <button onclick="UI.resetGraphicsSettings()" class="w-full mt-2 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 text-xs">↺ Restaurar padrão (Auto)</button>
+            <div class="flex items-center justify-between border-t studio-border pt-3">
+                <span class="text-zinc-300">Estatísticas detalhadas (draw calls, triângulos)</span>
+                <input type="checkbox" id="gfx-detailed-stats" class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxToggle('detailedStats', this.checked)">
+            </div>
+            <p class="text-[11px] text-zinc-500 -mt-2">Mostra um painel extra junto ao contador de FPS com número de draw calls, triângulos e memória de geometrias/texturas — útil pra diagnosticar exatamente o que está pesando numa cena específica.</p>
+            <button onclick="UI.resetGraphicsSettings()" class="w-full mt-2 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 text-xs">↺ Restaurar padrão de fábrica (Auto)</button>
         </div>
     </div>
 </div>
@@ -1671,17 +1748,28 @@ const META = (() => {
         RodConstraint:     { icon:"fa-solid fa-ruler text-stone-400" },
         AlignPosition:     { icon:"fa-solid fa-crosshairs text-stone-400" },
         AlignOrientation:  { icon:"fa-solid fa-compass text-stone-400" },
+        // ── Lote 6 de expansão (Body Movers — impulsionadores simplificados) ──
+        BodyVelocity:      { icon:"fa-solid fa-wind text-cyan-400" },
+        LinearVelocity:    { icon:"fa-solid fa-arrow-up-right-dots text-cyan-400" },
+        BodyForce:         { icon:"fa-solid fa-hand-fist text-cyan-400" },
+        BodyPosition:      { icon:"fa-solid fa-map-pin text-cyan-400" },
     };
     const PHYSICAL   = new Set(["Part","TrussPart","WedgePart","CornerWedgePart","CylinderPart","BallPart","MeshPart","SpawnLocation"]);
     const LIGHTS     = new Set(["PointLight","SurfaceLight","SpotLight"]);
     const EFFECTS    = new Set(["Sparkles","Fire","Smoke","ParticleEmitter","Beam","Trail"]);
-    const CONSTRAINTS= new Set(["WeldConstraint","HingeConstraint","RopeConstraint","SpringConstraint","RodConstraint","AlignPosition","AlignOrientation"]);
+    const CONSTRAINTS= new Set(["WeldConstraint","HingeConstraint","RopeConstraint","SpringConstraint","RodConstraint","AlignPosition","AlignOrientation","BodyVelocity","LinearVelocity","BodyForce","BodyPosition"]);
     const SCRIPTS    = new Set(["Script","LocalScript","ModuleScript"]);
     // Melhoria #6 — GUIs que vivem "dentro" de uma Part (SurfaceGui = colada na
     // face; BillboardGui = flutua sobre a Part e sempre encara a câmera).
     // Ambas se movem junto com a Part automaticamente, pois são adicionadas
     // como filhas reais (Object3D) da mesh da Part no Three.js.
     const PART_GUIS  = new Set(["SurfaceGui","BillboardGui"]);
+    // (nova função) Classes que só têm efeito de verdade quando são filhas
+    // diretas de Lighting (é lá que _syncDirtyScene procura por Sky/BloomEffect
+    // — ver ThreeManager). Inseridas em qualquer outro lugar, ficam "mudas"
+    // sem nenhum aviso — este Set existe só pra alimentar esse aviso no
+    // momento de inserir, igual ao que já existe pra PART_GUIS.
+    const LIGHTING_ONLY = new Set(["Sky","BloomEffect"]);
     // (nova função) Classes de GUI que ganham o botão dedicado de
     // Ativar/Desativar nas Properties (em vez do checkbox genérico).
     const GUI_TOGGLE = new Set(["ScreenGui","SurfaceGui","BillboardGui"]);
@@ -1693,7 +1781,7 @@ const META = (() => {
     function isPhysical(cls) { return PHYSICAL.has(cls); }
     function registerIcon(cls, iconClasses) { INSTANCES[cls] = { ...(INSTANCES[cls]||{}), icon: iconClasses }; }
 
-    return { SERVICES, INSTANCES, PHYSICAL, LIGHTS, EFFECTS, CONSTRAINTS, SCRIPTS, PART_GUIS, GUI_TOGGLE, icon, isService, isPhysical, registerIcon };
+    return { SERVICES, INSTANCES, PHYSICAL, LIGHTS, EFFECTS, CONSTRAINTS, SCRIPTS, PART_GUIS, GUI_TOGGLE, LIGHTING_ONLY, icon, isService, isPhysical, registerIcon };
 })();
 
 /* ================================================================
@@ -1900,7 +1988,7 @@ const DEFAULT_TREE = {
         ]},
         { id:"spk",  name:"StarterPack",        className:"StarterPack",        expanded:false, children:[] },
         { id:"sply", name:"StarterPlayer",      className:"StarterPlayer",      expanded:true,
-          properties:{ WalkSpeed:16, JumpPower:50, MaxJumps:2, FOV:45, CameraMode:"ThirdPerson",
+          properties:{ WalkSpeed:20, JumpPower:8, MaxJumps:2, FOV:45, CameraMode:"ThirdPerson",
                        BodyColor:"#00aaff", HeadColor:"#ffcc99", ArmColor:"#ffcc99", LegColor:"#333333", CharacterScale:1 },
           children:[
               { id:"sply_pscripts", name:"StarterPlayerScripts", className:"StarterPlayerScripts", expanded:false, properties:{}, children:[] },
@@ -1908,19 +1996,14 @@ const DEFAULT_TREE = {
 
               /* ── Pasta 1 · Scripts + rig + animações do Player (pedido do usuário) ── */
               { id:"sply_p1", name:"1_ScriptsDoPlayer", className:"Folder", expanded:true, properties:{}, children:[
-                  { id:"sply_p1_move", name:"Movimento", className:"LocalScript", expanded:false, children:[],
-                    properties:{ Source:"-- Script de MOVIMENTO do Player (LocalScript)\n-- O andar em WASD, gravidade, colisão e pulo já são simulados\n-- nativamente pelo engine ao entrar em Play. Este script mostra\n-- como o Humanoid real do Roblox controlaria o personagem, e você\n-- pode ajustar os valores abaixo (refletem em StarterPlayer).\n\nlocal Players   = game:GetService('Players')\nlocal player    = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoid  = character:WaitForChild('Humanoid')\n\nhumanoid.WalkSpeed = 16   -- velocidade ao andar\nhumanoid.JumpPower = 50   -- força do pulo\n\nprint('Movimento carregado — WASD para andar, Espaço para pular.')" }},
-                  { id:"sply_p1_cam", name:"Camera", className:"LocalScript", expanded:false, children:[],
-                    properties:{ Source:"-- Script de CÂMERA (LocalScript)\n-- Controla o zoom da câmera em 3ª pessoa com a RODINHA DO MOUSE.\n-- Isso já funciona de verdade no Play (arraste a rodinha p/ testar).\n\nlocal camera = workspace.CurrentCamera\nlocal minZoom, maxZoom = 2, 25\nlocal zoom = 9\n\nlocal UserInputService = game:GetService('UserInputService')\nUserInputService.InputChanged:Connect(function(input)\n    if input.UserInputType == Enum.UserInputType.MouseWheel then\n        zoom = math.clamp(zoom - input.Position.Z * 1.2, minZoom, maxZoom)\n        camera.CameraDistance = zoom\n    end\nend)\n\nprint('Câmera pronta — use a rodinha do mouse para aproximar/afastar.')" }},
+                  { id:"sply_p1_move", name:"MovimentoCameraPulo", className:"LocalScript", expanded:false, children:[],
+                    properties:{ Source:"-- Script de MOVIMENTO + CÂMERA + PULO do Player (LocalScript)\n-- Tudo que controla como o personagem anda, pula e como a câmera se\n-- comporta fica reunido AQUI (duplo clique neste script pra editar).\n-- O Humanoid em si fica limpo, só com Health/RigType — sem essas\n-- propriedades de movimento espalhadas por lá.\n--\n-- O andar em WASD, gravidade, colisão e pulo já são simulados\n-- nativamente pelo engine ao entrar em Play. Este script mostra\n-- como o Humanoid real do Roblox controlaria o personagem, e os\n-- valores abaixo refletem em StarterPlayer (fonte única de verdade).\n\nlocal Players   = game:GetService('Players')\nlocal player    = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoid  = character:WaitForChild('Humanoid')\n\nhumanoid.WalkSpeed = 20   -- velocidade ao andar\nhumanoid.JumpPower = 8    -- força do pulo\n\nprint('Movimento carregado — WASD para andar, Espaço para pular.')\n\n-- ── Câmera: zoom em 3ª pessoa com a RODINHA DO MOUSE ──\n-- Isso já funciona de verdade no Play (arraste a rodinha p/ testar).\nlocal camera = workspace.CurrentCamera\nlocal minZoom, maxZoom = 2, 25\nlocal zoom = 9\n\nlocal UserInputService = game:GetService('UserInputService')\nUserInputService.InputChanged:Connect(function(input)\n    if input.UserInputType == Enum.UserInputType.MouseWheel then\n        zoom = math.clamp(zoom - input.Position.Z * 1.2, minZoom, maxZoom)\n        camera.CameraDistance = zoom\n    end\nend)\n\nprint('Câmera pronta — use a rodinha do mouse para aproximar/afastar.')" }},
                   { id:"sply_p1_rig", name:"R6", className:"Model", expanded:true,
                     properties:{ Position:{x:0,y:0,z:0}, RigType:"R6" },
                     children:[
                         { id:"sply_p1_hum", name:"Humanoid", className:"Humanoid", expanded:true,
-                          properties:{ Health:100, MaxHealth:100, WalkSpeed:16, JumpPower:50, RigType:"R6" },
-                          children:[
-                              { id:"sply_p1_humscript", name:"VidaEVelocidade", className:"Script", expanded:false, children:[],
-                                properties:{ Source:"-- Controla VIDA e VELOCIDADE do personagem (fica dentro do Humanoid)\nlocal humanoid = script.Parent\n\nhumanoid.MaxHealth = 100\nhumanoid.Health    = 100\nhumanoid.WalkSpeed  = 16\n\nhumanoid.HealthChanged:Connect(function(health)\n    if health <= 0 then\n        print(humanoid.Parent.Name .. ' morreu!')\n    end\nend)" }}
-                          ]},
+                          properties:{ Health:100, MaxHealth:100, RigType:"R6" },
+                          children:[]},
                         { id:"sply_p1_hrp",  name:"HumanoidRootPart", className:"Part", expanded:false, children:[],
                           properties:{ Color:"#ffffff", Size:{x:2,y:2,z:1}, Position:{x:0,y:3,z:0}, Rotation:{x:0,y:0,z:0}, Visibilidade:false, CanCollide:false, Anchored:true, Material:"SmoothPlastic" }},
                         { id:"sply_p1_torso", name:"Torso", className:"Part", expanded:false, children:[],
@@ -2126,6 +2209,15 @@ function getDefaultProps(cls) {
         RodConstraint:   { Part0Id:"", Part1Id:"", Length:5, Enabled:true },
         AlignPosition:   { Part0Id:"", Part1Id:"", Responsiveness:20, Enabled:true },
         AlignOrientation:{ Part0Id:"", Part1Id:"", Responsiveness:20, Enabled:true },
+        // ── Lote 6 de expansão: Body Movers (função nova) — impulsionadores
+        // clássicos do Roblox (empurrar/flutuar/mover), simplificados: sem
+        // torque real, só a velocidade/força/posição-alvo lida pelo vigia
+        // em Lua puro (ver PRELUDE) que soma isso em Part.Position a cada
+        // frame enquanto Enabled == true.
+        BodyVelocity:    { Velocity:{x:0,y:0,z:0}, MaxForce:{x:9999,y:9999,z:9999}, Enabled:true },
+        LinearVelocity:  { VectorVelocity:{x:0,y:0,z:0}, MaxForce:9999, Enabled:true },
+        BodyForce:       { Force:{x:0,y:0,z:0}, Enabled:true },
+        BodyPosition:    { Position:{x:0,y:0,z:0}, MaxForce:{x:9999,y:9999,z:9999}, D:100, P:1000, Enabled:true },
     };
     if (map[cls]) return JSON.parse(JSON.stringify(map[cls]));
     const custom = (typeof Plugins !== "undefined") ? Plugins.getClassDefaults(cls) : null;
@@ -2225,9 +2317,47 @@ const ThreeManager = (() => {
        botão "🎚️ Configurações Gráficas" no header. Por padrão tudo fica em
        "Auto" (o ajuste automático por FPS já existente continua no controle),
        mas a pessoa pode travar num nível fixo ou desligar efeitos caros na
-       mão, se preferir performance previsível em vez de qualidade variável. */
+       mão, se preferir performance previsível em vez de qualidade variável.
+       (nova função) Agora também guarda o limite de FPS e a distância de
+       renderização escolhidos — e existe um preset "leve e bonito" que a
+       pessoa pode aplicar de uma vez (ver applyBalancedGfxPreset). */
     const GFX_SETTINGS_KEY = "graphics_settings_v1";
-    let _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto" };
+    // Otimização · piso mais baixo de resolução pro nível "extreme" (0.25) —
+    // pra máquinas realmente fracas onde nem "low" (0.5) é suficiente.
+    const GFX_QUALITY_PIXEL_STEPS = { extreme: 0.25, low: 0.5, medium: 0.75, high: 1, ultra: Math.min(window.devicePixelRatio, 2) };
+    // Distância de renderização (nova função) — controla o fog (near/far) e
+    // o far plane da câmera. "longa" é o valor que já existia (900) antes
+    // desta funcionalidade existir, então continua sendo o padrão de
+    // fábrica — ninguém tem o visual mudado sem pedir.
+    const GFX_RENDER_DISTANCE_STEPS = { curta: 300, media: 600, longa: 900, extrema: 1800 };
+    // Otimização · resolução do mapa de sombra configurável (nova função a
+    // pedido do usuário) — antes era um valor fixo de 2048x2048 sempre,
+    // independente da máquina. Um shadow map é uma textura extra que a GPU
+    // precisa renderizar do zero a cada recálculo; cair de 2048 pra 1024
+    // reduz essa textura pra 1/4 do tamanho (metade da largura x metade da
+    // altura), e pra 512 reduz pra 1/16 — ganho de GPU/VRAM real, com a
+    // sombra ficando visivelmente mais "serrilhada" nas bordas em troca.
+    const GFX_SHADOW_SIZE_STEPS = { baixa: 512, media: 1024, alta: 2048, ultra: 4096 };
+    // Otimização · estatísticas detalhadas (nova função a pedido do usuário)
+    // — painel opcional junto ao contador de FPS com draw calls, triângulos
+    // e memória de geometrias/texturas (via renderer.info). Desligado por
+    // padrão porque ler renderer.info tem um custo pequeno mas real; só vale
+    // a pena pra quem está de fato investigando um gargalo específico.
+    let _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto", fpsCap: 0, renderDistance: "longa", detailedStats: false, shadowQuality: "alta" };
+    // Otimização · filtragem anisotrópica por nível de qualidade — em
+    // "Extremo"/"Baixa" a amostragem anisotrópica alta custa GPU à toa (a
+    // resolução já está tão baixa que o ganho de nitidez não compensa); em
+    // "Média" um valor intermediário; só "Alta"/"Máxima"/"Auto" usam o maior
+    // valor que a placa suporta.
+    function _anisotropyForQuality() {
+        const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+        switch (_gfx.quality) {
+            case "extreme": return 1;
+            case "low":     return 1;
+            case "medium":  return Math.min(2, maxAniso);
+            default:        return maxAniso; // high, ultra, auto
+        }
+    }
     function _loadGfxSettings() {
         try {
             const saved = JSON.parse(localStorage.getItem(GFX_SETTINGS_KEY) || "null");
@@ -2237,6 +2367,20 @@ const ThreeManager = (() => {
     function _saveGfxSettings() {
         try { localStorage.setItem(GFX_SETTINGS_KEY, JSON.stringify(_gfx)); } catch (_) {}
     }
+    /** (nova função) Aplica o fog + far plane da câmera conforme a distância
+     *  de renderização escolhida — near do fog acompanha proporcionalmente
+     *  (~13% do far) pra transição continuar suave em qualquer distância. */
+    function _applyRenderDistance() {
+        if (!camera || !scene || !scene.fog) return;
+        const far = GFX_RENDER_DISTANCE_STEPS[_gfx.renderDistance] ?? GFX_RENDER_DISTANCE_STEPS.longa;
+        scene.fog.near = Math.max(20, Math.round(far * 0.13));
+        scene.fog.far  = far;
+        // Um pouco além do fog (não do mesmo tamanho) pra objeto não ser
+        // cortado abruptamente pelo far plane antes do fog terminar de
+        // escondê-lo — some suavemente na névoa, não "pop" no ar.
+        camera.far = Math.max(far * 1.4, 500);
+        camera.updateProjectionMatrix();
+    }
     /** Aplica de fato as configurações atuais (_gfx) no pipeline de render.
      *  Chamada no init() e toda vez que o usuário mexe num controle do modal. */
     function _applyGfxSettings() {
@@ -2245,14 +2389,26 @@ const ThreeManager = (() => {
         if (ssaoPass)  ssaoPass.enabled = _gfx.ssao  !== false;
         if (aaPass)    aaPass.enabled   = _gfx.aa    !== false;
         if (fxaaPass)  fxaaPass.enabled = _gfx.aa    !== false;
+        // Otimização · resolução do mapa de sombra (nova função a pedido do
+        // usuário) — só recria o shadow map (dispose + null) se o tamanho
+        // realmente mudou, pra não forçar recálculo desnecessário toda vez
+        // que o modal é reaberto/salvo sem mexer nessa opção específica.
+        if (sun) {
+            const shadowSize = GFX_SHADOW_SIZE_STEPS[_gfx.shadowQuality] ?? 2048;
+            if (sun.shadow.mapSize.width !== shadowSize) {
+                sun.shadow.mapSize.setScalar(shadowSize);
+                sun.shadow.map?.dispose();
+                sun.shadow.map = null;
+            }
+        }
         if (_gfx.quality !== "auto") {
             // Nível fixo escolhido pela pessoa — desliga o ajuste automático
             // por FPS (ver _renderLoop) e trava o pixelRatio nesse valor.
-            const steps = { low: 0.5, medium: 0.75, high: 1, ultra: Math.min(window.devicePixelRatio, 2) };
-            const pr = steps[_gfx.quality] ?? Math.min(window.devicePixelRatio, 2);
+            const pr = GFX_QUALITY_PIXEL_STEPS[_gfx.quality] ?? Math.min(window.devicePixelRatio, 2);
             renderer.setPixelRatio(pr);
             composer?.setPixelRatio?.(pr);
         }
+        _applyRenderDistance();
         markDirty();
     }
     /** Chamada pelo botão de UI — recebe só os campos que mudaram. */
@@ -2262,8 +2418,20 @@ const ThreeManager = (() => {
         _applyGfxSettings();
     }
     function getGraphicsSettings() { return Object.assign({}, _gfx); }
+    // (nova função a pedido do usuário) Preset "leve e bonito" — sombra, AA
+    // e bloom continuam ligados (mantém o visual bonito do Studio), mas
+    // corta os dois itens mais caros e menos perceptíveis (SSAO e a
+    // resolução extra acima de 1x) e trava um teto de 60fps, que já é mais
+    // que suficiente pra qualquer coisa num editor e evita gastar
+    // GPU/bateria à toa numa cena leve que rodaria a 200fps sem motivo.
+    const BALANCED_GFX_PRESET = { shadows: true, ssao: false, aa: true, bloom: true, quality: "high", fpsCap: 60, renderDistance: "longa", shadowQuality: "media" };
+    function applyBalancedGfxPreset() {
+        _gfx = Object.assign({}, BALANCED_GFX_PRESET);
+        _saveGfxSettings();
+        _applyGfxSettings();
+    }
     function resetGraphicsSettings() {
-        _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto" };
+        _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto", fpsCap: 0, renderDistance: "longa", detailedStats: false, shadowQuality: "alta" };
         _saveGfxSettings();
         _applyGfxSettings();
     }
@@ -2275,6 +2443,7 @@ const ThreeManager = (() => {
     let hemi, sun; // referências guardadas no escopo do módulo p/ o controle de Brilho do Céu poder ajustá-las depois do init()
     const BASE_EXPOSURE = 1.1, BASE_HEMI = 0.65, BASE_SUN = 1.6; // valores-base (Brightness=1) usados pelo slider de brilho ambiente
     const objectMap   = new Map();   // id → Three.Object3D
+    const _billboardGuis = new Map(); // id → Three.Mesh — só BillboardGuis (ver _updateBillboardGuis)
     const selectionHelpers = new Map(); // id → THREE.BoxHelper (Melhoria gráfica #2 — contorno de seleção, igual ao Studio)
     const particles   = new Map();   // id → {lifetimes, ...}
     let   _particleClock = 0;        // relógio acumulado p/ oscilação da fumaça
@@ -2422,10 +2591,63 @@ const ThreeManager = (() => {
     // pra restaurar exatamente como estava quando o FPS se recupera.
     let   _extremeBloomBackup = null;
     let   _extremeShadowOff   = false;
+    let   _perfBadgeLastText  = null; // evita tocar o DOM se o texto não mudou
+    /** (nova função a pedido do usuário) Monta e mostra o badge de "modo
+     *  economia" com o(s) motivo(s) pelo qual a engine está reduzindo
+     *  qualidade/FPS automaticamente agora — só existe pra dar
+     *  transparência sobre as otimizações automáticas (resolução dinâmica,
+     *  modo sobrevivência, teto de FPS por janela sem foco), que antes
+     *  aconteciam de forma silenciosa. */
+    function _updatePerfModeBadge() {
+        const badge = document.getElementById("perf-mode-badge");
+        if (!badge) return;
+        const reasons = [];
+        if (!_windowFocused && (_gfx.fpsCap === 0 || _gfx.fpsCap > 24)) {
+            reasons.push("janela sem foco → 24fps");
+        }
+        if (_extremeShadowOff || _extremeBloomBackup !== null) {
+            reasons.push("modo sobrevivência (FPS crítico)");
+        } else if (isAutoQuality() && ssaoPass && _gfx.ssao !== false && !ssaoPass.enabled) {
+            reasons.push("SSAO desligado (FPS baixo)");
+        } else if (isAutoQuality() && renderer) {
+            const maxPr = Math.min(window.devicePixelRatio, 2);
+            if (renderer.getPixelRatio() < maxPr - 0.01) reasons.push("resolução reduzida (FPS baixo)");
+        }
+        const text = reasons.length ? ("⚡ " + reasons.join(" · ")) : "";
+        if (text === _perfBadgeLastText) return; // já está mostrando isso, não mexe no DOM à toa
+        _perfBadgeLastText = text;
+        if (text) { badge.textContent = text; badge.classList.remove("hidden"); }
+        else       { badge.classList.add("hidden"); }
+    }
 
     // ── FPS counter ──────────────────────────────────────────────
     let   _frameCount = 0, _fpsTimer = 0, _lastFps = 60;
+    let   _lastFrameAt = 0; // (nova função) performance.now() do último frame processado — usado pelo limite de FPS
     let   _cameraFrustum, _frustumMatrix;
+    // Otimização · cache de "objetos pickáveis" por frame — raycastDistance()
+    // (câmera 3ª pessoa, todo frame) e raycastHit() (Scripts, pode ser
+    // chamado várias vezes por frame por NPC/projétil) antes reconstruíam a
+    // lista de meshes do zero a cada chamada, iterando TODO o objectMap.
+    // Agora a lista só é reconstruída uma vez por frame (invalidada pelo
+    // contador _frameId) e reaproveitada por todas as chamadas daquele
+    // mesmo frame — objetos só são criados/destruídos em resposta a ações
+    // do usuário ou Scripts entre frames, nunca no meio de um frame que já
+    // começou a renderizar, então a cache nunca fica desatualizada.
+    let _frameId = 0, _pickableCache = null, _pickableCacheFrame = -1;
+    let _soundUpdateAccum = 0; // Otimização · acumulador do throttle de _updateSoundVolumes (ver _renderLoop)
+    // Otimização · rastreia se a janela do navegador está em foco (ver uso
+    // do teto temporário de FPS em _renderLoop, acima de document.hidden).
+    let _windowFocused = true;
+    window.addEventListener("blur",  () => { _windowFocused = false; });
+    window.addEventListener("focus", () => { _windowFocused = true;  });
+    function _getPickableObjects() {
+        if (_pickableCacheFrame === _frameId && _pickableCache) return _pickableCache;
+        const arr = [];
+        objectMap.forEach(obj => { if ((obj.isMesh || obj.isGroup) && obj.visible && !obj.userData?.isPartGui) arr.push(obj); });
+        _pickableCache = arr;
+        _pickableCacheFrame = _frameId;
+        return arr;
+    }
     // Vetores reaproveitados por _updateBillboardGuis() — evita criar objetos novos a cada frame
     let   _bbWorldPos, _bbWorldQuat, _bbOffset;
 
@@ -2710,6 +2932,12 @@ const ThreeManager = (() => {
         // ── Raycasting: clique no canvas (Melhoria #3) ──────────
         renderer.domElement.addEventListener('click', _onViewportClick);
         renderer.domElement.addEventListener('mousemove', _onMouseMove);
+        // Otimização · rede de segurança pro cache do rect (ver _getCanvasRect)
+        // — cobre casos que o ResizeObserver do canvas não pega sozinho,
+        // como a janela do navegador mudar de tamanho ou a página rolar
+        // (o que desloca a posição do canvas sem mudar seu tamanho).
+        window.addEventListener('resize', () => { _canvasRect = null; });
+        window.addEventListener('scroll', () => { _canvasRect = null; }, true);
 
         // ── Resize com ResizeObserver ────────────────────────────
         new ResizeObserver(() => {
@@ -2718,6 +2946,7 @@ const ThreeManager = (() => {
             camera.updateProjectionMatrix();
             renderer.setSize(vp.clientWidth, vp.clientHeight);
             composer?.setSize(vp.clientWidth, vp.clientHeight);
+            _canvasRect = null; // Otimização · invalida o cache do rect do canvas (ver _onMouseMove)
             const pr = renderer.getPixelRatio();
             if (fxaaPass) {
                 fxaaPass.material.uniforms['resolution'].value.set(
@@ -2749,6 +2978,28 @@ const ThreeManager = (() => {
     ────────────────────────────────────────────────────────────── */
     function _renderLoop() {
         requestAnimationFrame(_renderLoop);
+        _frameId++;
+        // Otimização · limite de FPS (nova função a pedido do usuário) — se a
+        // pessoa travou um teto de quadros por segundo em "Configurações
+        // Gráficas", o frame inteiro é pulado (física, sync, render — tudo)
+        // até já ter passado tempo suficiente desde o último processado.
+        // fpsCap=0 é "ilimitado" (comportamento de sempre, sem limite
+        // nenhum além do que o próprio navegador já aplica sozinho).
+        // Otimização · quando a janela perde o foco (usuário trocou de
+        // janela/app, mas a aba continua visível — ex.: segundo monitor,
+        // ou o navegador ainda desenha a página em segundo plano) só o
+        // "document.hidden" abaixo não cobre esse caso, já que a aba não
+        // está tecnicamente escondida. Sem alterar a preferência salva do
+        // usuário, aplicamos um teto temporário de 24fps só enquanto a
+        // janela estiver sem foco E o usuário não tiver travado um limite
+        // ainda mais baixo — assim que a janela recupera o foco, volta
+        // exatamente pro comportamento configurado, sem perder nada.
+        const effectiveFpsCap = (!_windowFocused && (_gfx.fpsCap === 0 || _gfx.fpsCap > 24)) ? 24 : _gfx.fpsCap;
+        if (effectiveFpsCap > 0) {
+            const nowMs = performance.now();
+            if (nowMs - _lastFrameAt < 1000 / effectiveFpsCap) return;
+            _lastFrameAt = nowMs;
+        }
         const dt = Math.min(clock.getDelta(), 0.1);
         // Perf: aba em segundo plano não precisa physics/render — economiza
         // CPU/GPU/bateria à toa (o navegador já limita o rAF sozinho, mas
@@ -2764,6 +3015,24 @@ const ThreeManager = (() => {
             document.getElementById("fps-counter").textContent = `${_frameCount} fps`;
             _lastFps = _frameCount;
             _frameCount = 0; _fpsTimer = 0;
+            // Otimização · estatísticas detalhadas — só lê renderer.info (e só
+            // toca o DOM) quando o painel está ligado, junto do mesmo
+            // intervalo de 1x/seg do contador de FPS (não a cada frame).
+            if (_gfx.detailedStats && renderer) {
+                const info = renderer.info;
+                const statsEl = document.getElementById("detailed-stats");
+                if (statsEl) {
+                    statsEl.textContent =
+                        `${info.render.calls} calls · ${(info.render.triangles/1000).toFixed(1)}k tris · ` +
+                        `${info.memory.geometries} geo · ${info.memory.textures} tex`;
+                }
+            }
+            // Otimização · indicador de "modo economia" (nova função a pedido
+            // do usuário) — antes as reduções automáticas de FPS/qualidade
+            // aconteciam de forma invisível; agora um badge junto ao contador
+            // de FPS mostra exatamente qual economia está ativa agora e por
+            // quê, pra não parecer que "sumiu qualidade do nada".
+            _updatePerfModeBadge();
         }
 
         if (Simulation.active) {
@@ -2852,7 +3121,16 @@ const ThreeManager = (() => {
             _frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
         );
         _animateParticles(dt);
-        _updateSoundVolumes();
+        // Otimização · o volume por distância (falloff) muda de forma suave
+        // e gradual — recalcular isso 60x/seg é imperceptível ao ouvido
+        // comparado a ~15x/seg, mas custa CPU proporcional ao número de
+        // Sounds ativos na cena. Usa um acumulador de tempo (não contagem
+        // de frame) pra continuar correto mesmo com FPS travado bem baixo.
+        _soundUpdateAccum += dt;
+        if (_soundUpdateAccum >= 1/15) {
+            _updateSoundVolumes();
+            _soundUpdateAccum = 0;
+        }
         if (_constraintsDirty || Simulation.active) _updateConstraints();
         _updateSelectionHighlight();
         // Melhoria #6 — BillboardGui sempre encara a câmera, mesmo se a Part girar
@@ -2884,6 +3162,7 @@ const ThreeManager = (() => {
             if (!node || (!Tree.inWorkspace(id) && node.className !== "Sky")) {
                 (obj.parent || scene).remove(obj);
                 objectMap.delete(id);
+                _billboardGuis.delete(id);
             }
         });
         const ws = State.tree.children?.find(c => c.className === "Workspace");
@@ -3098,8 +3377,21 @@ const ThreeManager = (() => {
         }
     }
 
+    // Otimização · cache do getBoundingClientRect() do canvas — antes era
+    // lido a cada evento mousemove (dezenas/centenas de vezes por segundo
+    // durante um arraste ou giro de câmera), e getBoundingClientRect()
+    // força o navegador a recalcular o layout da página inteira na hora
+    // ("layout thrashing") se algo mudou desde a última leitura. Agora só
+    // relemos quando o canvas realmente muda de tamanho/posição (resize),
+    // e reaproveitamos o valor em todos os movimentos de mouse entre um
+    // resize e outro.
+    let _canvasRect = null;
+    function _getCanvasRect() {
+        if (!_canvasRect) _canvasRect = renderer.domElement.getBoundingClientRect();
+        return _canvasRect;
+    }
     function _onMouseMove(e) {
-        const rect = renderer.domElement.getBoundingClientRect();
+        const rect = _getCanvasRect();
         mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
         mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
     }
@@ -3112,8 +3404,7 @@ const ThreeManager = (() => {
         raycaster.set(origin, dir);
         raycaster.far = maxDist;
         raycaster.near = 0.05;
-        const pickable = [];
-        objectMap.forEach(obj => { if ((obj.isMesh || obj.isGroup) && obj.visible && !obj.userData?.isPartGui) pickable.push(obj); });
+        const pickable = _getPickableObjects();
         const hits = raycaster.intersectObjects(pickable, true);
         raycaster.far = Infinity; raycaster.near = 0; // restaura padrão p/ raycasting normal do editor
         return hits.length ? hits[0].distance : null;
@@ -3399,7 +3690,7 @@ const ThreeManager = (() => {
         const tex = new THREE.CanvasTexture(cnv);
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
         tex.encoding = THREE.sRGBEncoding;
-        tex.anisotropy = 4;
+        tex.anisotropy = _anisotropyForQuality();
         _checkerTexCache = tex;
         return tex;
     }
@@ -3462,7 +3753,7 @@ const ThreeManager = (() => {
                         // versão certa da textura pra cada distância, o que
                         // além de ficar mais nítido também é MAIS BARATO que
                         // amostrar a textura em resolução total sempre.
-                        t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        t.anisotropy = _anisotropyForQuality();
                         mat.map = t; mat.needsUpdate = true;
                     });
                 }
@@ -3654,15 +3945,30 @@ const ThreeManager = (() => {
         Left:   { pos:[-0.501, 0, 0], rot:[0, -Math.PI/2, 0] },
     };
 
+    // Otimização · limite do cache de imagens de GUI (nova função) — antes
+    // crescia sem limite pra sempre (cada URL única usada em qualquer
+    // SurfaceGui/BillboardGui/ImageLabel ficava na memória até recarregar a
+    // página). Em sessões longas trocando bastante de imagem isso vira
+    // vazamento de RAM lento. Agora tem um teto: ao ultrapassar, descarta a
+    // entrada usada há mais tempo (LRU simples) — reinsere no Map ao
+    // reacessar uma URL, o que a move pro "fim" (mais recente).
+    const _IMG_CACHE_MAX = 200;
     function _getCachedImage(url) {
         if (!url?.trim()) return null;
         let img = _imgCache.get(url);
-        if (!img) {
-            img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => markDirty();
-            img.src = url;
-            _imgCache.set(url, img);
+        if (img) {
+            _imgCache.delete(url);
+            _imgCache.set(url, img); // move pro fim = mais recentemente usado
+            return img;
+        }
+        img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => markDirty();
+        img.src = url;
+        _imgCache.set(url, img);
+        if (_imgCache.size > _IMG_CACHE_MAX) {
+            const oldestKey = _imgCache.keys().next().value;
+            _imgCache.delete(oldestKey);
         }
         return img;
     }
@@ -3775,9 +4081,8 @@ const ThreeManager = (() => {
        tamanho (Size, em studs) é aplicado direto, sem distorção.
     ────────────────────────────────────────────────────────────── */
     function _updateBillboardGuis() {
-        if (!camera) return;
-        objectMap.forEach(obj => {
-            if (obj.userData?.className !== "BillboardGui") return;
+        if (!camera || !_billboardGuis.size) return;
+        _billboardGuis.forEach(obj => {
             const parentPart = obj.userData.parentPart;
             if (!parentPart) { obj.visible = false; return; }
 
@@ -3827,6 +4132,11 @@ const ThreeManager = (() => {
             // filho da Part normalmente, pois deve girar/colar junto com ela.
             (isBillboard ? scene : parentPartMesh).add(obj);
             objectMap.set(node.id, obj);
+            // Otimização · rastreia BillboardGuis num Map separado (nova
+            // função) — _updateBillboardGuis() antes varria TODO objectMap
+            // (toda Part, Model, etc. da cena) só pra achar os poucos que
+            // são BillboardGui; agora itera direto só sobre eles.
+            if (isBillboard) _billboardGuis.set(node.id, obj);
         }
         const desiredParent = isBillboard ? scene : parentPartMesh;
         if (obj.parent !== desiredParent) { obj.parent?.remove(obj); desiredParent.add(obj); }
@@ -3858,6 +4168,7 @@ const ThreeManager = (() => {
     }
 
     function _updateConstraints() {
+        if (!auxLines.size) return; // Otimização · nada a fazer, evita overhead do forEach/Map a cada frame
         auxLines.forEach((line, id) => {
             const node = Tree.find(id);
             if (!node) { scene.remove(line); auxLines.delete(id); return; }
@@ -3868,11 +4179,24 @@ const ThreeManager = (() => {
         });
     }
 
+    let _particlesTmpVec; // reaproveitado por _animateParticles — evita criar Vector3 novo a cada partícula/frame
     function _animateParticles(dt) {
         _particleClock += dt;
+        if (!particles.size) return;
+        // Otimização · culling por distância/frustum — sistemas de partícula
+        // muito longe da câmera (ou fora do que ela está vendo) não têm
+        // ganho visual nenhum sendo simulados, mas cada um custa um loop por
+        // partícula todo frame independente disso. Pulamos o update deles
+        // nesse caso; o tempo delas só "pausa" enquanto invisíveis — volta a
+        // simular normal assim que a câmera aponta de volta pra elas, sem
+        // perder nenhum estado (spawn point, tipo, etc.).
+        const cullDist = (GFX_RENDER_DISTANCE_STEPS[_gfx.renderDistance] ?? 900) * 0.6;
+        const pPos = _particlesTmpVec || (_particlesTmpVec = new THREE.Vector3());
         particles.forEach((sys, id) => {
             const pts = objectMap.get(id);
             if (!pts) return;
+            pts.getWorldPosition(pPos);
+            if (!_cameraFrustum.containsPoint(pPos) && pPos.distanceTo(camera.position) > cullDist) return;
             const arr = pts.geometry.attributes.position.array;
             const isSmoke = sys.type === "Smoke";
             const aLife = isSmoke ? pts.geometry.attributes.aLife.array : null;
@@ -3937,6 +4261,7 @@ const ThreeManager = (() => {
                 });
             }
             objectMap.delete(node.id);
+            _billboardGuis.delete(node.id);
         }
         if (selectionHelpers.has(node.id)) {
             const h = selectionHelpers.get(node.id);
@@ -3956,10 +4281,17 @@ const ThreeManager = (() => {
         node.children?.forEach(cleanupNode);
     }
 
+    // Otimização · cache do elemento #snap-value (nova função) — antes era
+    // buscado via document.getElementById a cada chamada de
+    // _syncMeshToNode, que dispara continuamente durante um arraste (várias
+    // vezes por segundo). O elemento nunca é removido/recriado, então basta
+    // guardar a referência uma vez.
+    let _snapValueEl = null;
     function _syncMeshToNode(mesh) {
         const node = Tree.find(mesh.userData.nodeId);
         if (!node?.properties) return;
-        const snap = parseFloat(document.getElementById("snap-value").value) || 0.01;
+        if (!_snapValueEl) _snapValueEl = document.getElementById("snap-value");
+        const snap = parseFloat(_snapValueEl?.value) || 0.01;
         const sn = v => snap>0 ? Math.round(v/snap)*snap : v;
         if (node.properties.Position) {
             node.properties.Position.x = sn(mesh.position.x);
@@ -4055,15 +4387,25 @@ const ThreeManager = (() => {
      *  precisamos sincronizar manualmente o Mesh de preenchimento com a
      *  mesma AABB (barato: só roda pros objetos selecionados, geralmente
      *  poucos). */
+    // Otimização · objetos temporários reaproveitados por
+    // _updateSelectionHighlight — antes um Box3 + 2 Vector3 novos eram
+    // alocados a cada objeto selecionado, TODO frame, mesmo que nada
+    // tivesse mudado. Isso gera lixo (garbage collection) constante, que
+    // de vez em quando causa uma pausa curta e imprevisível pro navegador
+    // limpar memória — parte do que pode parecer um "gargalo" instável em
+    // vez de queda de FPS constante.
+    let _selBox, _selSize, _selCenter;
     function _updateSelectionHighlight() {
+        if (!selectionHelpers.size) return; // nada selecionado, nada a fazer
+        if (!_selBox) { _selBox = new THREE.Box3(); _selSize = new THREE.Vector3(); _selCenter = new THREE.Vector3(); }
         selectionHelpers.forEach(h => {
             h.edges.update();
-            const box = new THREE.Box3().setFromObject(h.mesh);
-            if (box.isEmpty()) return;
-            const size = box.getSize(new THREE.Vector3());
-            const center = box.getCenter(new THREE.Vector3());
-            h.fill.position.copy(center);
-            h.fill.scale.set(Math.max(size.x, 0.001), Math.max(size.y, 0.001), Math.max(size.z, 0.001));
+            _selBox.setFromObject(h.mesh);
+            if (_selBox.isEmpty()) return;
+            _selBox.getSize(_selSize);
+            _selBox.getCenter(_selCenter);
+            h.fill.position.copy(_selCenter);
+            h.fill.scale.set(Math.max(_selSize.x, 0.001), Math.max(_selSize.y, 0.001), Math.max(_selSize.z, 0.001));
         });
     }
 
@@ -4156,8 +4498,7 @@ const ThreeManager = (() => {
         raycaster.set(o, d);
         raycaster.far  = maxDist || 1000;
         raycaster.near = 0.01;
-        const pickable = [];
-        objectMap.forEach(obj => { if ((obj.isMesh || obj.isGroup) && obj.visible && !obj.userData?.isPartGui) pickable.push(obj); });
+        const pickable = _getPickableObjects();
         const hits = raycaster.intersectObjects(pickable, true);
         raycaster.far = Infinity; raycaster.near = 0; // restaura padrão p/ raycasting normal do editor
         if (!hits.length) return null;
@@ -4233,7 +4574,7 @@ const ThreeManager = (() => {
         cleanupNode, playSound, pauseSound, setRaycastEnabled, setFOV,
         getObjectMap, getScene, getCamera, getOrbit, getTransform, raycastDistance, raycastHit,
         buildHeldMeshFromTool, setGui3DVisible, isGui3DVisible,
-        setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings,
+        setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings, applyBalancedGfxPreset,
     };
 })();
 
@@ -5613,7 +5954,7 @@ const Explorer = (() => {
         { cat:"💾 PARTS", items:["Part","TrussPart","WedgePart","CornerWedgePart","CylinderPart","BallPart","MeshPart","SpawnLocation"] },
         { cat:"📝 SCRIPTS", items:["Script","LocalScript","ModuleScript"] },
         { cat:"🟦 EFEITOS & LUZES", items:["Sparkles","Fire","Smoke","ParticleEmitter","Trail","Beam","Sky","BloomEffect","PointLight","SurfaceLight","SpotLight"] },
-        { cat:"🔗 CONSTRAINTS", items:["WeldConstraint","HingeConstraint","RopeConstraint","SpringConstraint","RodConstraint","AlignPosition","AlignOrientation"] },
+        { cat:"🔗 CONSTRAINTS", items:["WeldConstraint","HingeConstraint","RopeConstraint","SpringConstraint","RodConstraint","AlignPosition","AlignOrientation","BodyVelocity","LinearVelocity","BodyForce","BodyPosition"] },
         { cat:"📺 GUI", items:["ScreenGui","SurfaceGui","BillboardGui","Frame","ScrollingFrame","CanvasGroup","TextLabel","TextButton","TextBox","ImageLabel","ImageButton","UICorner","UIGradient","UIStroke","UIGridLayout","UIListLayout","UIPadding","UIAspectRatioConstraint"] },
         { cat:"🌐 REDE", items:["RemoteEvent","RemoteFunction"] },
         { cat:"💿 AUDIO", items:["Sound","SoundGroup"] },
@@ -5741,6 +6082,12 @@ const Explorer = (() => {
         if (!parent) return;
         if (META.PART_GUIS.has(cls) && !META.PHYSICAL.has(parent.className)) {
             UI.showToast(`⚠️ ${cls} só funciona dentro de uma Part`, 2500);
+        }
+        // (nova função) Sky/BloomEffect só têm efeito de verdade dentro de
+        // Lighting (ver ThreeManager._syncDirtyScene) — avisa na hora de
+        // inserir em outro lugar, em vez de falhar silenciosamente.
+        if (META.LIGHTING_ONLY.has(cls) && parent.className !== "Lighting") {
+            UI.showToast(`⚠️ ${cls} só funciona dentro de Lighting`, 2500);
         }
         History.snapshot();
         const node = { id:Tree.uuid(), name:cls, className:cls, expanded:false, children:[], properties:getDefaultProps(cls) };
@@ -8801,6 +9148,28 @@ const LuaEngine = (() => {
             return 0;
         });
 
+        /** (função nova · "mais liberdade pros Scripts", igual ao Roblox
+         *  Studio de verdade) Players.LocalPlayer.Character — antes o
+         *  serviço "Players" existia na árvore mas era só uma pasta vazia:
+         *  nenhum Script conseguia pegar o personagem por ele (só via
+         *  script.Parent, o que só funciona pra Scripts que já ficam DENTRO
+         *  do rig). Isso quebrava, sem aviso claro, qualquer script escrito
+         *  no padrão comum do Roblox:
+         *    local player = Players.LocalPlayer
+         *    local character = player.Character or player.CharacterAdded:Wait()
+         *  (inclusive o próprio LocalScript de exemplo que vem no projeto novo). */
+        def("getLocalPlayerCharacterId", (LT) => {
+            const id = (typeof Simulation !== "undefined" && Simulation.getLocalPlayerCharacterId) ? Simulation.getLocalPlayerCharacterId() : null;
+            if (id) lua.lua_pushstring(LT, to_luastring(id)); else lua.lua_pushnil(LT);
+            return 1;
+        });
+        def("getLocalPlayerName", (LT) => {
+            let name = "Jogador1";
+            try { if (typeof Account !== "undefined" && Account.isLoggedIn && Account.isLoggedIn()) name = Account.getDisplayName() || name; } catch (_) { /* Account ainda não pronta */ }
+            lua.lua_pushstring(LT, to_luastring(name));
+            return 1;
+        });
+
         /** DataStoreService (função nova) — persistência real entre sessões,
          *  usando localStorage do navegador com um prefixo próprio pra não
          *  colidir com nada mais salvo na mesma origem. Dá "liberdade" pro
@@ -8929,6 +9298,28 @@ function SignalMT:Once(fn)
     end)
     return conn
 end
+-- (função nova · "mais liberdade pros Scripts", igual ao Roblox Studio de
+-- verdade) Signal:Wait() — pausa o Script até o evento disparar UMA vez e
+-- devolve os argumentos dele, exatamente como
+--   local character = player.Character or player.CharacterAdded:Wait()
+-- espera funcionar. Reaproveita o mesmo mecanismo de wait(n) (yield com a
+-- tag "__WAIT__", retomado no próximo frame pelo host) num laço curto, só
+-- que aqui quem acorda o laço é a própria conexão — sem travar o resto do
+-- jogo (outras coroutines/Scripts continuam rodando normalmente enquanto
+-- esta espera).
+function SignalMT:Wait()
+    local fired, results = false, nil
+    local conn
+    conn = self:Connect(function(...)
+        fired = true
+        results = { ... }
+    end)
+    while not fired do
+        coroutine.yield("__WAIT__", 0)
+    end
+    conn:Disconnect()
+    return table.unpack(results)
+end
 function __makeSignal(id, event)
     return setmetatable({__id = id, __event = event}, SignalMT)
 end
@@ -8946,6 +9337,30 @@ local __attrStore = {}
 -- __HOST em JS) atribuídas a uma instância, tipo RemoteFunction.OnServerInvoke,
 -- usadas por InvokeServer/InvokeClient logo abaixo.
 local __invokeStore = {}
+
+-- ── Humanoid:MoveTo (função nova) — tokens/sinais por instância. Fica aqui
+-- em cima (e não perto do resto do PathfindingService, mais abaixo) porque
+-- precisa ser um upvalue visível de dentro do InstanceMT.__index logo
+-- abaixo, que é definido de uma vez só nesta parte do PRELUDE.
+local __moveTokens  = {}  -- __id do Humanoid -> token atual (invalida MoveTo anteriores)
+local __moveSignals = {}  -- __id do Humanoid -> sinal Lua puro (MoveToFinished)
+
+-- Sinal Lua puro mínimo (sem ligação com __HOST) — usado só quando o evento
+-- não tem contraparte real no host, tipo MoveToFinished, que é inteiramente
+-- calculado no Lua abaixo.
+local function __makeLuaSignal()
+    local handlers = {}
+    local sig = {}
+    function sig:Connect(fn)
+        table.insert(handlers, fn)
+        local h = fn
+        return { Disconnect = function() for i, v in ipairs(handlers) do if v == h then table.remove(handlers, i) break end end end }
+    end
+    function sig:Fire(...)
+        for _, fn in ipairs(handlers) do pcall(fn, ...) end
+    end
+    return sig
+end
 
 local InstanceMT = {}
 InstanceMT.__index = function(self, key)
@@ -9170,6 +9585,25 @@ InstanceMT.__index = function(self, key)
         -- (função nova) gui:IsEnabled() -- true/false, já tratando nil como true
         -- (mesmo comportamento padrão do Roblox: Enabled não-definido = ligado)
         return function(s) return s.Enabled ~= false end
+    elseif key == "SetCore" then
+        -- (função nova) StarterGui:SetCore(nome, valor) — usado por
+        -- tutoriais pra mexer no HUD nativo do Roblox (notificação,
+        -- ChatBarDisabled etc.). Este motor não tem esse HUD nativo, então
+        -- só trata "SendNotification" caindo pro print() (aparece no
+        -- console durante os testes) e ignora o resto sem dar erro.
+        return function(_s, coreName, value)
+            if coreName == "SendNotification" and type(value) == "table" then
+                print("🔔 " .. tostring(value.Title or "Notificação") .. ": " .. tostring(value.Text or ""))
+            end
+        end
+    elseif key == "SetCoreGuiEnabled" then
+        return function(_s, coreType, enabled) __attrStore["__coreGui:" .. tostring(coreType)] = { v = enabled } end
+    elseif key == "GetCoreGuiEnabled" then
+        return function(_s, coreType)
+            local e = __attrStore["__coreGui:" .. tostring(coreType)]
+            if e == nil then return true end
+            return e.v
+        end
     elseif key == "GetProperties" then
         -- (função nova) devolve uma tabela {NomeDaPropriedade = valor, ...}
         -- com TODAS as propriedades do item de uma vez, sem precisar saber
@@ -9201,6 +9635,52 @@ InstanceMT.__index = function(self, key)
         -- do GetPropertyChangedSignal genérico, só que já pronto — não
         -- precisa chamar :GetPropertyChangedSignal("Health") na mão.
         return __getPropertyChangedSignal(self, "Health")
+    elseif key == "MoveTo" then
+        -- (função nova) Humanoid:MoveTo(posição) — move o character até o
+        -- ponto alvo em linha reta, respeitando WalkSpeed (studs/segundo),
+        -- igual ao padrão de NPC/IA simples do Roblox real. Sem desviar de
+        -- obstáculos sozinho (sem navmesh) — combine com
+        -- PathfindingService:CreatePath (mais abaixo no PRELUDE), que já
+        -- devolve waypoints prontos pra chamar :MoveTo() em sequência, um
+        -- por um, no callback de MoveToFinished.
+        return function(s, targetPos)
+            local sid = rawget(s, "__id")
+            __moveTokens[sid] = (__moveTokens[sid] or 0) + 1
+            local myToken = __moveTokens[sid]
+            spawn(function()
+                local root = nil
+                pcall(function()
+                    local char = s.Parent
+                    root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+                end)
+                if not root then return end
+                while __moveTokens[sid] == myToken do
+                    local ok, cur = pcall(function() return root.Position end)
+                    if not ok or not cur then break end
+                    local dist = cur:Distance(targetPos)
+                    if dist < 0.5 then break end
+                    local speed = 16
+                    pcall(function() speed = s.WalkSpeed or 16 end)
+                    local step = math.min(dist, speed * 0.03)
+                    local dir = (targetPos - cur):Unit()
+                    pcall(function() root.Position = cur + dir * step end)
+                    wait(0.03)
+                end
+                if __moveTokens[sid] == myToken then
+                    if not __moveSignals[sid] then __moveSignals[sid] = __makeLuaSignal() end
+                    __moveSignals[sid]:Fire(true)
+                end
+            end)
+        end
+    elseif key == "MoveToFinished" then
+        -- (função nova) Humanoid.MoveToFinished:Connect(function(reached)
+        -- ... end) — dispara quando um :MoveTo() em andamento termina
+        -- (reached=true) ou é substituído por um novo :MoveTo() chamado
+        -- antes de chegar (nesse caso NÃO dispara pro antigo, só o ÚLTIMO
+        -- MoveTo pendente dispara — igual ao Roblox real).
+        local sid = rawget(self, "__id")
+        if not __moveSignals[sid] then __moveSignals[sid] = __makeLuaSignal() end
+        return __moveSignals[sid]
     elseif key == "Died" then
         -- (função nova) Humanoid.Died — dispara UMA VEZ quando o Health
         -- cruza pra <= 0 (não fica repetindo enquanto continuar morto) e
@@ -9412,6 +9892,164 @@ function table.clear(t)
 end
 -- table.remove/table.insert já existem no Lua padrão (mantidos pelo openlibs).
 
+-- ════════════════════════════════════════════════════════════════════════
+-- (novo bloco) Tipos de dados que faltavam na biblioteca simplificada:
+-- BrickColor, NumberRange, NumberSequence, ColorSequence, Ray e Region3.
+-- Todos em Lua puro (sem depender do __HOST), no mesmo estilo dos tipos
+-- já existentes (Vector3/Color3/CFrame) — cobrem os usos mais comuns
+-- vistos em scripts reais de Roblox sem tentar ser 100% fiéis ao motor
+-- original (ex.: Region3 aqui não faz consulta espacial de verdade).
+-- ════════════════════════════════════════════════════════════════════════
+
+-- ── BrickColor ───────────────────────────────────────────────────────────
+BrickColor = {}
+BrickColor.__index = BrickColor
+BrickColor.__tostring = function(b) return b.Name end
+BrickColor.__eq = function(a, b) return a.Name == b.Name end
+-- Paleta reduzida com os nomes mais usados em scripts/tutoriais (cores
+-- exatas do Roblox real, não uma aproximação).
+local __BRICKCOLOR_TABLE = {
+    ["White"]              = {255,255,255}, ["Grey"]               = {163,162,165},
+    ["Light grey"]         = {200,200,200}, ["Dark grey"]          = {91,93,105},
+    ["Black"]              = {27,42,53},    ["Really black"]       = {17,17,17},
+    ["Really red"]         = {255,0,0},     ["Bright red"]         = {196,40,28},
+    ["Crimson"]            = {151,0,0},     ["Really blue"]        = {0,0,255},
+    ["Bright blue"]        = {13,105,172},  ["Cyan"]               = {4,175,236},
+    ["Bright green"]       = {75,151,75},   ["Earth green"]        = {40,127,71},
+    ["Lime green"]         = {80,225,60},   ["New Yeller"]         = {255,255,0},
+    ["Bright yellow"]      = {245,205,48},  ["Bright orange"]      = {226,128,32},
+    ["Neon orange"]        = {236,111,17},  ["Hot pink"]           = {255,105,180},
+    ["Magenta"]            = {170,0,170},   ["Royal purple"]       = {98,37,209},
+    ["Brown"]              = {124,92,70},   ["Reddish brown"]      = {105,64,40},
+    ["Institutional white"]= {248,248,248},
+}
+function BrickColor.new(name)
+    if type(name) == "table" then return name end -- já é um BrickColor
+    local rgb = __BRICKCOLOR_TABLE[name]
+    if type(name) == "number" then
+        -- BrickColor.new(id) — sem tabela de ids real, cai no cinza padrão
+        rgb = {163,162,165}; name = "Medium stone grey"
+    elseif not rgb then
+        rgb = {163,162,165}; name = tostring(name) -- nome desconhecido: mantém e usa cinza
+    end
+    return setmetatable({ Name = name, r = rgb[1], g = rgb[2], b = rgb[3] }, BrickColor)
+end
+function BrickColor:Color() return Color3.fromRGB(self.r, self.g, self.b) end
+function BrickColor.random()
+    local keys = {}
+    for k in pairs(__BRICKCOLOR_TABLE) do keys[#keys+1] = k end
+    return BrickColor.new(keys[math.random(#keys)])
+end
+function BrickColor.White() return BrickColor.new("White") end
+function BrickColor.Black() return BrickColor.new("Black") end
+function BrickColor.Gray() return BrickColor.new("Grey") end
+function BrickColor.Red() return BrickColor.new("Really red") end
+function BrickColor.Blue() return BrickColor.new("Really blue") end
+function BrickColor.Green() return BrickColor.new("Bright green") end
+function BrickColor.Yellow() return BrickColor.new("Bright yellow") end
+
+-- ── NumberRange ──────────────────────────────────────────────────────────
+NumberRange = {}
+NumberRange.__index = NumberRange
+NumberRange.__tostring = function(r) return string.format("%g, %g", r.Min, r.Max) end
+function NumberRange.new(min, max)
+    min = min or 0
+    return setmetatable({ Min = min, Max = max or min }, NumberRange)
+end
+
+-- ── NumberSequence / NumberSequenceKeypoint ─────────────────────────────
+NumberSequenceKeypoint = {}
+NumberSequenceKeypoint.__index = NumberSequenceKeypoint
+function NumberSequenceKeypoint.new(time, value, envelope)
+    return setmetatable({ Time = time, Value = value, Envelope = envelope or 0 }, NumberSequenceKeypoint)
+end
+
+NumberSequence = {}
+NumberSequence.__index = NumberSequence
+NumberSequence.__tostring = function(s) return "NumberSequence" end
+function NumberSequence.new(a, b)
+    local keypoints
+    if type(a) == "table" then
+        keypoints = a -- lista de NumberSequenceKeypoint já pronta
+    elseif b == nil then
+        -- valor único → sequência constante (igual ao construtor real do Roblox)
+        keypoints = { NumberSequenceKeypoint.new(0, a), NumberSequenceKeypoint.new(1, a) }
+    else
+        keypoints = { NumberSequenceKeypoint.new(0, a), NumberSequenceKeypoint.new(1, b) }
+    end
+    return setmetatable({ Keypoints = keypoints }, NumberSequence)
+end
+
+-- ── ColorSequence / ColorSequenceKeypoint ───────────────────────────────
+ColorSequenceKeypoint = {}
+ColorSequenceKeypoint.__index = ColorSequenceKeypoint
+function ColorSequenceKeypoint.new(time, color)
+    return setmetatable({ Time = time, Value = color }, ColorSequenceKeypoint)
+end
+
+ColorSequence = {}
+ColorSequence.__index = ColorSequence
+ColorSequence.__tostring = function(s) return "ColorSequence" end
+function ColorSequence.new(a, b)
+    local keypoints
+    if type(a) == "table" and getmetatable(a) ~= Color3 then
+        keypoints = a
+    elseif b == nil then
+        keypoints = { ColorSequenceKeypoint.new(0, a), ColorSequenceKeypoint.new(1, a) }
+    else
+        keypoints = { ColorSequenceKeypoint.new(0, a), ColorSequenceKeypoint.new(1, b) }
+    end
+    return setmetatable({ Keypoints = keypoints }, ColorSequence)
+end
+
+-- ── Ray ──────────────────────────────────────────────────────────────────
+-- Raio simplificado (Origin + Direction); quem quiser um raycast de verdade
+-- contra a cena 3D deve usar workspace:Raycast (já implementado mais abaixo
+-- via __HOST, que consulta o Three.js de verdade) — este Ray só empacota os
+-- dois vetores, como o tipo de dado original faz.
+Ray = {}
+Ray.__index = Ray
+Ray.__tostring = function(r) return tostring(r.Origin) .. " -> " .. tostring(r.Direction) end
+function Ray.new(origin, direction)
+    return setmetatable({ Origin = origin, Direction = direction }, Ray)
+end
+function Ray:ClosestPoint(point)
+    local d = self.Direction:Unit()
+    local t = (point - self.Origin):Dot(d)
+    return self.Origin + d * t
+end
+function Ray:Distance(point) return (point - self:ClosestPoint(point)):Magnitude() end
+
+-- ── Region3 ──────────────────────────────────────────────────────────────
+-- Guarda só os dois cantos (min/max); sem consulta espacial real contra o
+-- workspace (isso exigiria varrer toda a cena 3D no host), mas cobre os usos
+-- mais comuns de scripts que só querem checar "esse ponto está na região?".
+Region3 = {}
+Region3.__index = Region3
+function Region3.new(minVec, maxVec)
+    return setmetatable({ CFrame = CFrame.new((minVec + maxVec) * 0.5),
+        Size = Vector3.new(maxVec.x - minVec.x, maxVec.y - minVec.y, maxVec.z - minVec.z),
+        __min = minVec, __max = maxVec }, Region3)
+end
+function Region3:ExpandToGrid(_resolution) return self end -- sem grid real; devolve a própria região
+function Region3:ContainsPoint(p)
+    return p.x >= self.__min.x and p.x <= self.__max.x
+       and p.y >= self.__min.y and p.y <= self.__max.y
+       and p.z >= self.__min.z and p.z <= self.__max.z
+end
+
+-- ── GuiService (função nova) — stub mínimo ──────────────────────────────
+-- Cobre os campos/checagens mais comuns em scripts de UI sem precisar de
+-- estado real do host (este editor sempre roda em "modo desktop/mouse").
+GuiService = setmetatable({}, { __index = function(_, key)
+    if key == "IsTenFootInterface" then return function() return false end end
+    if key == "GetGuiInset" then return function() return Vector3.new(0,36,0), Vector3.new(0,0,0) end end
+    if key == "SelectedObject" then return nil end
+    if key == "SetSelectedObject" then return function() end end
+    if key == "AutoSelectGuiEnabled" then return false end
+    return nil
+end })
+
 function string.split(s, sep)
     sep = sep or ","
     local out = {}
@@ -9475,6 +10113,46 @@ UserInputService = setmetatable({}, { __index = function(_, key)
     return nil
 end })
 
+-- ── Players / Players.LocalPlayer (função nova · "mais liberdade pros
+-- Scripts", igual ao Roblox Studio de verdade) ──────────────────────────
+-- Antes só existia um serviço "Players" vazio no DataModel — dava pra
+-- fazer game:GetService('Players') mas .LocalPlayer não existia, então
+-- .Character/.CharacterAdded (o padrão mais comum de todo script de
+-- movimento/vida/inventário no Roblox real) sempre quebrava. Agora:
+--   local player    = Players.LocalPlayer
+--   local character = player.Character or player.CharacterAdded:Wait()
+--   local humanoid  = character:WaitForChild('Humanoid')
+-- funciona de verdade, apontando pro Model jogável definido em StarterPlayer.
+local __localPlayerObj = setmetatable({}, { __index = function(_, key)
+    if key == "Name" or key == "DisplayName" then
+        return __HOST.getLocalPlayerName()
+    elseif key == "Character" then
+        local cid = __HOST.getLocalPlayerCharacterId()
+        if cid then return __wrapInstance(cid) end
+        return nil
+    elseif key == "CharacterAdded" or key == "CharacterRemoving" then
+        -- Disparado pelo host (ver Simulation.update) sempre que o Model do
+        -- rig aparece/some — o argumento cru é uma string (id da instância),
+        -- então embrulha antes de entregar pro script, igual ao Roblox real
+        -- (que entrega o Character já como Instance no callback).
+        local sig = __makeSignal("__Players", key)
+        local rawConnect = sig.Connect
+        sig.Connect = function(self, fn)
+            return rawConnect(self, function(charId) fn(__wrapInstance(charId)) end)
+        end
+        return sig
+    elseif key == "UserId" then
+        return 1
+    end
+    return nil
+end })
+Players = setmetatable({}, { __index = function(_, key)
+    if key == "LocalPlayer" then return __localPlayerObj end
+    return nil
+end })
+function Players:GetPlayers() return { __localPlayerObj } end
+function Players:GetPlayerFromCharacter(_char) return __localPlayerObj end
+
 -- ── BindableEvent / RemoteEvent (função nova) ────────────────────────────
 -- Suporte a comunicação por eventos entre Scripts, igual ao Roblox real.
 -- Neste motor single-player, FireServer/FireClient e Fire caem no mesmo
@@ -9509,11 +10187,28 @@ game = setmetatable({}, {
                 -- uma vez (nem a animação "Parado").
                 if name == "UserInputService" then return UserInputService end
                 if name == "RunService" then return RunService end
+                if name == "ContextActionService" then return ContextActionService end
+                if name == "TeleportService" then return TeleportService end
+                if name == "BadgeService" then return BadgeService end
+                if name == "ContentProvider" then return ContentProvider end
+                if name == "CollectionService" then return CollectionService end
+                if name == "PathfindingService" then return PathfindingService end
+                if name == "PhysicsService" then return PhysicsService end
+                if name == "TextService" then return TextService end
+                -- (função nova) Players TAMBÉM precisa cair na tabela Lua pura
+                -- definida acima (com .LocalPlayer de verdade) — sem este
+                -- branch, GetService('Players') devolvia só o nó vazio do
+                -- DataModel, e .LocalPlayer sempre vinha nil.
+                if name == "Players" then return Players end
                 local id = __HOST.getService(name)
                 if id then return __wrapInstance(id) end
                 error(tostring(name) .. " não é um serviço disponível neste motor.")
             end
         end
+        -- (função nova) Acesso direto game.Players (sem GetService) — comum
+        -- em scripts copiados de tutorial — também precisa cair na tabela
+        -- Lua real, senão .LocalPlayer sumia só nesse atalho.
+        if key == "Players" then return Players end
         local id = __HOST.getService(key)
         if id then return __wrapInstance(id) end
         return nil
@@ -11464,6 +12159,272 @@ function Signal:HandlerCount()
 end
 
 -- ============================================================
+-- EXTRA · ProximityPrompt (função nova) — prompt.Triggered:Connect(fn)
+-- ============================================================
+-- Antes, ProximityPrompt só existia como objeto no Explorer (com
+-- ActionText/ObjectText/HoldDuration/MaxActivationDistance/Enabled nas
+-- Propriedades), mas sem NENHUMA lógica de jogo por trás — não existia
+-- ProximityPromptService de verdade, então .Triggered nunca era chamado
+-- por ninguém e qualquer tutorial de "segure E para interagir" ficava
+-- morto. Agora, ao chamar prompt.Triggered:Connect(fn) pela primeira vez,
+-- um vigia próprio (spawn + wait) nasce para ESSE prompt e passa a checar,
+-- a cada frame:
+--   1) Enabled == true;
+--   2) distância entre o HumanoidRootPart do Players.LocalPlayer.Character
+--      e a Part-mãe do prompt (prompt.Parent) <= MaxActivationDistance;
+--   3) tecla E pressionada (segurando por HoldDuration segundos, igual
+--      ao Roblox real — HoldDuration = 0 dispara na hora).
+-- Quando as três batem, Triggered:Fire(player) roda, com o mesmo padrão
+-- de todo Script real:
+--   local prompt = parte:WaitForChild('ProximityPrompt')
+--   prompt.Triggered:Connect(function(player) ... end)
+local __promptSignals = {}   -- __id da instância ProximityPrompt -> Signal.new()
+local __promptWatching = {}  -- __id -> true (evita nascer 2 vigias pro mesmo prompt)
+
+local function __promptRootPos()
+    local ok, char = pcall(function() return Players.LocalPlayer.Character end)
+    if not ok or not char then return nil end
+    local ok2, root = pcall(function() return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") end)
+    if not ok2 or not root then return nil end
+    local ok3, pos = pcall(function() return root.Position end)
+    if not ok3 then return nil end
+    return pos
+end
+
+local function __promptStartWatch(prompt)
+    local id = rawget(prompt, "__id")
+    if __promptWatching[id] then return end
+    __promptWatching[id] = true
+    local held = 0
+    spawn(function()
+        while true do
+            wait(0.05)
+            local ok, alive = pcall(function() return prompt.Parent ~= nil end)
+            if not ok or not alive then __promptWatching[id] = nil; return end
+
+            local enabled = true
+            pcall(function() enabled = prompt.Enabled end)
+            if not enabled then held = 0 goto continue end
+
+            local part = nil
+            pcall(function() part = prompt.Parent end)
+            local rootPos, partPos = __promptRootPos(), nil
+            pcall(function() partPos = part.Position end)
+            if not rootPos or not partPos then held = 0 goto continue end
+
+            local maxDist = 10
+            pcall(function() maxDist = prompt.MaxActivationDistance end)
+            if rootPos:Distance(partPos) > maxDist then held = 0 goto continue end
+
+            local down = false
+            pcall(function() down = UserInputService:IsKeyDown(Enum.KeyCode.E) end)
+            if not down then held = 0 goto continue end
+
+            local holdDur = 0
+            pcall(function() holdDur = prompt.HoldDuration or 0 end)
+            held = held + 0.05
+            if held >= holdDur then
+                held = -999999 -- trava até soltar a tecla (evita disparar todo frame)
+                local sig = __promptSignals[id]
+                if sig then sig:Fire(Players.LocalPlayer) end
+            end
+
+            ::continue::
+        end
+    end)
+end
+
+-- Sobrescreve o acesso a .Triggered em qualquer instância cujo ClassName
+-- seja "ProximityPrompt", devolvendo o Signal Lua puro (e ligando o vigia
+-- na primeira vez que alguém conecta) — sem precisar de nenhuma ponte nova
+-- com o __HOST, seguindo o mesmo padrão do TweenService/RunService acima.
+local __oldInstanceIndex = InstanceMT.__index
+InstanceMT.__index = function(self, key)
+    if key == "Triggered" then
+        local id = rawget(self, "__id")
+        local ok, cls = pcall(function() return self.ClassName end)
+        if ok and cls == "ProximityPrompt" then
+            if not __promptSignals[id] then __promptSignals[id] = Signal.new() end
+            __promptStartWatch(self)
+            local sig = __promptSignals[id]
+            -- devolve um objeto com só :Connect (Fire fica interno, só o
+            -- vigia acima pode disparar), igual à API real do Roblox.
+            return setmetatable({}, { __index = function(_, k)
+                if k == "Connect" then return function(_, fn) return sig:Connect(fn) end end
+                return nil
+            end })
+        end
+    end
+    return __oldInstanceIndex(self, key)
+end
+
+-- ============================================================
+-- EXTRA · Teams (função nova) — Teams:GetTeams() e Team:GetPlayers()
+-- ============================================================
+-- Antes "Teams" e os "Team" dentro dele existiam só como nós decorativos
+-- no Explorer (com TeamColor/AutoAssignable nas Propriedades), sem NENHUMA
+-- ligação com a API Lua — game:GetService("Teams"):GetTeams() dava erro
+-- (método inexistente) e não tinha como saber quais players estão em qual
+-- time. Como este motor é single-player (só existe LocalPlayer, sem
+-- servidor de verdade), a parte de "times" fica simplificada:
+--   • player.Team = algumTime / player.Team → já funciona sozinho, sem
+--     precisar de nenhum código extra aqui: __localPlayerObj é uma tabela
+--     Lua comum com só __index (sem __newindex), então atribuir uma chave
+--     nova nela (Team) faz um set direto de verdade — e ler de volta depois
+--     também, com o comportamento padrão do Lua (metamétodo só é chamado
+--     quando a chave NÃO existe na tabela ainda).
+--   • Teams:GetTeams() — devolve só os filhos com ClassName "Team" (usa
+--     GetChildren(), que já existe, e filtra).
+--   • time:GetPlayers() — devolve {LocalPlayer} se o time dele
+--     (player.Team) for este mesmo Team (por igualdade de instância via
+--     InstanceMT.__eq), senão devolve {} — coerente com não existir
+--     nenhum outro player nesta simulação.
+local __oldInstanceIndex2 = InstanceMT.__index
+InstanceMT.__index = function(self, key)
+    local ok, cls = pcall(function() return self.ClassName end)
+    if ok and key == "GetTeams" and cls == "Teams" then
+        return function(s)
+            local out = {}
+            for _, kid in ipairs(s:GetChildren()) do
+                local okc, kc = pcall(function() return kid.ClassName end)
+                if okc and kc == "Team" then out[#out + 1] = kid end
+            end
+            return out
+        end
+    elseif ok and key == "GetPlayers" and cls == "Team" then
+        return function(s)
+            local myTeam = nil
+            pcall(function() myTeam = Players.LocalPlayer.Team end)
+            if myTeam ~= nil and myTeam == s then return { Players.LocalPlayer } end
+            return {}
+        end
+    end
+    return __oldInstanceIndex2(self, key)
+end
+
+-- ============================================================
+-- EXTRA · MarketplaceService (função nova) — compras/gamepasses simulados
+-- ============================================================
+-- Não existe economia real neste motor (sem servidor/Robux de verdade),
+-- então MarketplaceService aqui é um MOCK consistente: qualquer
+-- PromptPurchase/PromptGamePassPurchase já considera comprado na hora,
+-- suficiente pra testar o FLUXO do jogo (loja, desbloqueio de item,
+-- gamepass) sem precisar integrar pagamento de verdade. GetProductInfo
+-- devolve uma tabela fake com Name/PriceInRobux coerente, do jeito que o
+-- tutorial oficial do Roblox espera.
+local __ownedGamePasses = {}   -- gamePassId -> true (persiste só durante esta sessão de Play)
+local __ownedProducts   = {}
+
+MarketplaceService = {
+    PromptPurchaseFinished = Signal.new(),         -- (player, assetId, wasPurchased)
+    PromptGamePassPurchaseFinished = Signal.new(), -- (player, gamePassId, wasPurchased)
+}
+function MarketplaceService:GetProductInfo(id, _infoType)
+    return { Name = "Produto " .. tostring(id), Description = "", PriceInRobux = 100, IsForSale = true, ProductId = id }
+end
+function MarketplaceService:PromptPurchase(player, productId)
+    __ownedProducts[productId] = true
+    MarketplaceService.PromptPurchaseFinished:Fire(player, productId, true)
+end
+function MarketplaceService:PromptGamePassPurchase(player, gamePassId)
+    __ownedGamePasses[gamePassId] = true
+    MarketplaceService.PromptGamePassPurchaseFinished:Fire(player, gamePassId, true)
+end
+function MarketplaceService:UserOwnsGamePassAsync(_player, gamePassId)
+    return __ownedGamePasses[gamePassId] == true
+end
+function MarketplaceService:PlayerOwnsAsset(_player, productId)
+    return __ownedProducts[productId] == true
+end
+
+-- ============================================================
+-- EXTRA · BodyVelocity / LinearVelocity / BodyForce / BodyPosition
+-- ============================================================
+-- Movedores de corpo ("body movers") clássicos do Roblox: aplicam
+-- velocidade/força contínua numa Part enquanto o Instance existir e
+-- Enabled == true. Este motor não tem uma engine de física rígida real
+-- por trás (só gravidade/colisão simplificadas do Play, como já assumido
+-- em CFrame/Vector3 acima) — então, igual ao TweenService, a integração é
+-- feita 100% em Lua: um vigia por instância soma Velocity * dt em cima da
+-- Part.Position a cada frame, o mesmo efeito visual que
+-- BodyVelocity/LinearVelocity têm no Roblox real para scripts comuns
+-- (empurrar, flutuar, plataforma que sobe/desce, etc.). BodyPosition
+-- aproxima a Part de um alvo (efeito "mola", sem torque real).
+local __moverWatching = {} -- __id -> true
+
+local function __moverStartWatch(mover, velocityProp)
+    local id = rawget(mover, "__id")
+    if __moverWatching[id] then return end
+    __moverWatching[id] = true
+    spawn(function()
+        while true do
+            wait(0.03)
+            local ok, alive = pcall(function() return mover.Parent ~= nil end)
+            if not ok or not alive then __moverWatching[id] = nil; return end
+
+            local enabled = true
+            pcall(function() enabled = mover.Enabled end)
+            if enabled then
+                local part = nil
+                pcall(function() part = mover.Parent end)
+                local vel = nil
+                pcall(function() vel = mover[velocityProp] end)
+                if part and vel then
+                    local ok2, pos = pcall(function() return part.Position end)
+                    if ok2 and pos then
+                        pcall(function() part.Position = pos + vel * 0.03 end)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function __bodyPositionStartWatch(bp)
+    local id = rawget(bp, "__id")
+    if __moverWatching[id] then return end
+    __moverWatching[id] = true
+    spawn(function()
+        while true do
+            wait(0.03)
+            local ok, alive = pcall(function() return bp.Parent ~= nil end)
+            if not ok or not alive then __moverWatching[id] = nil; return end
+            local enabled = true
+            pcall(function() enabled = bp.Enabled end)
+            if enabled then
+                local part, target = nil, nil
+                pcall(function() part = bp.Parent end)
+                pcall(function() target = bp.Position end)
+                if part and target then
+                    local ok2, pos = pcall(function() return part.Position end)
+                    if ok2 and pos then
+                        pcall(function() part.Position = pos:Lerp(target, 0.15) end)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Instance.new já cria BodyVelocity/LinearVelocity/BodyForce/BodyPosition
+-- normalmente (getDefaultProps devolve {} pra classe desconhecida, então
+-- Velocity/VectorVelocity/Force/Position funcionam como campos genéricos
+-- comuns, do mesmo jeito que qualquer outra propriedade solta). O vigia
+-- liga sozinho assim que o Instance é criado — sem precisar que o Script
+-- chame nada a mais, igual ao comportamento real desses objetos.
+local __bodyMoverClasses = { BodyVelocity = "Velocity", LinearVelocity = "VectorVelocity", BodyForce = "Force" }
+local __oldInstanceNewForMovers = Instance.new
+function Instance.new(className, parent)
+    local inst = __oldInstanceNewForMovers(className, parent)
+    if __bodyMoverClasses[className] then
+        __moverStartWatch(inst, __bodyMoverClasses[className])
+    elseif className == "BodyPosition" then
+        __bodyPositionStartWatch(inst)
+    end
+    return inst
+end
+
+-- ============================================================
 -- EXTRA · SafeConnect / FunctionChain / Hook (função nova) — formas
 -- seguras de "conectar" uma função com outra(s). O problema que isso
 -- resolve: normalmente, se UMA função conectada quebra (erro de Lua),
@@ -11978,14 +12939,14 @@ function StringBuilder:Length() return #self:ToString() end
 -- ============================================================
 -- EXTRA · Validate.* extra (mais checagens de tipo, função nova)
 -- ============================================================
-function Validate.isVector3(v) return type(v) == "table" and getmetatable(v) == Vector3 end
-function Validate.isVector2(v) return type(v) == "table" and getmetatable(v) == Vector2 end
-function Validate.isColor3(v) return type(v) == "table" and getmetatable(v) == Color3 end
+-- (correção) isVector3/isVector2/isColor3/isCallable/isPositive/isNegative
+-- já existiam no primeiro bloco Validate.* (mais acima no PRELUDE) — estavam
+-- redeclaradas aqui por engano, e a redeclaração de isCallable era mais
+-- fraca que a original (perdia o suporte a tabelas com metamétodo __call,
+-- só aceitava type(v)=="function"). Removidas as duplicatas; só ficam as
+-- checagens que são realmente novas neste bloco.
 function Validate.isCFrame(v) return type(v) == "table" and getmetatable(v) == CFrame end
 function Validate.isInstance(v) return type(v) == "table" and getmetatable(v) == InstanceMT end
-function Validate.isCallable(v) return type(v) == "function" end
-function Validate.isPositive(n) return type(n) == "number" and n > 0 end
-function Validate.isNegative(n) return type(n) == "number" and n < 0 end
 function Validate.isNonNegative(n) return type(n) == "number" and n >= 0 end
 function Validate.inRange(n, lo, hi) return type(n) == "number" and n >= lo and n <= hi end
 
@@ -12223,6 +13184,99 @@ function PhysicsService:CollisionGroupsAreCollidable(a, b)
 end
 function PhysicsService:SetPartCollisionGroup(part, name) part:SetAttribute("__CollisionGroup", name) end
 function PhysicsService:GetPartCollisionGroup(part) return part:GetAttribute("__CollisionGroup") or "Default" end
+
+-- ============================================================
+-- EXTRA · ContextActionService (função nova) — vincula uma função a uma ou
+-- mais teclas com um "nome de ação" (o mesmo padrão do Roblox real, usado
+-- pra ações de mobile/PC unificadas — botão de pulo customizado, atirar,
+-- interagir, etc.). Por baixo, só liga UserInputService.InputBegan/Ended
+-- já existentes e filtra pela KeyCode pedida — sem ponte nova com o host.
+-- ============================================================
+ContextActionService = {}
+local __actionConns = {} -- nomeDaAção -> {inputBeganConn, inputEndedConn}
+function ContextActionService:BindAction(actionName, fn, _touchButton, ...)
+    self:UnbindAction(actionName)
+    local keys = { ... }
+    local keySet = {}
+    for _, k in ipairs(keys) do
+        local name = (type(k) == "table" and k.Name) or tostring(k)
+        keySet[name] = true
+    end
+    local beganConn = UserInputService.InputBegan:Connect(function(input)
+        if keySet[input.KeyCode.Name] then fn(actionName, "Begin", input) end
+    end)
+    local endedConn = UserInputService.InputEnded:Connect(function(input)
+        if keySet[input.KeyCode.Name] then fn(actionName, "End", input) end
+    end)
+    __actionConns[actionName] = { beganConn, endedConn }
+end
+function ContextActionService:UnbindAction(actionName)
+    local conns = __actionConns[actionName]
+    if conns then
+        for _, c in ipairs(conns) do c:Disconnect() end
+        __actionConns[actionName] = nil
+    end
+end
+-- (função nova) versões vazias/no-op — só existem pra não quebrar scripts
+-- que chamam essas funções de UI (não fazem sentido num motor sem HUD
+-- mobile próprio, mas não devem dar erro "campo inexistente").
+function ContextActionService:SetTitle(_actionName, _title) end
+function ContextActionService:SetDescription(_actionName, _desc) end
+function ContextActionService:SetImage(_actionName, _image) end
+function ContextActionService:SetPosition(_actionName, _pos) end
+
+-- ============================================================
+-- EXTRA · TeleportService (função nova) — MOCK: este motor roda um único
+-- lugar (Place) por sessão, sem servidor real por trás, então não existe
+-- "outro lugar" de verdade pra teleportar. Em vez de dar erro (o que
+-- quebraria qualquer jogo com sistema de "lobby -> partida" testado em
+-- estrutura de múltiplos lugares), TeleportService aqui só avisa via
+-- Signal — dá pra Script escutar TeleportInitFailed/usar como stub —
+-- suficiente pra não travar o fluxo do jogo durante o desenvolvimento.
+TeleportService = {
+    TeleportInitFailed = Signal.new(), -- (player, teleportResult, errorMessage, placeId, teleportOptions)
+}
+function TeleportService:Teleport(placeId, player, _teleportData, _options)
+    warn("TeleportService:Teleport chamado (placeId " .. tostring(placeId) .. ") — este motor só roda um lugar por sessão, então o teleporte não acontece de verdade.")
+    TeleportService.TeleportInitFailed:Fire(player, "Failure", "Este motor não suporta múltiplos lugares.", placeId, nil)
+end
+TeleportService.TeleportAsync = TeleportService.Teleport
+function TeleportService:TeleportToPlaceInstance(placeId, _instanceId, player)
+    TeleportService:Teleport(placeId, player)
+end
+function TeleportService:GetLocalPlayerTeleportData() return nil end
+function TeleportService:SetTeleportGui(_gui) end
+
+-- ============================================================
+-- EXTRA · BadgeService / ContentProvider (funções novas) — stubs que
+-- cobrem chamadas comuns de tutoriais sem quebrar o script, mesmo sem o
+-- sistema nativo de conquistas (Badges) real do Roblox por trás.
+-- (StarterGui:SetCore fica junto do resto das propriedades genéricas de
+-- Instance, mais acima no PRELUDE — StarterGui aqui já é um nó real do
+-- DataModel, obtido via game:GetService("StarterGui"), não um global solto.)
+-- ============================================================
+BadgeService = {}
+local __awardedBadges = {} -- badgeId -> true (mock, dura só a sessão)
+function BadgeService:AwardBadge(_userId, badgeId)
+    __awardedBadges[badgeId] = true
+    return true
+end
+function BadgeService:UserHasBadgeAsync(_userId, badgeId) return __awardedBadges[badgeId] == true end
+function BadgeService:GetBadgeInfoAsync(badgeId)
+    return { Name = "Badge " .. tostring(badgeId), Description = "", IconImageId = 0, IsEnabled = true }
+end
+
+-- (função nova) ContentProvider:PreloadAsync — este motor não tem
+-- carregamento assíncrono de assets de verdade (tudo já fica disponível
+-- na hora), então só devolve sucesso pra cada item na hora, mantendo o
+-- padrão de tela de loading dos jogos reais funcionando sem travar.
+ContentProvider = {}
+function ContentProvider:PreloadAsync(assetList, callback)
+    for i, asset in ipairs(assetList or {}) do
+        if callback then pcall(callback, tostring(asset), "Success") end
+    end
+end
+ContentProvider.RequestQueueSize = 0
 
 -- ============================================================
 -- EXTRA · Bezier.* / Spline.* (função nova) — curvas pra movimento de
@@ -13022,17 +14076,33 @@ const UI = (() => {
        lê o estado atual do ThreeManager, preenche os controles do modal, e
        liga cada controle pra já aplicar/salvar a mudança na hora (sem botão
        de "salvar" separado — o localStorage guarda tudo em tempo real). */
-    const GFX_QUALITY_LABELS = { low:"Baixa", medium:"Média", high:"Alta", ultra:"Máxima", auto:"Auto" };
-    const GFX_QUALITY_STEPS  = ["low", "medium", "high", "ultra", "auto"];
+    const GFX_QUALITY_LABELS = { extreme:"Extremo", low:"Baixa", medium:"Média", high:"Alta", ultra:"Máxima", auto:"Auto" };
+    const GFX_QUALITY_STEPS  = ["extreme", "low", "medium", "high", "ultra", "auto"];
+    const GFX_FPSCAP_LABELS  = { 0:"Ilimitado", 30:"30 fps", 60:"60 fps", 120:"120 fps", 144:"144 fps" };
+    const GFX_RENDERDIST_LABELS = { curta:"Curta", media:"Média", longa:"Longa", extrema:"Extrema" };
+    const GFX_SHADOWQUALITY_LABELS = { baixa:"Baixa", media:"Média", alta:"Alta", ultra:"Ultra" };
     function openGraphicsSettings() {
         const gfx = ThreeManager.getGraphicsSettings();
         document.getElementById("gfx-shadows").checked = gfx.shadows !== false;
         document.getElementById("gfx-ssao").checked     = gfx.ssao   !== false;
         document.getElementById("gfx-aa").checked       = gfx.aa     !== false;
         document.getElementById("gfx-bloom").checked    = gfx.bloom  !== false;
+        document.getElementById("gfx-detailed-stats").checked = gfx.detailedStats === true;
+        _toggleDetailedStatsPanel(gfx.detailedStats === true);
         const idx = Math.max(0, GFX_QUALITY_STEPS.indexOf(gfx.quality));
         document.getElementById("gfx-quality-slider").value = idx;
         document.getElementById("gfx-quality-label").textContent = GFX_QUALITY_LABELS[gfx.quality] || "Auto";
+        // (nova função) Popula os controles novos — limite de FPS e distância
+        // de renderização — com o valor salvo atual.
+        const fpsCap = gfx.fpsCap || 0;
+        document.getElementById("gfx-fpscap").value = String(fpsCap);
+        document.getElementById("gfx-fpscap-label").textContent = GFX_FPSCAP_LABELS[fpsCap] || `${fpsCap} fps`;
+        const renderDist = gfx.renderDistance || "longa";
+        document.getElementById("gfx-renderdist").value = renderDist;
+        document.getElementById("gfx-renderdist-label").textContent = GFX_RENDERDIST_LABELS[renderDist] || "Longa";
+        const shadowQuality = gfx.shadowQuality || "alta";
+        document.getElementById("gfx-shadowquality").value = shadowQuality;
+        document.getElementById("gfx-shadowquality-label").textContent = GFX_SHADOWQUALITY_LABELS[shadowQuality] || "Alta";
         openModal("graphics-settings-modal");
     }
     function setGfxQualityFromSlider(idx) {
@@ -13043,6 +14113,44 @@ const UI = (() => {
     }
     function setGfxToggle(key, checked) {
         ThreeManager.setGraphicsSettings({ [key]: checked });
+        if (key === "detailedStats") _toggleDetailedStatsPanel(checked);
+    }
+    // (nova função a pedido do usuário) Painel de estatísticas detalhadas —
+    // mostra/esconde o texto de draw calls/triângulos junto ao contador de
+    // FPS. Só existe visualmente quando ligado — quando desligado nem o
+    // texto é atualizado (ver _renderLoop), pra não gastar CPU à toa lendo
+    // renderer.info todo segundo sem ninguém estar olhando.
+    function _toggleDetailedStatsPanel(on) {
+        const el = document.getElementById("detailed-stats");
+        if (el) el.style.display = on ? "" : "none";
+    }
+    // (nova função a pedido do usuário) Limite de FPS — 0 = ilimitado.
+    function setGfxFpsCap(fps) {
+        document.getElementById("gfx-fpscap-label").textContent = GFX_FPSCAP_LABELS[fps] || `${fps} fps`;
+        ThreeManager.setGraphicsSettings({ fpsCap: fps });
+        showToast(fps > 0 ? `🎯 FPS travado em ${fps}` : "🎯 FPS ilimitado");
+    }
+    // (nova função a pedido do usuário) Distância de renderização (fog + far
+    // plane da câmera) — reduzir ajuda bastante o FPS em mapas grandes.
+    function setGfxRenderDistance(dist) {
+        document.getElementById("gfx-renderdist-label").textContent = GFX_RENDERDIST_LABELS[dist] || dist;
+        ThreeManager.setGraphicsSettings({ renderDistance: dist });
+        showToast(`🌫️ Distância de renderização: ${GFX_RENDERDIST_LABELS[dist] || dist}`);
+    }
+    // (nova função a pedido do usuário) Qualidade/resolução do mapa de
+    // sombra — separado do liga/desliga de sombra: dá pra manter sombra
+    // ligada mas numa resolução mais leve pra GPU.
+    function setGfxShadowQuality(q) {
+        document.getElementById("gfx-shadowquality-label").textContent = GFX_SHADOWQUALITY_LABELS[q] || q;
+        ThreeManager.setGraphicsSettings({ shadowQuality: q });
+        showToast(`🔲 Qualidade da sombra: ${GFX_SHADOWQUALITY_LABELS[q] || q}`);
+    }
+    // (nova função a pedido do usuário) Aplica o preset "leve e bonito" e
+    // repopula o modal pra mostrar os controles já no novo estado.
+    function applyBalancedGfxPreset() {
+        ThreeManager.applyBalancedGfxPreset();
+        openGraphicsSettings();
+        showToast("🌿 Configurações gráficas: padrão leve e bonito aplicado.");
     }
     function resetGraphicsSettings() {
         ThreeManager.resetGraphicsSettings();
@@ -13572,7 +14680,7 @@ const UI = (() => {
 
     return { log, clearConsole, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
               openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
-              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, resetGraphicsSettings };
+              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxFpsCap, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
 })();
 
 /* ================================================================
@@ -13647,8 +14755,19 @@ const App = (() => {
 
     /** Autosave periódico — só grava se algo mudou desde o último save ── função nova */
     function _startAutosaveLoop() {
+        // Otimização · requestIdleCallback (nova função) — serializar a
+        // árvore inteira em JSON (quickSave) pode custar alguns milissegundos
+        // num mapa grande; se isso rodar bem no meio de um frame de render,
+        // pode causar uma engasgada perceptível (frame drop) justamente
+        // porque o navegador tinha acabado de terminar um trabalho pesado.
+        // requestIdleCallback só executa quando o navegador está mesmo
+        // ocioso (sobrou tempo depois de render/layout/input daquele
+        // período), então o autosave nunca compete pelo mesmo tempo de CPU
+        // que a engine precisa pra manter o FPS. Fallback pra setTimeout em
+        // navegadores sem suporte (ex.: Safari mais antigo).
+        const scheduleIdle = window.requestIdleCallback || (fn => setTimeout(fn, 1));
         setInterval(() => {
-            if (_dirtySinceAutosave) quickSave(true);
+            if (_dirtySinceAutosave) scheduleIdle(() => quickSave(true));
         }, 20000); // a cada 20s
         window.addEventListener("beforeunload", () => { if (_dirtySinceAutosave) quickSave(true); });
     }
@@ -15862,6 +16981,26 @@ const Multiplayer = (() => {
     let _p2pConnecting = false;     // evita tentar conectar/hospedar duas vezes ao mesmo tempo
     let _p2pWarnedNoLib = false;    // evita repetir o aviso de "PeerJS não carregou" a cada poll
 
+    /* ── (nova função a pedido do usuário) Chat de VOZ por proximidade ────
+       Reaproveita a mesma conexão PeerJS/topologia estrela do sync do
+       editor — só que aqui cada PAR de membros com voz ligada abre uma
+       ligação de mídia (peer.call) DIRETA entre si (sem passar pelo host),
+       pra não sobrecarregar quem está hospedando. Pra isso, cada membro
+       precisa saber o peer ID REAL dos outros — o host é quem sabe (viu
+       cada conn.peer no handshake), então ele publica esse "roster"
+       (username -> peer ID real) toda vez que alguém entra/sai. O ID do
+       próprio host é sempre P2P_HOST_ID(code), então nem precisa roster
+       pra isso — todo mundo já consegue calcular sozinho. */
+    const _voiceRoster = new Map();   // (host) username -> peer ID real da DataConnection
+    let _remoteVoiceRoster = {};      // (cliente) roster recebido do host {username: peerId}
+    let _voiceOn = false;             // true enquanto MEU microfone está ativo
+    let _localVoiceStream = null;     // meu MediaStream de áudio (getUserMedia)
+    const _voicePeersOn = new Set();  // usernames que sinalizaram voz ligada (recebido via broadcast)
+    const _voiceCalls = new Map();    // username -> { call, audioEl }
+    let _voiceProximityTimer = null;
+    const VOICE_HEAR_DISTANCE = 40;   // (studs) além disso, volume zero
+    const VOICE_FULL_DISTANCE = 6;    // (studs) até aqui, volume máximo
+
     /* ── (nova função) SINCRONIZAÇÃO RESERVA (sem WebRTC) ─────────────────
        O WebRTC direto (acima) é rápido, mas depende da rede de cada pessoa
        conseguir abrir uma conexão direta — em redes mais fechadas (Wi-Fi de
@@ -16206,6 +17345,10 @@ const Multiplayer = (() => {
         if (_p2pRetryTimer) { clearTimeout(_p2pRetryTimer); _p2pRetryTimer = null; }
         if (_sceneBroadcastTimer) { clearTimeout(_sceneBroadcastTimer); _sceneBroadcastTimer = null; }
         if (_sceneTrailingTimer) { clearTimeout(_sceneTrailingTimer); _sceneTrailingTimer = null; }
+        // (nova função a pedido do usuário) o chat de voz depende inteiro
+        // da mesma sessão PeerJS — encerra tudo antes de destruir o Peer.
+        stopVoice();
+        _voiceRoster.clear(); _remoteVoiceRoster = {}; _voicePeersOn.clear();
         _peerConns.forEach(c => { try { c.close(); } catch (_) {} });
         _peerConns = new Map();
         if (_hostConn) { try { _hostConn.close(); } catch (_) {} _hostConn = null; }
@@ -16241,6 +17384,7 @@ const Multiplayer = (() => {
             try { peer = new Peer(P2P_HOST_ID(_code), { config: P2P_ICE_CONFIG }); }
             catch (_) { _p2pConnecting = false; return; }
             _peer = peer;
+            _wireVoiceCallHandler(peer);
             peer.on("open", () => {
                 _isHost = true; _p2pConnecting = false;
                 _p2pResetRetryBackoff(); // virei host com sucesso — volta o backoff pro valor base
@@ -16260,10 +17404,21 @@ const Multiplayer = (() => {
                     if (typeof Simulation !== "undefined" && Simulation.active) {
                         try { conn.send({ type: "play", active: true, by: (_me() || {}).username, ts: Date.now() }); } catch (_) {}
                     }
+                    // (nova função a pedido do usuário) chat de voz — guarda o
+                    // username (veio no metadata do connect) ligado ao peer ID
+                    // real dessa conexão, e avisa TODO MUNDO (inclusive quem
+                    // acabou de entrar) do roster atualizado, pra qualquer par
+                    // conseguir se ligar direto via peer.call().
+                    const uname = conn.metadata && conn.metadata.username;
+                    if (uname) {
+                        _voiceRoster.set(uname, conn.peer);
+                        try { conn.send({ type: "voice-roster", roster: _voiceRosterObj() }); } catch (_) {}
+                        _peerConns.forEach((c) => { if (c !== conn && c.open) { try { c.send({ type: "voice-roster", roster: _voiceRosterObj() }); } catch (_) {} } });
+                    }
                 });
                 conn.on("data", (msg) => _p2pOnHostReceive(conn, msg));
-                conn.on("close", () => _p2pRemoveConn(conn));
-                conn.on("error", () => _p2pRemoveConn(conn));
+                conn.on("close", () => { _p2pRemoveConn(conn); _p2pOnMemberGone(conn); });
+                conn.on("error", () => { _p2pRemoveConn(conn); _p2pOnMemberGone(conn); });
             });
             peer.on("error", (err) => {
                 _p2pConnecting = false;
@@ -16285,6 +17440,7 @@ const Multiplayer = (() => {
                 try { peer = new Peer({ config: P2P_ICE_CONFIG }); }
                 catch (_) { _p2pConnecting = false; return; }
                 _peer = peer;
+                _wireVoiceCallHandler(peer);
                 peer.on("open", () => { _p2pConnecting = false; _p2pConnectToHost(); });
                 peer.on("error", (err) => {
                     console.warn("[Multiplayer P2P] erro no peer cliente:", err && err.type);
@@ -16309,7 +17465,12 @@ const Multiplayer = (() => {
     function _p2pConnectToHost() {
         if (!_peer || !_code) return;
         let conn;
-        try { conn = _peer.connect(P2P_HOST_ID(_code), { reliable: true }); }
+        // (nova função a pedido do usuário) manda meu username junto do
+        // handshake — o host usa isso pra saber QUEM é cada DataConnection
+        // (necessário pro chat de voz: o host precisa apresentar o peer ID
+        // real de cada membro pros outros, ver _p2pBroadcastVoiceRoster).
+        const me0 = _me();
+        try { conn = _peer.connect(P2P_HOST_ID(_code), { reliable: true, metadata: { username: me0 && me0.username } }); }
         catch (_) { _p2pScheduleRetry(); return; }
         _hostConn = conn;
         let timedOut = false;
@@ -16333,6 +17494,206 @@ const Multiplayer = (() => {
 
     function _p2pRemoveConn(conn) {
         for (const [key, c] of _peerConns) { if (c === conn) _peerConns.delete(key); }
+    }
+
+    /** (nova função) Manda uma mensagem pra sala inteira via WebRTC — se eu
+     *  sou o host, retransmito pra cada conexão aberta; se sou cliente,
+     *  mando só pro host (que já retransmite os outros nos handlers de
+     *  receive). Usado pelo chat de texto e pela sinalização de voz. */
+    function _p2pBroadcastAll(msg) {
+        if (_isHost) {
+            _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (_hostConn && _hostConn.open) {
+            try { _hostConn.send(msg); } catch (_) {}
+        }
+    }
+
+    /** (host) Monta o roster atual {username: peerId real} a partir das
+     *  conexões conhecidas — mandado pra sala toda vez que alguém entra ou
+     *  sai, pra qualquer par conseguir se ligar direto (peer.call) pro chat
+     *  de voz. */
+    function _voiceRosterObj() {
+        const obj = {};
+        _voiceRoster.forEach((peerId, uname) => { obj[uname] = peerId; });
+        return obj;
+    }
+
+    /** (host) Um membro caiu — tira do roster de voz e avisa o resto. */
+    function _p2pOnMemberGone(conn) {
+        if (!_isHost) return;
+        const uname = conn && conn.metadata && conn.metadata.username;
+        if (!uname || !_voiceRoster.has(uname)) return;
+        _voiceRoster.delete(uname);
+        _peerConns.forEach((c) => { if (c.open) { try { c.send({ type: "voice-roster", roster: _voiceRosterObj() }); } catch (_) {} } });
+        _onVoicePeerGone(uname);
+    }
+
+    /** Liga o handler de chamada de voz recebida (peer.on("call")) — chamado
+     *  tanto na criação do Peer do host quanto do cliente, já que os dois
+     *  podem receber uma ligação de voz de outro membro. */
+    function _wireVoiceCallHandler(peer) {
+        peer.on("call", (call) => {
+            const uname = call.metadata && call.metadata.username;
+            try {
+                if (_voiceOn && _localVoiceStream) call.answer(_localVoiceStream);
+                else call.answer();
+            } catch (_) { return; }
+            if (uname) _attachVoiceCall(uname, call);
+        });
+    }
+
+    /** Descobre o peer ID real de um username pro chat de voz — o host já
+     *  sabe direto (guardou no handshake), quem é cliente usa o roster que
+     *  o host publicou (ver _voiceRosterObj / msg "voice-roster"). */
+    function _resolveVoicePeerId(username) {
+        const me = _me();
+        if (_isHost) {
+            if (me && username === me.username) return P2P_HOST_ID(_code);
+            return _voiceRoster.get(username) || null;
+        }
+        return _remoteVoiceRoster[username] || null;
+    }
+
+    /** Liga uma chamada de voz DIRETA com `username`, se: eu tenho meu
+     *  microfone ligado, essa pessoa já sinalizou voz ligada, ainda não
+     *  temos uma ligação com ela, e sou eu quem "deve" iniciar (evita os
+     *  dois lados ligarem ao mesmo tempo — só o username alfabeticamente
+     *  menor liga, o outro só responde). */
+    function _maybeCallVoicePeer(username) {
+        if (!_voiceOn || !_localVoiceStream || !_peer) return;
+        const me = _me();
+        if (!me || !username || username === me.username) return;
+        if (!_voicePeersOn.has(username)) return;
+        if (_voiceCalls.has(username)) return;
+        if (!(me.username < username)) return;
+        const peerId = _resolveVoicePeerId(username);
+        if (!peerId) return;
+        try {
+            const call = _peer.call(peerId, _localVoiceStream, { metadata: { username: me.username } });
+            if (call) _attachVoiceCall(username, call);
+        } catch (_) {}
+    }
+
+    /** Guarda a MediaConnection e cria o <audio> que toca o que chegar dela
+     *  (o volume desse <audio> é quem controla a "proximidade" — ver
+     *  _updateVoiceProximity, chamado a cada 250ms enquanto a voz está
+     *  ligada). */
+    function _attachVoiceCall(username, call) {
+        if (!call || !username) return;
+        let entry = _voiceCalls.get(username);
+        if (!entry) { entry = { call, audioEl: null }; _voiceCalls.set(username, entry); }
+        else entry.call = call;
+        call.on("stream", (remoteStream) => {
+            let e2 = _voiceCalls.get(username);
+            if (!e2) { e2 = { call, audioEl: null }; _voiceCalls.set(username, e2); }
+            if (!e2.audioEl) {
+                const audioEl = document.createElement("audio");
+                audioEl.autoplay = true;
+                audioEl.dataset.voiceUser = username;
+                document.body.appendChild(audioEl);
+                e2.audioEl = audioEl;
+            }
+            e2.audioEl.srcObject = remoteStream;
+        });
+        call.on("close", () => _onVoicePeerGone(username));
+        call.on("error", () => _onVoicePeerGone(username));
+    }
+
+    /** Encerra e limpa a ligação de voz com `username` (saiu da sala,
+     *  desligou o mic, caiu a conexão...). */
+    function _onVoicePeerGone(username) {
+        const entry = _voiceCalls.get(username);
+        if (!entry) return;
+        try { entry.call.close(); } catch (_) {}
+        if (entry.audioEl) { try { entry.audioEl.srcObject = null; entry.audioEl.remove(); } catch (_) {} }
+        _voiceCalls.delete(username);
+    }
+
+    function _updateVoiceButtonUI() {
+        const btn = document.getElementById("mp-voice-toggle-btn");
+        const icon = document.getElementById("mp-voice-toggle-icon");
+        const label = document.getElementById("mp-voice-toggle-label");
+        if (!btn || !icon) return;
+        if (_voiceOn) {
+            icon.className = "fa-solid fa-microphone text-emerald-300";
+            btn.classList.add("bg-emerald-800/90"); btn.classList.remove("bg-zinc-800/90");
+            if (label) label.textContent = "Voz (ligada)";
+        } else {
+            icon.className = "fa-solid fa-microphone-slash";
+            btn.classList.remove("bg-emerald-800/90"); btn.classList.add("bg-zinc-800/90");
+            if (label) label.textContent = "Voz";
+        }
+    }
+
+    /** (nova função a pedido do usuário) Liga/desliga o MEU microfone —
+     *  botão flutuante no canto do viewport durante o Play (ver
+     *  #mp-voice-toggle-btn). Quando ligado, abre uma ligação de voz DIRETA
+     *  (WebRTC) com cada outro membro que também estiver com a voz ligada,
+     *  e o volume de cada um é ajustado sozinho conforme a distância entre
+     *  os personagens no jogo (ver _updateVoiceProximity). */
+    async function toggleVoice() {
+        if (_voiceOn) { stopVoice(); return; }
+        if (!_code) { UI.showToast("⚠️ Entre numa sala antes de ativar o chat de voz."); return; }
+        const me = _me();
+        if (!me) { UI.showToast("⚠️ Entre numa conta antes de usar o chat de voz."); return; }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            UI.showToast("⚠️ Seu navegador não suporta captura de microfone."); return;
+        }
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch (_) { UI.showToast("⚠️ Não consegui acessar o microfone — verifique a permissão do navegador."); return; }
+        _localVoiceStream = stream;
+        _voiceOn = true;
+        _voicePeersOn.add(me.username);
+        _updateVoiceButtonUI();
+        _p2pBroadcastAll({ type: "voice-on", by: me.username });
+        Array.from(_voicePeersOn).forEach(_maybeCallVoicePeer);
+        _startVoiceProximityLoop();
+        UI.showToast("🎤 Chat de voz ligado — quanto mais perto de alguém no jogo, mais alto você escuta.");
+    }
+
+    /** Desliga meu microfone e encerra todas as ligações de voz ativas. */
+    function stopVoice() {
+        const wasOn = _voiceOn;
+        _voiceOn = false;
+        if (_localVoiceStream) { try { _localVoiceStream.getTracks().forEach(t => t.stop()); } catch (_) {} _localVoiceStream = null; }
+        Array.from(_voiceCalls.keys()).forEach(_onVoicePeerGone);
+        const me = _me();
+        if (me) {
+            _voicePeersOn.delete(me.username);
+            if (wasOn && _code) _p2pBroadcastAll({ type: "voice-off", by: me.username });
+        }
+        _stopVoiceProximityLoop();
+        _updateVoiceButtonUI();
+    }
+
+    function _startVoiceProximityLoop() {
+        _stopVoiceProximityLoop();
+        _voiceProximityTimer = setInterval(_updateVoiceProximity, 250);
+    }
+    function _stopVoiceProximityLoop() {
+        if (_voiceProximityTimer) { clearInterval(_voiceProximityTimer); _voiceProximityTimer = null; }
+    }
+    /** A cada 250ms, ajusta o volume de cada ligação de voz ativa conforme
+     *  a distância entre o MEU personagem e o do outro membro no mundo 3D
+     *  — perto (até VOICE_FULL_DISTANCE) ouve no talo, longe (a partir de
+     *  VOICE_HEAR_DISTANCE) não ouve mais nada, com um degradê no meio. */
+    function _updateVoiceProximity() {
+        if (!_voiceCalls.size) return;
+        const myPos = (typeof Simulation !== "undefined" && Simulation.getLocalPlayerPosition) ? Simulation.getLocalPlayerPosition() : null;
+        _voiceCalls.forEach((entry, username) => {
+            if (!entry.audioEl) return;
+            if (!myPos) { entry.audioEl.volume = 1; return; } // fora do Play (edição): sem falloff
+            const theirPos = (typeof Simulation !== "undefined" && Simulation.getRemotePlayerPosition) ? Simulation.getRemotePlayerPosition(username) : null;
+            if (!theirPos) { entry.audioEl.volume = 0.5; return; } // ainda não sei onde essa pessoa está
+            const dx = myPos.x - theirPos.x, dy = myPos.y - theirPos.y, dz = myPos.z - theirPos.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            let vol;
+            if (dist <= VOICE_FULL_DISTANCE) vol = 1;
+            else if (dist >= VOICE_HEAR_DISTANCE) vol = 0;
+            else vol = 1 - (dist - VOICE_FULL_DISTANCE) / (VOICE_HEAR_DISTANCE - VOICE_FULL_DISTANCE);
+            entry.audioEl.volume = Math.max(0, Math.min(1, vol));
+        });
     }
 
     /** Verdadeiro se eu tenho, AGORA, um jeito de mandar/receber a cena
@@ -16454,6 +17815,17 @@ const Multiplayer = (() => {
                 try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim); } catch (_) {}
             }
             _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (msg.type === "chat") {
+            // (nova função a pedido do usuário) chat de texto em tempo real —
+            // some no editor E no overlay do Play, sem esperar o poll do
+            // GitHub. Ainda gravamos no GitHub também (ver sendRoomChat) só
+            // pra dar histórico pra quem entrar depois / sem WebRTC.
+            _applyIncomingChat(msg.msg);
+            _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (msg.type === "voice-on" || msg.type === "voice-off") {
+            if (msg.type === "voice-on") _voicePeersOn.add(msg.by); else { _voicePeersOn.delete(msg.by); _onVoicePeerGone(msg.by); }
+            _maybeCallVoicePeer(msg.by);
+            _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
         }
     }
 
@@ -16475,6 +17847,15 @@ const Multiplayer = (() => {
             if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
                 try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim); } catch (_) {}
             }
+        } else if (msg.type === "chat") {
+            _applyIncomingChat(msg.msg);
+        } else if (msg.type === "voice-roster") {
+            _remoteVoiceRoster = msg.roster || {};
+            // Se eu já tinha a voz ligada, tenta ligar com quem entrou novo.
+            if (_voiceOn) Object.keys(_remoteVoiceRoster).forEach(_maybeCallVoicePeer);
+        } else if (msg.type === "voice-on" || msg.type === "voice-off") {
+            if (msg.type === "voice-on") _voicePeersOn.add(msg.by); else { _voicePeersOn.delete(msg.by); _onVoicePeerGone(msg.by); }
+            _maybeCallVoicePeer(msg.by);
         }
     }
 
@@ -16675,6 +18056,11 @@ const Multiplayer = (() => {
         if (!me) { UI.showToast("⚠️ Entre numa conta antes de usar o chat."); return; }
         if (!GithubStorage.hasConfig()) { UI.showToast("⚠️ Configure o repositório do GitHub antes de usar o chat."); return; }
         const msg = { id: _reqId(), username: me.username, text: text.slice(0, 500), ts: Date.now() };
+        // (nova função a pedido do usuário) entrega instantânea via WebRTC —
+        // a gravação no GitHub abaixo continua rolando em paralelo, só pra
+        // persistir/histórico (quem não tem WebRTC ainda pega pelo poll).
+        _applyIncomingChat(msg);
+        _p2pBroadcastAll({ type: "chat", msg });
         for (let tries = 0; tries < 4; tries++) {
             const fresh = await _ghGet(CHAT_PATH(_code));
             if (!fresh.ok) { UI.showToast("⚠️ Não consegui enviar: " + (fresh.error || "")); return; }
@@ -16690,6 +18076,18 @@ const Multiplayer = (() => {
             // 409 = outro membro escreveu no meio do caminho — relê e tenta de novo
         }
         UI.showToast("⚠️ Muita gente escrevendo no chat ao mesmo tempo — tente de novo.");
+    }
+
+    /** (nova função a pedido do usuário) Aplica uma mensagem de chat vinda
+     *  via WebRTC (minha ou de outro membro) na lista local, sem esperar o
+     *  poll do GitHub — dedup por id (a mesma mensagem também chega depois
+     *  pelo poll, já persistida). */
+    function _applyIncomingChat(msg) {
+        if (!msg || !msg.id) return;
+        if (_roomChat.some(m => m.id === msg.id)) return;
+        _roomChat = [..._roomChat, msg].slice(-CHAT_MAX_MESSAGES);
+        _lastRoomChatSig = JSON.stringify(_roomChat);
+        _renderRoomChat();
     }
 
     /** Chamado pelo botão/Enter do campo de chat da sala. */
@@ -16717,27 +18115,59 @@ const Multiplayer = (() => {
     }
 
     function _renderRoomChat() {
-        const box = document.getElementById("mp-room-chat-list");
-        if (!box || !_code) return;
+        if (!_code) return;
+        _fillChatBox(document.getElementById("mp-room-chat-list"), false);
+        // (nova função a pedido do usuário) mesma lista, num balão
+        // compacto sobre o viewport 3D — só quando o Play está ativo numa
+        // sala (ver Simulation._start/_stop, que mostram/escondem o div).
+        _fillChatBox(document.getElementById("play-chat-list"), true);
+    }
+
+    /** Preenche UM container de chat (painel da sala OU overlay do Play)
+     *  com as mensagens de _roomChat. `compact` deixa o balão mais
+     *  discreto (fundo semi-transparente, texto menor) pra não atrapalhar
+     *  a visão do jogo. */
+    function _fillChatBox(box, compact) {
+        if (!box) return;
         const me = _me();
         box.innerHTML = "";
         if (!_roomChat.length) {
-            box.innerHTML = `<div class="text-zinc-600 text-[10px] text-center py-2">Nenhuma mensagem ainda — diga oi pra galera da sala!</div>`;
+            if (!compact) box.innerHTML = `<div class="text-zinc-600 text-[10px] text-center py-2">Nenhuma mensagem ainda — diga oi pra galera da sala!</div>`;
             return;
         }
-        _roomChat.forEach(m => {
+        // No overlay compacto, mostra só as últimas mensagens (senão lota o
+        // canto da tela), sempre da mais antiga (topo) pra mais nova
+        // (embaixo) — igual ao chat do painel da sala.
+        const list = compact ? _roomChat.slice(-6) : _roomChat;
+        list.forEach(m => {
             const mine = !!(me && m.username === me.username);
             const row = document.createElement("div");
             row.className = `flex flex-col ${mine ? "items-end" : "items-start"}`;
             const time = new Date(m.ts || 0).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const bubbleClass = compact
+                ? `max-w-[90%] text-[11px] px-2 py-1 rounded-lg break-words backdrop-blur ${mine ? "bg-sky-700/80 text-white" : "bg-black/55 text-zinc-100"}`
+                : `max-w-[85%] text-xs px-2 py-1 rounded-lg break-words ${mine ? "bg-sky-700 text-white" : "bg-zinc-700 text-zinc-100"}`;
             row.innerHTML = `
-                <span class="text-[9px] text-zinc-500">${mine ? "você" : m.username} · ${time}</span>
-                <span class="max-w-[85%] text-xs px-2 py-1 rounded-lg break-words ${mine ? "bg-sky-700 text-white" : "bg-zinc-700 text-zinc-100"}"></span>`;
+                <span class="text-[9px] ${compact ? "text-zinc-300 drop-shadow" : "text-zinc-500"}">${mine ? "você" : m.username} · ${time}</span>
+                <span class="${bubbleClass}"></span>`;
             row.querySelector("span:last-child").textContent = m.text || "";
             box.appendChild(row);
         });
         box.scrollTop = box.scrollHeight;
     }
+
+    /** Chamado pelo Enter no campo de chat que fica flutuando sobre o
+     *  viewport durante o Play (ver #play-chat-input). */
+    function submitPlayChat() {
+        const input = document.getElementById("play-chat-input");
+        if (!input) return;
+        const text = input.value;
+        input.value = "";
+        sendRoomChat(text);
+    }
+    /** Atualiza o balão de chat do Play assim que ele aparece (entrar em
+     *  Play já numa sala) — sem isso ficaria vazio até a próxima mensagem. */
+    function refreshPlayChat() { _renderRoomChat(); }
 
     /* ── Coroa / render do painel ── */
     function _activeMembers() {
@@ -17208,6 +18638,10 @@ const Multiplayer = (() => {
         // (nova função a pedido do usuário) posição/rotação do meu jogador durante o Play
         notifyPlayerTransform,
         sendRoomChat, submitRoomChat,
+        // (nova função a pedido do usuário) chat de texto flutuante durante o Play
+        submitPlayChat, refreshPlayChat,
+        // (nova função a pedido do usuário) chat de voz por proximidade
+        toggleVoice, stopVoice,
         // (nova função) arquivo de amizade por pessoa, usado pelo Account
         readUserFile, writeUserFile,
     };
@@ -17250,6 +18684,10 @@ const Simulation = (() => {
     let _playerRigNodes  = {};          // nome-da-Part -> node da árvore (p/ ler a pose animada por Animator:Play() — função nova)
     let _playerRigMinY   = 0;           // mesmo offset de reancoragem usado na hora de montar o rig (ver _buildPlayerRigFromStarterPlayer)
     let _playerRigModelId = null;       // (nova função a pedido do usuário) id do Model usado no rig — basta isso pra descobrir, a qualquer momento, QUAL Animator dele está tocando (Parado/Andar/Correr/Pular), sem duplicar nenhum dado de posição
+    // (nova função · "mais liberdade pros Scripts") espelha o valor acima que
+    // já foi avisado pros Scripts via Players.LocalPlayer.CharacterAdded/
+    // CharacterRemoving — evita disparar o mesmo evento repetido todo frame.
+    let _lastCharacterIdFiredToLua = null;
     let _equippedTool    = null;        // { toolId, mesh } — Tool atualmente na mão do player
     let _equippedSlotKey = null;        // slot do inventário que gerou o Tool equipado atual
 
@@ -18220,6 +19658,14 @@ const Simulation = (() => {
         document.getElementById("viewport-section").classList.add("play-fullscreen-viewport");
         document.getElementById("play-mode-stop-bar").classList.remove("hidden");
         document.getElementById("physics-badge").classList.add("visible");
+        // (nova função a pedido do usuário) Chat/voz da sala só aparecem no
+        // Play quando o usuário está mesmo numa sala multiplayer.
+        if (typeof Multiplayer !== "undefined" && Multiplayer.isInRoom && Multiplayer.isInRoom()) {
+            document.getElementById("play-chat-overlay").classList.remove("hidden");
+            document.getElementById("mp-voice-toggle-btn").classList.remove("hidden");
+            document.getElementById("mp-voice-toggle-btn").classList.add("flex");
+            if (Multiplayer.refreshPlayChat) Multiplayer.refreshPlayChat();
+        }
 
         // ── Ativa câmera com mouse-look — função nova ──
         _yaw = Math.PI;   // câmera inicia atrás do jogador, olhando para frente (-z)
@@ -18271,14 +19717,10 @@ const Simulation = (() => {
         const splyFov = Tree.find("sply");
         if (splyFov?.properties?.FOV) ThreeManager.setFOV(splyFov.properties.FOV);
 
-        // 4.5. Sincroniza Health/WalkSpeed/JumpPower do Humanoid dentro de
-        // StarterPlayer/1_ScriptsDoPlayer/R6 (editável pelo usuário) com o
-        // player real, pra esses valores realmente funcionarem no Play.
-        const rigHumanoid = Tree.find("sply_p1_hum");
-        if (rigHumanoid?.properties && splyFov) {
-            if (rigHumanoid.properties.WalkSpeed) splyFov.properties.WalkSpeed = rigHumanoid.properties.WalkSpeed;
-            if (rigHumanoid.properties.JumpPower) splyFov.properties.JumpPower = rigHumanoid.properties.JumpPower;
-        }
+        // 4.5. WalkSpeed/JumpPower agora moram só em StarterPlayer (o
+        // Humanoid do rig ficou limpo, sem essas propriedades) — o script
+        // MovimentoCameraPulo e o loop de update() já leem direto daqui,
+        // então não precisa mais sincronizar nada aqui.
 
         UI.log("▶ Modo Play ativo — Física Cannon.js (gravidade, colisões reais).", "success");
         Plugins.runHook("playStart");
@@ -18294,6 +19736,7 @@ const Simulation = (() => {
         _clearRemotePlayers(); // (nova função) some com os bonecos dos outros jogadores da sala também
         if (_equippedTool?.videoEl) { _equippedTool.videoEl.pause(); _equippedTool.videoEl.src = ""; }
         _equippedTool = null; _equippedSlotKey = null; _playerRigParts = {}; _playerRigNodes = {}; _playerRigMinY = 0;
+        _playerRigModelId = null; _lastCharacterIdFiredToLua = null;
         _keys = {};
         _freeCam3p = false; _orbitDrag = false;
         _updateFreeCamButton();
@@ -18311,17 +19754,21 @@ const Simulation = (() => {
             ["viewport-section", ["play-fullscreen-viewport"]],
             ["play-mode-stop-bar", null], // tratado abaixo (add, não remove)
             ["physics-badge",      null], // tratado abaixo (remove "visible")
+            ["play-chat-overlay",  null], // tratado abaixo (add, não remove)
         ].forEach(([id, classes]) => {
             try {
                 const el = document.getElementById(id);
                 if (!el) return;
                 if (id === "play-mode-stop-bar") { el.classList.add("hidden"); return; }
                 if (id === "physics-badge")      { el.classList.remove("visible"); return; }
+                if (id === "play-chat-overlay")  { el.classList.add("hidden"); return; }
                 el.classList.remove(...classes);
             } catch (err) {
                 console.error(`[Simulation._stop] Falha ao restaurar #${id}:`, err);
             }
         });
+        // (nova função a pedido do usuário) Sai do chat de voz junto com o Stop
+        if (typeof Multiplayer !== "undefined" && Multiplayer.stopVoice) { try { Multiplayer.stopVoice(); } catch (_) {} }
 
         // Garante que o layout recalcule as dimensões reais (o ResizeObserver
         // do viewport depende disso para redimensionar o renderer do Three.js
@@ -18734,6 +20181,17 @@ const Simulation = (() => {
         // só dependem de Heartbeat (sem mexer no player/física) continuarem
         // rodando normalmente mesmo em cenas sem StarterPlayer.
         LuaEngine.heartbeat(dt);
+        // (nova função · "mais liberdade pros Scripts", igual ao Roblox Studio
+        // de verdade) Players.LocalPlayer.Character só existia como leitura
+        // estática — scripts que seguem o padrão real
+        // `player.Character or player.CharacterAdded:Wait()` ficavam presos
+        // pra sempre se rodassem antes do spawn. Agora, sempre que o Model
+        // do rig muda (spawnou ou foi destruído), avisa os Scripts.
+        if (_playerRigModelId !== _lastCharacterIdFiredToLua) {
+            if (_playerRigModelId) LuaEngine.fireEvent("__Players", "CharacterAdded", [_playerRigModelId]);
+            else if (_lastCharacterIdFiredToLua) LuaEngine.fireEvent("__Players", "CharacterRemoving", [_lastCharacterIdFiredToLua]);
+            _lastCharacterIdFiredToLua = _playerRigModelId;
+        }
         // (nova função · categoria Animações) Avança qualquer Animator tocando
         // via animator:Play() num Script — funciona mesmo em cenas sem
         // StarterPlayer, por isso fica antes do early-return também.
@@ -18798,6 +20256,22 @@ const Simulation = (() => {
         _playerBody.velocity.x += (targetVX - _playerBody.velocity.x) * accelT;
         _playerBody.velocity.z += (targetVZ - _playerBody.velocity.z) * accelT;
 
+        /* ─ (correção) Movimento no ar mais rápido que no chão ─
+           _world.defaultContactMaterial.friction (usado em TODO contato,
+           inclusive pé-do-player x chão) freava a velocidade horizontal
+           durante o _world.step() só quando o player estava encostado no
+           chão — no ar, sem contato, não havia fricção nenhuma segurando
+           essa velocidade. Resultado: no ar o personagem chegava na
+           velocidade "spd" cheia, e no chão ficava sempre um pouco abaixo
+           disso, dando a sensação de "andar mais rápido no ar". Guardamos
+           aqui a velocidade horizontal já calculada (a que realmente
+           queremos) pra restaurar depois do step, assim chão e ar sempre
+           terminam com a MESMA velocidade horizontal — todo o controle de
+           movimento fica só neste código, a física cuida apenas de
+           colisão/gravidade, não mais de frear o andar. */
+        const preStepVX = _playerBody.velocity.x;
+        const preStepVZ = _playerBody.velocity.z;
+
         /* ─ Pulo (Melhoria #8 + pulo duplo/triplo — função nova) ─
            coyote time + jump buffer pro 1º pulo, como em jogos "de verdade":
            dá uma pequena folga pra pular logo ao sair de uma borda, e guarda
@@ -18839,6 +20313,14 @@ const Simulation = (() => {
 
         /* ─ Avança o mundo físico ─ */
         _world.step(1 / 60, dt, 3);
+
+        /* ─ (correção — continuação) Restaura a velocidade horizontal ao
+           valor calculado ANTES do step, ignorando o quanto a fricção do
+           contato com o chão tirou dela — mantém X/Z do jogador igual
+           estando no chão ou no ar. O Y (gravidade/pulo) fica intocado,
+           só a física mesmo decide ele. */
+        _playerBody.velocity.x = preStepVX;
+        _playerBody.velocity.z = preStepVZ;
 
         /* ─ Detecta aterrissagem (transição ar → chão) p/ som de pouso ─ */
         const groundedAfterStep = _checkGrounded();
@@ -19034,12 +20516,35 @@ const Simulation = (() => {
        comparação, o recálculo de verdade acontece 1x no próximo frame. */
     function refreshEquippedTool() { _equippedSlotKey = null; }
 
-    return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, get active() { return _active; },
+    /** (nova função a pedido do usuário) Posição atual do MEU player no
+     *  mundo — usada pelo chat de voz por proximidade (Multiplayer) pra
+     *  calcular a distância até cada outro membro da sala. Retorna null
+     *  fora do Play (não faz sentido calcular proximidade sem personagem). */
+    function getLocalPlayerPosition() {
+        if (!_active || !_player) return null;
+        return { x: _player.position.x, y: _player.position.y, z: _player.position.z };
+    }
+    /** (nova função a pedido do usuário) Posição do boneco de outro membro
+     *  da sala (já interpolada, ver _updateRemotePlayers), pelo mesmo
+     *  username usado em applyRemotePlayerTransform. */
+    function getRemotePlayerPosition(username) {
+        const rp = _remotePlayers.get(username);
+        if (!rp || !rp.group) return null;
+        return { x: rp.group.position.x, y: rp.group.position.y, z: rp.group.position.z };
+    }
+
+    // (nova função · "mais liberdade pros Scripts") id do Model do rig atual
+    // — usado pelo __HOST da LuaEngine pra montar Players.LocalPlayer.Character
+    // de verdade, em vez do jogo Lua nunca ter acesso a quem é o personagem.
+    function getLocalPlayerCharacterId() { return _active ? _playerRigModelId : null; }
+    return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, getLocalPlayerCharacterId, get active() { return _active; },
              getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId,
              // (nova função a pedido do usuário) Play/Stop sincronizado entre membros da sala
              applyRemotePlayState,
              // (nova função a pedido do usuário) bonecos dos outros jogadores da sala durante o Play
-             applyRemotePlayerTransform, removeRemotePlayer };
+             applyRemotePlayerTransform, removeRemotePlayer,
+             // (nova função a pedido do usuário) posições pro chat de voz por proximidade
+             getLocalPlayerPosition, getRemotePlayerPosition };
 })();
 
 /* ================================================================
@@ -19498,6 +21003,17 @@ function setupKeyboard() {
             if (k==='l') Simulation.requestPointerLock();
             if (k==='v') Simulation.toggleCameraMode();
             if (k==='c') Simulation.toggleFreeCam();
+            // (nova função a pedido do usuário) Enter abre o chat da sala
+            // flutuando sobre o viewport — só se o balão estiver visível
+            // (ou seja, só numa sala multiplayer, ver Simulation._start).
+            if (e.key==='Enter') {
+                const chatInput = document.getElementById('play-chat-input');
+                const overlay = document.getElementById('play-chat-overlay');
+                if (chatInput && overlay && !overlay.classList.contains('hidden')) {
+                    e.preventDefault();
+                    chatInput.focus();
+                }
+            }
         }
     });
     window.addEventListener('keyup', e => Simulation.keyUp(e.key));
@@ -19626,3 +21142,4 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
