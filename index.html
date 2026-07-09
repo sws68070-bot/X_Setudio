@@ -437,6 +437,24 @@
             <input type="password" id="account-login-password" placeholder="Senha" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-emerald-500">
             <button onclick="Account.submitLogin()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs">Entrar</button>
             <button onclick="Account.openSignup()" class="text-zinc-500 hover:text-zinc-300 text-[10px] text-center">Não tem conta? Cadastre-se</button>
+
+            <!-- (nova função a pedido do usuário) Duas formas de entrar sem
+                 digitar usuário/senha: colar o token do GitHub (conecta no
+                 repositório padrão e busca a conta de lá) ou carregar um
+                 arquivo de backup (.json) baixado antes em Configurações →
+                 Backup local — restaura tudo neste navegador e já entra
+                 logado, sem precisar de internet. -->
+            <div class="border-t studio-border pt-2 mt-1 flex flex-col gap-1.5">
+                <span class="text-zinc-600 text-[9px] text-center">Já tem conta salva em outro navegador?</span>
+                <button type="button" onclick="document.getElementById('account-login-token-box').classList.toggle('hidden')" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5"><i class="fa-brands fa-github"></i> Tenho um token do GitHub</button>
+                <div id="account-login-token-box" class="hidden flex gap-1.5">
+                    <input type="password" id="account-login-token-input" placeholder="ghp_... ou github_pat_..." class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-emerald-500">
+                    <button type="button" onclick="Account.quickConnectToken('account-login-token-input')" class="px-2.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white text-[10px] font-bold">Conectar</button>
+                </div>
+
+                <button type="button" onclick="document.getElementById('account-login-file-input').click()" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5"><i class="fa-solid fa-file-arrow-up"></i> Carregar arquivo de conta (.json)</button>
+                <input type="file" id="account-login-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onFileSelected(this)">
+            </div>
         </div>
     </div>
 </div>
@@ -457,6 +475,18 @@
             <p class="text-zinc-600 text-[10px] leading-relaxed -mt-1">Não precisa de token do GitHub pra criar a conta — ela já fica salva neste navegador. O token é opcional, só pra quem quiser entrar na mesma conta de outro computador (configurável depois em Configurações → Repositório de dados).</p>
             <button onclick="Account.submitSignup()" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs">Criar conta</button>
             <button onclick="Account.openLogin()" class="text-zinc-500 hover:text-zinc-300 text-[10px] text-center">Já tem conta? Entrar</button>
+
+            <!-- (nova função a pedido do usuário) Só o botão de token aqui
+                 (sem arquivo — cadastro é sempre de conta nova). Cola o
+                 token e conecta no repositório padrão antes de criar a
+                 conta, pra ela já nascer sincronizável em outros navegadores. -->
+            <div class="border-t studio-border pt-2 mt-1 flex flex-col gap-1.5">
+                <button type="button" onclick="document.getElementById('account-signup-token-box').classList.toggle('hidden')" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5"><i class="fa-brands fa-github"></i> Já tenho um token do GitHub</button>
+                <div id="account-signup-token-box" class="hidden flex gap-1.5">
+                    <input type="password" id="account-signup-token-input" placeholder="ghp_... ou github_pat_..." class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+                    <button type="button" onclick="Account.quickConnectToken('account-signup-token-input')" class="px-2.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white text-[10px] font-bold">Conectar</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -630,6 +660,11 @@
         <div id="account-switcher-list" class="p-3 flex flex-col gap-2 overflow-y-auto"></div>
         <div class="p-3 border-t studio-border flex flex-col gap-2">
             <button onclick="Account.closeAccountSwitcher(); Account.openSignup();" class="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs flex items-center gap-2 justify-center"><i class="fa-solid fa-user-plus"></i> Adicionar conta</button>
+            <!-- (nova função a pedido do usuário) Adicionar conta a partir de
+                 um arquivo de backup (.json) — mesmo mecanismo do Backup local
+                 das Configurações, só que acessível direto daqui. -->
+            <button onclick="document.getElementById('account-switcher-file-input').click()" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-2 justify-center"><i class="fa-solid fa-file-arrow-up"></i> Carregar arquivo de conta</button>
+            <input type="file" id="account-switcher-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onFileSelected(this)">
             <button onclick="Account.closeAccountSwitcher()" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs">Cancelar</button>
         </div>
     </div>
@@ -17163,6 +17198,24 @@ const Account = (() => {
     /* ── Modais de Entrar / Cadastrar ── */
     function openLogin() { UI.closeModal("account-signup-modal"); UI.openModal("account-login-modal"); }
     function openSignup() { UI.closeModal("account-login-modal"); UI.openModal("account-signup-modal"); }
+
+    /** (nova função a pedido do usuário) Conecta o repositório do GitHub só
+     *  colando o token — usado pelos botões de token nos modais de Entrar/
+     *  Cadastrar, pra quem já tem conta noutro navegador não precisar abrir
+     *  Configurações antes de logar. Reaproveita owner/repo/branch/path já
+     *  salvos (ou o repositório padrão do projeto) — só o token muda. */
+    function quickConnectToken(tokenInputId) {
+        const el = document.getElementById(tokenInputId);
+        const token = (el?.value || "").trim();
+        if (!token) { UI.showToast("⚠️ Cole o token primeiro."); return; }
+        const DEFAULT_OWNER = "sws68070-bot", DEFAULT_REPO = "Dados", DEFAULT_BRANCH = "main", DEFAULT_PATH = "toolbox-catalog.json";
+        const cfg = GithubStorage.getConfig();
+        const owner = cfg?.owner || DEFAULT_OWNER, repo = cfg?.repo || DEFAULT_REPO;
+        GithubStorage.saveConfig({ token, owner, repo, branch: cfg?.branch || DEFAULT_BRANCH, path: cfg?.path || DEFAULT_PATH });
+        if (el) el.value = "";
+        UI.showToast(`✅ Conectado a ${owner}/${repo} — agora é só preencher usuário e senha.`);
+        try { _renderGithubFieldsInline(); } catch (_) {}
+    }
     async function submitLogin() {
         UI.showToast("🔄 Entrando...");
         const res = await login(document.getElementById("account-login-username").value, document.getElementById("account-login-password").value);
@@ -17651,7 +17704,7 @@ const Account = (() => {
         applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
         addFriend, submitAddFriend, searchFriendCandidates, removeFriend, acceptFriendRequest, declineFriendRequest,
         sendMessage, submitMessage, getConversation,
-        openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup,
+        openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup, quickConnectToken,
         openSettingsSidebar, closeSettingsSidebar, openMyToolboxItems, openAccountSwitcher,
         closeAccountSwitcher, openAddFriend, openNotifications, renderAll,
         saveGithubConfigInline, disconnectGithubInline,
