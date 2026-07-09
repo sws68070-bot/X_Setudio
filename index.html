@@ -451,6 +451,10 @@
         <div class="p-4 flex flex-col gap-3">
             <input type="text" id="account-signup-username" placeholder="Escolha um usuário" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-orange-500">
             <input type="password" id="account-signup-password" placeholder="Escolha uma senha" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-orange-500">
+            <!-- (nova função a pedido do usuário) Deixa claro que dá pra criar
+                 a conta sem token nenhum — o token do GitHub é só opcional,
+                 pra quem quiser acessar a mesma conta de outro computador. -->
+            <p class="text-zinc-600 text-[10px] leading-relaxed -mt-1">Não precisa de token do GitHub pra criar a conta — ela já fica salva neste navegador. O token é opcional, só pra quem quiser entrar na mesma conta de outro computador (configurável depois em Configurações → Repositório de dados).</p>
             <button onclick="Account.submitSignup()" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-xs">Criar conta</button>
             <button onclick="Account.openLogin()" class="text-zinc-500 hover:text-zinc-300 text-[10px] text-center">Já tem conta? Entrar</button>
         </div>
@@ -556,6 +560,37 @@
             <p class="text-zinc-600 text-[9px] leading-relaxed border-t studio-border pt-1.5 mt-1">
                 Crie o token em github.com → Settings → Developer settings → Fine-grained tokens, com permissão de leitura/escrita em <b class="text-zinc-400">Contents</b> só neste repositório. Esse mesmo repositório passa a guardar sua conta, amizades, salas e o catálogo do Toolbox.
             </p>
+        </div>
+
+        <div class="border-t studio-border"></div>
+
+        <!-- ═══ (nova função a pedido do usuário) Backup local em arquivo —
+             não depende de internet nem de GitHub: baixa TUDO que está
+             salvo neste navegador (conta, senha em hash, amizades,
+             mensagens, projetos salvos/publicados, plugins, configurações
+             gráficas/VR e o token do GitHub, se houver) num único arquivo
+             .json, e permite carregar esse arquivo de volta — aqui mesmo
+             ou em outro navegador/computador — pra restaurar tudo. ═══ -->
+        <div class="flex flex-col gap-2 bg-studio-input border studio-border rounded px-3 py-2">
+            <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-solid fa-floppy-disk text-sky-400"></i> Backup local (arquivo)</span>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">Salva tudo o que está guardado neste navegador — conta, amizades, mensagens, projetos, plugins e o token do GitHub (se houver) — num arquivo .json. Não precisa de internet nem de repositório configurado.</p>
+            <span id="backup-local-status" class="text-[10px] text-zinc-500"></span>
+
+            <button onclick="LocalBackup.download()" class="w-full px-3 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> Baixar backup (.json)</button>
+
+            <label class="text-zinc-400 text-[10px] font-bold mt-1">Carregar um backup</label>
+            <div id="backup-drop-zone"
+                 class="border-2 border-dashed studio-border rounded-lg px-3 py-4 flex flex-col items-center gap-1.5 cursor-pointer text-center transition-colors"
+                 onclick="document.getElementById('backup-file-input').click()"
+                 ondragover="LocalBackup.handleDragOver(event)"
+                 ondragleave="LocalBackup.handleDragLeave(event)"
+                 ondrop="LocalBackup.handleDrop(event)">
+                <i class="fa-solid fa-file-arrow-up text-xl text-zinc-500"></i>
+                <span class="text-zinc-400 text-[10px]">Arraste o arquivo de backup (.json) aqui<br>ou clique para escolher</span>
+            </div>
+            <input type="file" id="backup-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onFileSelected(this)">
+
+            <p class="text-zinc-600 text-[9px] leading-relaxed border-t studio-border pt-1.5 mt-1">⚠️ Carregar um backup <b class="text-zinc-400">sobrescreve</b> os dados atuais deste navegador. Guarde o arquivo baixado em lugar seguro — quem tiver esse arquivo tem acesso ao token do GitHub salvo nele, se houver um.</p>
         </div>
 
         <div class="border-t studio-border"></div>
@@ -907,9 +942,61 @@
                  Play; ver KEYBOARD → Escape). Fica só o toggle de câmera e,
                  quando a sala é multiplayer, o toggle de microfone. -->
             <div id="play-mode-stop-bar" class="hidden absolute top-3 right-3 z-40 flex items-center gap-2">
+                <!-- (nova função a pedido do usuário) Entrar/sair de VR (WebXR) —
+                     só aparece quando o navegador/dispositivo suporta
+                     "immersive-vr" (checado em VRManager.checkSupport no boot).
+                     Enquanto o VR estiver ativo, a câmera fica travada em
+                     1ª pessoa e cabeça/mãos passam a ser rastreadas de verdade. -->
+                <button id="btn-enter-vr" onclick="VRManager.toggleVR()" class="hidden px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl items-center gap-2 border border-white/20 transition-all" title="Entrar em realidade virtual (WebXR) — rastreia cabeça e mãos; a câmera fica sempre em 1ª pessoa enquanto o VR está ativo">
+                    <i class="fa-solid fa-vr-cardboard"></i> <span id="btn-enter-vr-label">VR</span>
+                </button>
+                <!-- (nova função a pedido do usuário) "VR por Câmera" — pra quem
+                     não tem headset (WebXR): funciona no celular, PC ou TV com
+                     câmera/webcam, usando rastreio facial pra olhar ao redor. -->
+                <button id="btn-enter-cam-vr" onclick="CameraVR.toggle()" class="hidden px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl items-center gap-2 border border-white/20 transition-all" title="VR por Câmera — sem headset: use a câmera do celular, PC ou TV pra rastrear a cabeça (rosto) e olhar ao redor">
+                    <i class="fa-solid fa-camera"></i> <span id="btn-enter-cam-vr-label">VR por Câmera</span>
+                </button>
                 <button id="mp-voice-toggle-btn" onclick="Multiplayer.toggleVoice()" class="hidden px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl items-center gap-2 border border-white/20 transition-all" title="Ativar/desativar chat de voz por proximidade da sala">
                     <i class="fa-solid fa-microphone-slash" id="mp-voice-toggle-icon"></i> <span id="mp-voice-toggle-label">Voz</span>
                 </button>
+            </div>
+
+            <!-- (nova função a pedido do usuário) Painel flutuante da "VR por
+                 Câmera" — preview da webcam + quadro de detecção do rosto +
+                 controles de recalibração. Só aparece enquanto o recurso
+                 está ativo (ver CameraVR.enterCameraVR/exitCameraVR). -->
+            <div id="cam-vr-panel" class="hidden absolute bottom-8 right-3 z-40 bg-zinc-900/95 backdrop-blur border border-white/20 rounded-xl shadow-2xl p-2 w-52 flex flex-col gap-1.5">
+                <div class="relative w-full rounded-lg overflow-hidden bg-black" style="aspect-ratio:4/3;">
+                    <video id="cam-vr-video" class="w-full h-full object-cover" style="transform:scaleX(-1);" muted playsinline></video>
+                    <canvas id="cam-vr-canvas" class="absolute inset-0 w-full h-full" style="transform:scaleX(-1);"></canvas>
+                </div>
+                <div id="cam-vr-status" class="text-[10px] text-zinc-400 text-center">Procurando rosto…</div>
+                <div id="cam-vr-angles" class="text-[9px] text-cyan-300 text-center font-mono"></div>
+                <div class="flex gap-1.5">
+                    <button onclick="CameraVR.recenter()" class="flex-1 text-[10px] px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded border border-white/10" title="Recalibrar a posição neutra da cabeça (olhar em frente)">🎯 Centralizar</button>
+                    <button onclick="CameraVR.exitCameraVR()" class="flex-1 text-[10px] px-2 py-1 bg-red-900/60 hover:bg-red-800/70 rounded border border-white/10" title="Sair da VR por Câmera">✕ Sair</button>
+                </div>
+                <label class="flex items-center gap-1.5 text-[10px] text-zinc-400 px-0.5">
+                    <input type="checkbox" id="cam-vr-invert" onchange="CameraVR.setInvertX(this.checked)" class="w-3 h-3">
+                    Inverter horizontal (lado)
+                </label>
+                <label class="flex items-center gap-1.5 text-[10px] text-zinc-400 px-0.5">
+                    <input type="checkbox" id="cam-vr-invert-pitch" onchange="CameraVR.setInvertPitch(this.checked)" class="w-3 h-3">
+                    Inverter vertical (cima/baixo)
+                </label>
+                <!-- (nova função a pedido do usuário) Sensibilidade da câmera
+                     com o rosto — controla o quanto o olhar vira no jogo pra
+                     cada grau real de giro de cabeça. Fica salvo (localStorage)
+                     pra não precisar reajustar toda vez. -->
+                <div class="px-0.5">
+                    <label class="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span>🎚️ Sensibilidade (rosto)</span>
+                        <span id="cam-vr-sensitivity-label" class="text-cyan-400 font-mono">1.00x</span>
+                    </label>
+                    <input type="range" id="cam-vr-sensitivity" min="0.4" max="2.5" step="0.05" value="1"
+                           oninput="CameraVR.setSensitivity(this.value)" class="w-full mt-0.5">
+                </div>
+                <div class="text-[9px] text-zinc-500 px-0.5 leading-tight">🟢 Contorno verde = rosto detectado. Gire a cabeça pra olhar ao redor (cima/baixo/lado).</div>
             </div>
 
             <!-- (nova função a pedido do usuário) Chat de texto da sala,
@@ -1195,13 +1282,23 @@
                     Limite de FPS
                     <span id="gfx-fpscap-label" class="text-cyan-400 font-mono text-xs">Ilimitado</span>
                 </label>
-                <select id="gfx-fpscap" onchange="UI.setGfxFpsCap(parseInt(this.value))" class="w-full mt-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs">
+                <select id="gfx-fpscap" onchange="UI.setGfxFpsCap(this.value)" class="w-full mt-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs">
                     <option value="0">Ilimitado</option>
                     <option value="30">30 fps</option>
                     <option value="60">60 fps</option>
                     <option value="120">120 fps</option>
                     <option value="144">144 fps</option>
+                    <option value="custom">Personalizado…</option>
                 </select>
+                <!-- (nova função a pedido do usuário) Campo numérico livre pro
+                     usuário travar QUALQUER valor de FPS (não só os presets
+                     acima) — só aparece quando "Personalizado…" é escolhido. -->
+                <div id="gfx-fpscap-custom-wrap" class="hidden mt-1.5 flex items-center gap-2">
+                    <input type="number" id="gfx-fpscap-custom" min="1" max="300" step="1" value="90"
+                           class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-xs"
+                           oninput="UI.setGfxFpsCapCustom(this.value)" placeholder="ex: 90">
+                    <span class="text-[10px] text-zinc-500">fps (1–300)</span>
+                </div>
                 <p class="text-[11px] text-zinc-500 mt-1">Travar em 30–60fps economiza bastante bateria/calor em notebooks, sem perda de qualidade visual.</p>
             </div>
             <!-- (nova função a pedido do usuário) Distância de renderização —
@@ -2553,6 +2650,28 @@ const ThreeManager = (() => {
      *  travou um nível fixo na mão, respeitamos a escolha dela. */
     function isAutoQuality() { return _gfx.quality === "auto"; }
     function isBloomAllowed() { return _gfx.bloom !== false; }
+    // (nova função — pedido do usuário: "cai muito" no Play mesmo com POUCOS
+    // objetos) SSAO é uma pass de TELA CHEIA: seu custo depende da
+    // resolução, não da quantidade de Parts na cena — por isso ele pesa
+    // igual numa cena vazia ou lotada, e o ajuste automático por FPS (ver
+    // _renderLoop) só desliga ele DEPOIS que o FPS já caiu abaixo de 24,
+    // reagindo tarde demais pro gosto de quem está testando o jogo. Agora,
+    // ao entrar no Play, desligamos o SSAO de saída (só quando a qualidade
+    // está em "Auto" — se a pessoa travou um nível fixo na mão, respeitamos)
+    // e devolvemos ao estado de antes assim que volta pro Edit.
+    let _ssaoWasEnabledBeforePlay = null;
+    function setPlayPerformanceMode(active) {
+        if (!ssaoPass) return;
+        if (active) {
+            if (isAutoQuality()) {
+                _ssaoWasEnabledBeforePlay = ssaoPass.enabled;
+                ssaoPass.enabled = false;
+            }
+        } else if (_ssaoWasEnabledBeforePlay !== null) {
+            ssaoPass.enabled = _ssaoWasEnabledBeforePlay;
+            _ssaoWasEnabledBeforePlay = null;
+        }
+    }
     let hemi, sun; // referências guardadas no escopo do módulo p/ o controle de Brilho do Céu poder ajustá-las depois do init()
     const BASE_EXPOSURE = 1.1, BASE_HEMI = 0.65, BASE_SUN = 1.6; // valores-base (Brightness=1) usados pelo slider de brilho ambiente
     const objectMap   = new Map();   // id → Three.Object3D
@@ -2757,6 +2876,14 @@ const ThreeManager = (() => {
         if (_pickableCacheFrame === _frameId && _pickableCache) return _pickableCache;
         const arr = [];
         objectMap.forEach(obj => { if ((obj.isMesh || obj.isGroup) && obj.visible && !obj.userData?.isPartGui) arr.push(obj); });
+        // (nova função) Parts agrupadas num lote de Instancing ficam com o
+        // mesh original invisível — sem isso, workspace:Raycast() e
+        // ProximityPrompt (linha de visão) parariam de "ver" essas Parts
+        // durante o Play. O InstancedMesh do lote entra no lugar delas;
+        // ver resolução de nodeId por instanceId em raycastHit() abaixo.
+        if (typeof InstancingManager !== "undefined" && InstancingManager.isActive()) {
+            arr.push(...InstancingManager.getBatchMeshes());
+        }
         _pickableCache = arr;
         _pickableCacheFrame = _frameId;
         return arr;
@@ -2803,6 +2930,11 @@ const ThreeManager = (() => {
         renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference: "high-performance" });
         renderer.setSize(vp.clientWidth, vp.clientHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        // (nova função a pedido do usuário) Suporte a VR (WebXR) — habilita o
+        // subsistema de XR do renderer. Sozinho isso não muda nada visualmente
+        // fora de uma sessão VR; só liga a "porta de entrada" que o VRManager
+        // usa pra apresentar a cena no headset (ver módulo VR MANAGER).
+        renderer.xr.enabled = true;
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
         // Otimização · sombras sob demanda — recalcular o shadow map é uma
@@ -3077,7 +3209,12 @@ const ThreeManager = (() => {
         _loadGfxSettings();
         _applyGfxSettings();
 
-        _renderLoop();
+        // (nova função a pedido do usuário — VR) renderer.setAnimationLoop
+        // substitui o antigo requestAnimationFrame(_renderLoop) recursivo:
+        // fora do VR ele se comporta exatamente igual (chamado a cada
+        // repaint), e dentro de uma sessão WebXR passa a ser conduzido pelo
+        // próprio headset — é o único jeito suportado de renderizar em VR.
+        renderer.setAnimationLoop(_renderLoop);
     }
 
     /* ──────────────────────────────────────────────────────────────
@@ -3089,8 +3226,20 @@ const ThreeManager = (() => {
         · Cap de delta em 100ms
         · Constraints só atualizadas quando dirty
     ────────────────────────────────────────────────────────────── */
-    function _renderLoop() {
-        requestAnimationFrame(_renderLoop);
+    // (nova função a pedido do usuário — VR) frame bruto do WebXR do quadro
+    // atual, guardado aqui pro VRManager usar (rastreio de juntas da mão via
+    // frame.getJointPose só existe dentro do callback do próprio XR).
+    let _xrFrame = null;
+    function _renderLoop(_time, frame) {
+        // (nova função a pedido do usuário — VR) Antes chamávamos
+        // requestAnimationFrame(_renderLoop) manualmente pra agendar o
+        // próximo quadro. Numa sessão WebXR ativa isso NÃO funciona direito
+        // — o headset tem seu próprio relógio de apresentação (90/120Hz,
+        // reprojeção, etc.), então o loop precisa ser conduzido por
+        // renderer.setAnimationLoop() (ver chamada no fim do init()), que já
+        // chama esta função sozinha tanto fora quanto dentro do VR. Por isso
+        // não há mais nenhuma chamada a requestAnimationFrame aqui dentro.
+        _xrFrame = frame || null;
         _frameId++;
         // Otimização · limite de FPS (nova função a pedido do usuário) — se a
         // pessoa travou um teto de quadros por segundo em "Configurações
@@ -3107,7 +3256,13 @@ const ThreeManager = (() => {
         // janela estiver sem foco E o usuário não tiver travado um limite
         // ainda mais baixo — assim que a janela recupera o foco, volta
         // exatamente pro comportamento configurado, sem perder nada.
-        const effectiveFpsCap = (!_windowFocused && (_gfx.fpsCap === 0 || _gfx.fpsCap > 24)) ? 24 : _gfx.fpsCap;
+        // (nova função a pedido do usuário — VR) Enquanto a sessão VR está
+        // apresentando, nem o teto de FPS nem o corte por "aba escondida"
+        // fazem sentido: o headset já controla seu próprio timing (90/120Hz)
+        // e o navegador considera a aba "hidden" durante a imersão em
+        // alguns browsers — pular o frame aí travaria a imagem no headset.
+        const _presentingVR = !!(renderer.xr && renderer.xr.isPresenting);
+        const effectiveFpsCap = _presentingVR ? 0 : ((!_windowFocused && (_gfx.fpsCap === 0 || _gfx.fpsCap > 24)) ? 24 : _gfx.fpsCap);
         if (effectiveFpsCap > 0) {
             const nowMs = performance.now();
             if (nowMs - _lastFrameAt < 1000 / effectiveFpsCap) return;
@@ -3117,7 +3272,7 @@ const ThreeManager = (() => {
         // Perf: aba em segundo plano não precisa physics/render — economiza
         // CPU/GPU/bateria à toa (o navegador já limita o rAF sozinho, mas
         // ainda assim evitamos todo o trabalho pesado deste frame).
-        if (document.hidden) return;
+        if (document.hidden && !_presentingVR) return;
         if (typeof Plugins !== "undefined") Plugins.runHook("frame", dt);
 
 
@@ -3128,6 +3283,11 @@ const ThreeManager = (() => {
             document.getElementById("fps-counter").textContent = `${_frameCount} fps`;
             _lastFps = _frameCount;
             _frameCount = 0; _fpsTimer = 0;
+            // (nova função a pedido do usuário) Alimenta a IA de otimização
+            // de gráficos com o FPS deste segundo — ela só decide algo a
+            // cada poucos segundos (ver EVAL_INTERVAL em AIOptimizer), não
+            // reage a cada leitura isolada.
+            if (typeof AIOptimizer !== "undefined") AIOptimizer.reportFrame(1, _lastFps);
             // Otimização · estatísticas detalhadas — só lê renderer.info (e só
             // toca o DOM) quando o painel está ligado, junto do mesmo
             // intervalo de 1x/seg do contador de FPS (não a cada frame).
@@ -3154,10 +3314,14 @@ const ThreeManager = (() => {
             // Part Anchored movida via Lua) — sem isso, mudanças feitas por script
             // em objetos estáticos não apareceriam visualmente durante o Play.
             if (_sceneDirty) { _syncDirtyScene(); _sceneDirty = false; }
-            // Otimização · durante o Play, física/scripts mexem em coisas o
-            // tempo todo, então religa o recálculo de sombras a cada frame
-            // (o modo "sob demanda" acima só faz sentido em Edit, parado).
-            renderer.shadowMap.needsUpdate = true;
+            // (OTIMIZAÇÃO) Antes recalculava o shadow map em TODO frame durante
+            // o Play (a operação mais cara da GPU no pipeline, segundo o
+            // próprio comentário abaixo em "degradação extrema"). Sombra
+            // recalculada a cada 2 quadros (30x/seg a 60fps) é visualmente
+            // indistinguível de todo frame — física/scripts continuam
+            // mexendo as coisas normalmente, só a sombra "amostra" a cada 2
+            // quadros em vez de todos — e corta esse custo pela metade.
+            if (renderer.shadowMap.enabled && (_frameId & 1) === 0) renderer.shadowMap.needsUpdate = true;
         } else {
             orbit.update();
             if (_sceneDirty)       { _syncDirtyScene(); _sceneDirty = false; }
@@ -3252,11 +3416,24 @@ const ThreeManager = (() => {
         // consistente na tela conforme a câmera se aproxima/afasta.
         if (typeof VertexEditor !== "undefined" && VertexEditor.isActive()) VertexEditor.updateHandleScale(camera);
 
+        // (nova função a pedido do usuário — VR) Atualiza o rastreio de
+        // cabeça/mãos ANTES do render deste quadro, pra as esferas das
+        // juntas e o rig do jogador já aparecerem na posição certa no
+        // frame que está prestes a ser desenhado (sem 1 frame de atraso).
+        if (_presentingVR && typeof VRManager !== "undefined") VRManager.update(_xrFrame);
+
         // (correção) Passa a renderizar via composer (Render + Bloom) em vez
         // de renderer.render() direto — é o que faz o BloomEffect inserido
         // pelo usuário realmente aparecer. Com strength=0 (padrão sem
         // BloomEffect na cena) o resultado é visualmente idêntico ao antigo.
-        if (composer) composer.render(); else renderer.render(scene, camera);
+        // (nova função a pedido do usuário — VR) O EffectComposer renderiza
+        // pra um render target 2D "achatado" e depois copia pra tela — isso
+        // quebra a renderização estéreo (1 olho por vez) que o WebXR exige.
+        // Durante uma sessão VR ativa, sempre usamos renderer.render() puro
+        // (sem Bloom/SSAO/FXAA), que É compatível com XR de fábrica.
+        if (_presentingVR) renderer.render(scene, camera);
+        else if (composer) composer.render();
+        else renderer.render(scene, camera);
         renderer.shadowMap.autoUpdate = false;
         renderer.shadowMap.needsUpdate = false; // consumido neste frame; só liga de novo via markDirty/Play
     }
@@ -3969,6 +4146,17 @@ const ThreeManager = (() => {
                 THREE.MathUtils.degToRad(p.Rotation.y||0),
                 THREE.MathUtils.degToRad(p.Rotation.z||0));
             obj.visible = p.Visibilidade !== false;
+            // ── Otimização (pesquisada em técnicas de jogos web) ──
+            // Parts Anchored (estáticas) nunca mudam de posição/rotação/escala
+            // sozinhas — só quando ESTE trecho roda de novo (um Script mudou
+            // node.properties, ou o usuário editou no Studio). O Three.js por
+            // padrão recalcula a matriz local (posição+rotação+escala → 4x4)
+            // de TODO objeto a cada frame, mesmo parado. Com matrixAutoUpdate
+            // desligado, ela só é recalculada aqui manualmente (updateMatrix),
+            // exatamente quando algo de fato mudou — Parts soltas (mass!==0,
+            // sincronizadas pela física a cada frame) continuam automáticas.
+            if (p.Anchored) { obj.matrixAutoUpdate = false; obj.updateMatrix(); }
+            else if (obj.matrixAutoUpdate === false) { obj.matrixAutoUpdate = true; } // virou solta (ex.: Script mudou Anchored) → volta ao normal
             parentMesh = obj;
 
         } else if (META.LIGHTS.has(node.className)) {
@@ -4616,9 +4804,17 @@ const ThreeManager = (() => {
         raycaster.far = Infinity; raycaster.near = 0; // restaura padrão p/ raycasting normal do editor
         if (!hits.length) return null;
         let hitObj = hits[0].object, nodeId = null;
-        while (hitObj) {
-            if (hitObj.userData && hitObj.userData.nodeId) { nodeId = hitObj.userData.nodeId; break; }
-            hitObj = hitObj.parent;
+        // (nova função) Se o raio acertou um lote de Instancing, o "mesh"
+        // é compartilhado por várias Parts — hits[0].instanceId diz QUAL
+        // instância específica foi atingida, e o lote guarda em userData
+        // a lista nodeId por índice (ver InstancingManager.build).
+        if (hitObj.isInstancedMesh && hits[0].instanceId != null && hitObj.userData?.instanceNodeIds) {
+            nodeId = hitObj.userData.instanceNodeIds[hits[0].instanceId] || null;
+        } else {
+            while (hitObj) {
+                if (hitObj.userData && hitObj.userData.nodeId) { nodeId = hitObj.userData.nodeId; break; }
+                hitObj = hitObj.parent;
+            }
         }
         if (!nodeId) return null;
         return { nodeId, point: { x: hits[0].point.x, y: hits[0].point.y, z: hits[0].point.z }, distance: hits[0].distance };
@@ -4629,6 +4825,10 @@ const ThreeManager = (() => {
     function getCamera()    { return camera; }
     function getOrbit()     { return orbit; }
     function getTransform() { return transform; }
+    // (nova função a pedido do usuário — VR) Exposto pro VRManager conseguir
+    // ligar a sessão WebXR e trocar a câmera de "pai" (dolly/rig) sem
+    // precisar duplicar a referência ao renderer em outro módulo.
+    function getRenderer()  { return renderer; }
 
     /* (nova função) Constrói o modelo de verdade da Tool — percorre todas
        as Parts que o usuário montou dentro dela no Editor de Modelo da
@@ -4682,12 +4882,20 @@ const ThreeManager = (() => {
         return group;
     }
 
+    /** (novas funções — usadas pelo AIOptimizer) Leitura do desempenho atual
+     *  sem precisar duplicar o contador de FPS nem o acesso a renderer.info
+     *  em outro módulo. */
+    function getFps() { return _lastFps; }
+    function getTriangleCount() { return renderer ? renderer.info.render.triangles : 0; }
+
     return {
         init, markDirty, syncNow, setTransformMode, attachToSelected,
         cleanupNode, playSound, pauseSound, setRaycastEnabled, setFOV,
-        getObjectMap, getScene, getCamera, getOrbit, getTransform, raycastDistance, raycastHit,
+        getObjectMap, getScene, getCamera, getOrbit, getTransform, getRenderer, raycastDistance, raycastHit,
         buildHeldMeshFromTool, setGui3DVisible, isGui3DVisible,
         setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings, applyBalancedGfxPreset,
+        setPlayPerformanceMode,
+        getFps, getTriangleCount,
     };
 })();
 
@@ -14577,8 +14785,11 @@ const UI = (() => {
         // (nova função) Popula os controles novos — limite de FPS e distância
         // de renderização — com o valor salvo atual.
         const fpsCap = gfx.fpsCap || 0;
-        document.getElementById("gfx-fpscap").value = String(fpsCap);
+        const isPreset = [0, 30, 60, 120, 144].includes(fpsCap);
+        document.getElementById("gfx-fpscap").value = isPreset ? String(fpsCap) : "custom";
         document.getElementById("gfx-fpscap-label").textContent = GFX_FPSCAP_LABELS[fpsCap] || `${fpsCap} fps`;
+        document.getElementById("gfx-fpscap-custom-wrap").classList.toggle("hidden", isPreset);
+        if (!isPreset) document.getElementById("gfx-fpscap-custom").value = fpsCap;
         const renderDist = gfx.renderDistance || "longa";
         document.getElementById("gfx-renderdist").value = renderDist;
         document.getElementById("gfx-renderdist-label").textContent = GFX_RENDERDIST_LABELS[renderDist] || "Longa";
@@ -14613,11 +14824,39 @@ const UI = (() => {
         const el = document.getElementById("detailed-stats");
         if (el) el.style.display = on ? "" : "none";
     }
-    // (nova função a pedido do usuário) Limite de FPS — 0 = ilimitado.
-    function setGfxFpsCap(fps) {
+    // (nova função a pedido do usuário) Limite de FPS — 0 = ilimitado. Agora
+    // aceita também "custom", que revela o campo numérico livre em vez de
+    // aplicar um valor na hora (o valor real só é aplicado quando a pessoa
+    // digita algo em setGfxFpsCapCustom).
+    function setGfxFpsCap(val) {
+        if (val === "custom") {
+            document.getElementById("gfx-fpscap-custom-wrap").classList.remove("hidden");
+            const current = parseInt(document.getElementById("gfx-fpscap-custom").value, 10) || 90;
+            setGfxFpsCapCustom(current);
+            return;
+        }
+        document.getElementById("gfx-fpscap-custom-wrap").classList.add("hidden");
+        const fps = parseInt(val, 10) || 0;
         document.getElementById("gfx-fpscap-label").textContent = GFX_FPSCAP_LABELS[fps] || `${fps} fps`;
         ThreeManager.setGraphicsSettings({ fpsCap: fps });
         showToast(fps > 0 ? `🎯 FPS travado em ${fps}` : "🎯 FPS ilimitado");
+    }
+    // (nova função a pedido do usuário) Aplica um teto de FPS QUALQUER,
+    // digitado livremente (1 a 300) — pra quem quer travar num valor que
+    // não está nos presets (ex: 90, 75, 165...).
+    let _fpsCapCustomDebounce = null;
+    function setGfxFpsCapCustom(raw) {
+        let fps = parseInt(raw, 10);
+        if (!Number.isFinite(fps)) return;
+        fps = Math.max(1, Math.min(300, fps));
+        document.getElementById("gfx-fpscap-label").textContent = `${fps} fps`;
+        // Debounce leve pra não disparar toast/gravar settings a cada
+        // dígito digitado no campo numérico.
+        clearTimeout(_fpsCapCustomDebounce);
+        _fpsCapCustomDebounce = setTimeout(() => {
+            ThreeManager.setGraphicsSettings({ fpsCap: fps });
+            showToast(`🎯 FPS travado em ${fps} (personalizado)`);
+        }, 250);
     }
     // (nova função a pedido do usuário) Distância de renderização (fog + far
     // plane da câmera) — reduzir ajuda bastante o FPS em mapas grandes.
@@ -15242,7 +15481,7 @@ const UI = (() => {
 
     return { log, clearConsole, getLogHistory, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
               openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
-              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxFpsCap, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
+              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxFpsCap, setGfxFpsCapCustom, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
 })();
 
 /* ================================================================
@@ -16965,6 +17204,9 @@ const Account = (() => {
         if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
         else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
         _renderGithubFieldsInline();
+        // (nova função) Atualiza o resumo de dados locais disponíveis pra
+        // backup toda vez que a barra de configurações é aberta/redesenhada.
+        try { if (typeof LocalBackup !== "undefined") LocalBackup.refreshStatus(); } catch (_) {}
     }
     function getCurrentFriendCode() { return _current ? (_current.friendCode || "") : ""; }
     function copyFriendCode() {
@@ -17414,6 +17656,180 @@ const Account = (() => {
         closeAccountSwitcher, openAddFriend, openNotifications, renderAll,
         saveGithubConfigInline, disconnectGithubInline,
     };
+})();
+
+/* ================================================================
+   MÓDULO (nova função a pedido do usuário) · BACKUP LOCAL EM ARQUIVO
+   ─────────────────────────────────────────────────────────────────
+   Hoje tudo que o app guarda (conta, senha em hash, amizades,
+   mensagens, projetos salvos/publicados, plugins, configurações
+   gráficas/VR, catálogo do Toolbox e até o token do GitHub, se a
+   pessoa colou um) mora só no localStorage deste navegador. Isso
+   some se o navegador limpar os dados, se for usado modo anônimo, ou
+   ao trocar de computador sem repositório do GitHub configurado.
+   Este módulo cobre isso com um backup/restauração 100% local, sem
+   precisar de internet:
+     • LocalBackup.download()        → junta tudo num único .json e
+       manda baixar.
+     • LocalBackup.onFileSelected()/
+       LocalBackup.handleDrop()      → lê um desses arquivos (pelo
+       clique ou arrastando pra área) e devolve tudo pro localStorage
+       deste navegador, sempre com confirmação antes de sobrescrever.
+   ================================================================ */
+const LocalBackup = (() => {
+
+    // Todas as chaves de localStorage usadas hoje pelo app. Se alguma
+    // não existir ainda neste navegador (ex.: sem token do GitHub
+    // configurado), ela é simplesmente ignorada — sem erro.
+    const KEYS = [
+        "engine_accounts_v1",            // contas (perfil, senha em hash, amizades, pedidos)
+        "engine_session_v1",              // sessão — quem está logado agora
+        "engine_messages_v1",             // mensagens trocadas com amigos
+        "github_storage_config_v1",       // repositório + TOKEN do GitHub
+        "toolbox_catalog_v1",             // catálogo do Toolbox
+        "toolbox_history_v1",             // histórico do Toolbox
+        "polypizza_api_key",              // chave de API do Poly Pizza (se configurada)
+        "engine_autosave_v1",             // autosave do projeto atual
+        "engine_named_projects_v1",       // projetos salvos com nome
+        "engine_published_projects_v1",   // projetos publicados
+        "graphics_settings_v1",           // preferências gráficas
+        "camvr_settings_v1",              // configurações de VR por câmera
+        "rse_ai_optimizer_memory_v1",     // memória do otimizador de IA
+        "engine_plugins_v1",              // plugins instalados
+    ];
+    const DYNAMIC_PREFIX = "oii_ds::"; // dados avulsos gravados sob esse prefixo
+
+    /** Lista só as chaves acima que realmente existem neste navegador,
+     *  mais qualquer chave dinâmica (DYNAMIC_PREFIX) encontrada — assim o
+     *  backup nunca inclui lixo de outro site/aba que use este mesmo domínio. */
+    function _relevantKeys() {
+        const found = new Set(KEYS.filter(k => localStorage.getItem(k) !== null));
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith(DYNAMIC_PREFIX)) found.add(k);
+            }
+        } catch (_) { /* ambiente sem acesso a localStorage.length (raro) */ }
+        return Array.from(found);
+    }
+
+    function _bytesToText(n) {
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+        return (n / 1024 / 1024).toFixed(2) + " MB";
+    }
+
+    function _hasSavedToken() {
+        try { return !!JSON.parse(localStorage.getItem("github_storage_config_v1") || "null")?.token; }
+        catch (_) { return false; }
+    }
+
+    /** Atualiza o resumo mostrado na barra lateral (quantos itens, quanto
+     *  espaço, se inclui token do GitHub). Chamado sempre que a barra de
+     *  configurações é (re)desenhada — ver Account._renderSettingsSidebar. */
+    function refreshStatus() {
+        const el = document.getElementById("backup-local-status");
+        if (!el) return;
+        const keys = _relevantKeys();
+        if (!keys.length) { el.textContent = "Nenhum dado local encontrado ainda neste navegador."; return; }
+        let bytes = 0;
+        keys.forEach(k => { bytes += (localStorage.getItem(k) || "").length; });
+        el.textContent = `${keys.length} item(ns) salvos neste navegador (~${_bytesToText(bytes)})${_hasSavedToken() ? " — inclui o token do GitHub" : ""}.`;
+    }
+
+    /** Junta tudo num arquivo .json e manda baixar (Blob + link temporário). */
+    function download() {
+        const keys = _relevantKeys();
+        if (!keys.length) { UI.showToast("Ainda não há dados locais pra baixar."); return; }
+        const data = {};
+        keys.forEach(k => { data[k] = localStorage.getItem(k); });
+        const payload = {
+            __app: "Roblox Studio Engine v3",
+            __kind: "local-backup",
+            __version: 1,
+            exportedAt: new Date().toISOString(),
+            data,
+        };
+        try {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const who = (window.Account && Account.isLoggedIn && Account.isLoggedIn()) ? Account.getDisplayName() : "dados";
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `backup-engine-${who}-${stamp}.json`.replace(/\s+/g, "_");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            UI.showToast(`💾 Backup baixado (${keys.length} item(ns)).`);
+        } catch (e) {
+            UI.showToast("⚠️ Não consegui gerar o arquivo: " + e.message);
+        }
+    }
+
+    /** Aplica um backup já convertido em objeto JS — sobrescreve o
+     *  localStorage deste navegador e recarrega a página, pra todos os
+     *  módulos (conta, projetos, plugins...) reiniciarem já lendo os
+     *  dados novos, do mesmo jeito que acontece ao abrir o app pela
+     *  primeira vez neste navegador. */
+    function _restore(payload) {
+        if (!payload || typeof payload !== "object" || !payload.data || typeof payload.data !== "object") {
+            UI.showToast("⚠️ Arquivo inválido — não parece um backup deste app.");
+            return;
+        }
+        const entries = Object.entries(payload.data).filter(([, v]) => typeof v === "string");
+        if (!entries.length) { UI.showToast("⚠️ O arquivo não tem nenhum dado dentro."); return; }
+        const askToken = entries.some(([k]) => k === "github_storage_config_v1") ? " (incluindo o token do GitHub, se houver um salvo nele)" : "";
+        if (!confirm(`Carregar este backup vai SOBRESCREVER os dados salvos neste navegador — ${entries.length} item(ns): conta, projetos, plugins, configurações${askToken}. Continuar?`)) return;
+        try {
+            entries.forEach(([k, v]) => localStorage.setItem(k, v));
+            UI.showToast("✅ Backup restaurado! Recarregando...");
+            setTimeout(() => location.reload(), 700);
+        } catch (e) {
+            UI.showToast("⚠️ Erro ao restaurar: " + e.message);
+        }
+    }
+
+    function _readFile(file) {
+        if (!file) return;
+        if (!/\.json$/i.test(file.name)) { UI.showToast("⚠️ Escolha um arquivo .json de backup."); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+            let parsed = null;
+            try { parsed = JSON.parse(reader.result); }
+            catch (_) { UI.showToast("⚠️ Não consegui ler esse arquivo — não é um JSON válido."); return; }
+            _restore(parsed);
+        };
+        reader.onerror = () => UI.showToast("⚠️ Falha ao ler o arquivo.");
+        reader.readAsText(file, "utf-8");
+    }
+
+    /** Ligado ao <input type="file"> escondido (clique na área de backup). */
+    function onFileSelected(input) {
+        const file = input?.files?.[0];
+        _readFile(file);
+        input.value = ""; // permite escolher o mesmo arquivo de novo depois
+    }
+    /** Arrastar-e-soltar na área de backup — realce visual só enquanto
+     *  o arquivo está sendo arrastado por cima. */
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add("border-sky-500");
+        e.currentTarget.classList.remove("studio-border");
+    }
+    function handleDragLeave(e) {
+        e.currentTarget.classList.remove("border-sky-500");
+        e.currentTarget.classList.add("studio-border");
+    }
+    function handleDrop(e) {
+        e.preventDefault();
+        handleDragLeave(e);
+        const file = e.dataTransfer?.files?.[0];
+        _readFile(file);
+    }
+
+    return { download, onFileSelected, handleDragOver, handleDragLeave, handleDrop, refreshStatus };
 })();
 
 /* ================================================================
@@ -19219,6 +19635,138 @@ const Multiplayer = (() => {
      3. Detecção de contato com solo via evento 'collide'.
      4. Sincronização Three.js ↔ Cannon em cada frame.
    ================================================================ */
+const InstancingManager = (() => {
+    /* ============================================================
+       MÓDULO · INSTANCING MANAGER (Static Batching) — função nova
+       ─────────────────────────────────────────────────────────────
+       Agrupa Parts estáticas (Anchored) que são visualmente IDÊNTICAS
+       (mesma classe/geometria, cor, Material, transparência e texturas
+       por face) num único THREE.InstancedMesh — troca, por exemplo,
+       300 draw calls de blocos de parede iguais por 1 draw call só.
+       Só roda durante o Play: no Editor as Parts continuam individuais
+       de propósito, pra seleção/gizmo/edição de propriedades
+       continuarem funcionando normalmente.
+
+       Limitações assumidas (documentadas, não são bugs):
+         · Não cobre MeshPart/GLTF importado, Parts com CornerRadius
+           (geometria arredondada única) nem com EdgeHighlight ligado
+           (usa um filho LineSegments que não existe num InstancedMesh)
+           — essas continuam individuais, com o mesmo desempenho de antes.
+         · Uma Part que entrou num lote não é mais escondida/mostrada
+           individualmente pelo Content Streaming (ver Simulation) — o
+           lote inteiro passa a ser desenhado sempre. É a troca normal
+           do instancing: a GPU desenha milhares de instâncias de uma vez
+           bem mais barato do que a CPU decidir "esconde essa, mostra
+           aquela" uma por uma, então vale a pena mesmo sem cull individual. */
+    const MIN_BATCH_SIZE   = 6; // menos que isso, o overhead de montar o lote não compensa
+    const ELIGIBLE_CLASSES = new Set(["Part", "WedgePart", "CornerWedgePart", "CylinderPart", "BallPart", "TrussPart"]);
+
+    let _batches         = [];        // [{ mesh: THREE.InstancedMesh, memberIds: Set<nodeId> }]
+    let _batchedIds       = new Set(); // todos os nodeIds que estão em algum lote agora
+    let _hiddenOriginals  = [];        // meshes originais escondidos, pra devolver ao sair do Play
+    let _active           = false;
+
+    function _signatureFor(node, p) {
+        const faceKeys = ['ImgRight','ImgLeft','ImgTop','ImgBottom','ImgFront','ImgBack'];
+        const faces = faceKeys.map(k => p[k] || "").join("|");
+        return [node.className, p.Color || "#aaaaaa", p.Transparência || 0, p.Material || "Plastic", faces].join("::");
+    }
+
+    function _eligible(node) {
+        const p = node.properties || {};
+        if (!ELIGIBLE_CLASSES.has(node.className)) return false;
+        if (!p.Anchored) return false;               // só estáticas — dinâmicas se movem sozinhas
+        if (p.CornerRadius > 0) return false;         // geometria arredondada é única por Size
+        if (p._gltfImported) return false;            // MeshPart importado tem geometria própria
+        if (p.EdgeHighlight) return false;            // depende de um filho LineSegments por mesh
+        if (p.Visibilidade === false) return false;
+        return true;
+    }
+
+    /** Monta os lotes a partir do estado atual do Workspace. Chamada uma
+     *  vez ao entrar no Play (ver Simulation._start) — os lotes refletem
+     *  a cena como ela está NAQUELE momento; Scripts que criam Parts novas
+     *  depois simplesmente continuam renderizando individualmente (não
+     *  entram em nenhum lote), sem quebrar nada. */
+    function build() {
+        if (_active) teardown();
+        const ws = Tree.find("ws");
+        if (!ws) return;
+        const scene     = ThreeManager.getScene();
+        const objectMap = ThreeManager.getObjectMap();
+        const groups    = new Map(); // assinatura visual → [{ node, mesh }]
+
+        (function walk(node) {
+            if (_eligible(node)) {
+                const mesh = objectMap.get(node.id);
+                if (mesh) {
+                    const sig = _signatureFor(node, node.properties || {});
+                    if (!groups.has(sig)) groups.set(sig, []);
+                    groups.get(sig).push({ node, mesh });
+                }
+            }
+            node.children?.forEach(walk);
+        })(ws);
+
+        groups.forEach((members) => {
+            if (members.length < MIN_BATCH_SIZE) return; // poucas — deixa individual, não compensa
+            const first = members[0].mesh;
+            const inst  = new THREE.InstancedMesh(first.geometry, first.material, members.length);
+            inst.castShadow = true; inst.receiveShadow = true;
+            // Nunca muda depois de montado (Parts Anchored não se movem
+            // sozinhas) — avisa o driver da GPU que pode otimizar em cima disso.
+            inst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+            const memberIds = new Set();
+            const instanceNodeIds = [];
+            members.forEach((m, i) => {
+                m.mesh.updateMatrix(); // garante a matriz local atualizada (ver otimização matrixAutoUpdate)
+                inst.setMatrixAt(i, m.mesh.matrix);
+                m.mesh.visible = false; // o InstancedMesh assume o visual a partir daqui
+                _hiddenOriginals.push(m.mesh);
+                memberIds.add(m.node.id);
+                _batchedIds.add(m.node.id);
+                instanceNodeIds[i] = m.node.id;
+            });
+            // (nova função) Mapa índice-da-instância → nodeId, usado por
+            // ThreeManager.raycastHit() pra resolver QUAL Part de verdade
+            // foi atingida (workspace:Raycast, ProximityPrompt etc.
+            // continuam funcionando normalmente mesmo com o lote).
+            inst.userData.instanceNodeIds = instanceNodeIds;
+            inst.instanceMatrix.needsUpdate = true;
+            scene.add(inst);
+            _batches.push({ mesh: inst, memberIds });
+        });
+
+        _active = _batches.length > 0;
+        if (_active) {
+            const total = _batches.reduce((n, b) => n + b.memberIds.size, 0);
+            UI.log(`📦 Instancing: ${total} Parts agrupadas em ${_batches.length} lote(s) — menos draw calls no Play.`, "info");
+        }
+    }
+
+    /** Desfaz os lotes e devolve a visibilidade das Parts originais — chamada
+     *  ao sair do Play (ver Simulation._stop), pra edição voltar ao normal. */
+    function teardown() {
+        const scene = ThreeManager.getScene();
+        _batches.forEach(b => scene.remove(b.mesh));
+        // Geometria e material são compartilhados com as Parts originais
+        // (cachedGeo / mesh.material de um dos membros) — NÃO descartar aqui,
+        // senão as Parts individuais ficariam sem material/geometria.
+        _batches = [];
+        _batchedIds = new Set();
+        _hiddenOriginals.forEach(mesh => { mesh.visible = true; });
+        _hiddenOriginals = [];
+        _active = false;
+    }
+
+    function isActive()  { return _active; }
+    function isBatched(nodeId) { return _batchedIds.has(nodeId); }
+    function getBatchMeshes() { return _batches.map(b => b.mesh); }
+
+    return { build, teardown, isActive, isBatched, getBatchMeshes };
+})();
+
 const Simulation = (() => {
     let _active = false;
     let _player = null;
@@ -19238,6 +19786,21 @@ const Simulation = (() => {
     let _world           = null;
     const _bodies        = new Map();   // nodeId → CANNON.Body
     const _constraints   = new Map();   // nodeId → CANNON.Constraint (Weld/Hinge/Rope/Rod)
+
+    /* ── Content Streaming / Chunking (função nova — otimização de perf) ──
+       Baseado no mesmo esquema usado pelo Roblox p/ mundos grandes:
+       Parts Anchored (estáticas) longe do jogador saem do _world de física
+       E ficam invisíveis (mesh.visible=false); ao se aproximar, voltam.
+       Só mexe em estáticas — soltas (mass!==0) sempre continuam simuladas,
+       senão cairiam no meio do nada quando saíssem de cena. Roda 1x/seg
+       (não a cada frame) via _streamAccum, então custa perto de nada. */
+    const STREAM_INTERVAL = 1.0;   // segundos entre cada varredura de streaming
+    let STREAM_NEAR       = 140;   // unidades: dentro disso, tudo carregado (Zona 1)
+    let STREAM_FAR        = 260;   // unidades: além disso, descarrega (Zona 3)
+    // (entre NEAR e FAR fica uma "zona morta"/histerese — evita ficar
+    //  descarregando e recarregando toda hora um objeto bem na borda)
+    let _streamAccum      = 0;
+    const _streamedOut    = new Set(); // nodeIds com corpo removido do _world + mesh oculta
     const _softConstraints = new Map(); // nodeId → {type, b0, b1, node} — Spring/AlignPosition/AlignOrientation (aplicados manualmente, Cannon não tem um "Constraint" pronto pra eles)
     let _playerBody      = null;
     let _playerGrounded  = false;
@@ -19607,6 +20170,10 @@ const Simulation = (() => {
      *  em 1ª pessoa trava o mouse automaticamente (some o cursor); em 3ª
      *  pessoa libera o mouse pra poder clicar normalmente na GUI. */
     function _syncPointerLockToCameraMode() {
+        // (nova função a pedido do usuário — VR) Em VR o mouse não pilota a
+        // câmera (é a cabeça de verdade que faz isso), então travar o
+        // ponteiro do mouse na tela espelhada do desktop não faz sentido.
+        if (typeof VRManager !== "undefined" && VRManager.isPresenting()) return;
         const vp = document.getElementById("viewport-3d");
         if (_isFirstPerson()) {
             _freeCam3p = false; // 1ª pessoa usa seu próprio pointer lock, não o modo "câmera livre" de 3ª pessoa
@@ -19642,7 +20209,19 @@ const Simulation = (() => {
         // SAPBroadphase (Sweep and Prune) escala muito melhor com cenas
         // que têm dezenas/centenas de objetos físicos.
         _world.broadphase           = new CANNON.SAPBroadphase(_world);
-        _world.solver.iterations    = 10;
+        // (OTIMIZAÇÃO — pedido do usuário: "cai muito" de FPS no Play) O
+        // solver (Gauss-Seidel) é a parte mais cara de world.step(): ele
+        // roda até `iterations` passadas por CADA contato/constraint ativo
+        // a cada frame de física. 10 iterações + tolerância de convergência
+        // travada em 1e-7 (o padrão do Cannon.js) praticamente garante que
+        // ele SEMPRE gasta as 10 iterações inteiras, mesmo quando já
+        // convergiu bem antes disso. Baixamos pra 7 iterações — ainda
+        // estável pra pilhas de Parts/constraints comuns do editor — e
+        // destravamos a tolerância (1e-7 → 1e-3) pra ele conseguir sair
+        // mais cedo assim que o resultado já estiver bom o bastante, em vez
+        // de sempre rodar o teto de iterações à toa.
+        _world.solver.iterations    = 7;
+        _world.solver.tolerance     = 1e-3;
         _world.defaultContactMaterial.friction    = 0.4;
         _world.defaultContactMaterial.restitution = 0.04;
 
@@ -19889,6 +20468,49 @@ const Simulation = (() => {
         _kinematicLastPos.clear();
         _kinematicRiders.clear();
         _connectorLastXform.clear();
+        _streamedOut.clear();
+        _streamAccum = 0;
+    }
+
+    /** Varredura de streaming: descarrega (física + visual) Parts estáticas
+     *  longe do jogador, recarrega as que voltaram a ficar perto. Chamada
+     *  de dentro de update(dt) com o próprio dt do frame, mas só executa de
+     *  fato 1x por STREAM_INTERVAL segundos (o resto do tempo é O(1)). */
+    function _updateStreaming(dt) {
+        if (!_playerBody || !_bodies.size) return;
+        _streamAccum += dt;
+        if (_streamAccum < STREAM_INTERVAL) return;
+        _streamAccum = 0;
+
+        const px = _playerBody.position.x, py = _playerBody.position.y, pz = _playerBody.position.z;
+        const nearSq = STREAM_NEAR * STREAM_NEAR;
+        const farSq  = STREAM_FAR  * STREAM_FAR;
+        const objectMap = ThreeManager.getObjectMap();
+
+        _bodies.forEach((body, nodeId) => {
+            if (body.mass !== 0) return; // só Parts Anchored — soltas ficam sempre ativas
+            const dx = body.position.x - px, dy = body.position.y - py, dz = body.position.z - pz;
+            const distSq = dx*dx + dy*dy + dz*dz;
+            const isOut  = _streamedOut.has(nodeId);
+
+            if (!isOut && distSq > farSq) {
+                // Zona 3 (longe/fora de visão) → descarrega física + visual
+                _world.removeBody(body);
+                _streamedOut.add(nodeId);
+                const mesh = objectMap.get(nodeId);
+                if (mesh) mesh.visible = false;
+            } else if (isOut && distSq < nearSq) {
+                // Voltou pra perto (Zona 1) → recarrega física + visual
+                _world.addBody(body);
+                _streamedOut.delete(nodeId);
+                const mesh = objectMap.get(nodeId);
+                // Parts agrupadas num lote de Instancing (ver InstancingManager)
+                // continuam escondidas individualmente de propósito — quem
+                // desenha o visual delas agora é o THREE.InstancedMesh do lote.
+                const isInstanced = typeof InstancingManager !== "undefined" && InstancingManager.isBatched(nodeId);
+                if (mesh && !isInstanced) mesh.visible = true;
+            }
+        });
     }
 
     /** Sincroniza o corpo físico de cada Part Anchored com o que o
@@ -20182,6 +20804,19 @@ const Simulation = (() => {
         if (typeof ToolBuildEditor !== "undefined" && ToolBuildEditor.active) ToolBuildEditor.close();
         _active = true;
         _backup = JSON.parse(JSON.stringify(State.tree));
+        // (OTIMIZAÇÃO — pedido do usuário: FPS caindo no Play mesmo com
+        // poucos objetos) Desliga o SSAO (pass de tela cheia, custo fixo
+        // que não depende de quantos objetos existem na cena) assim que o
+        // Play começa — ver comentário completo em ThreeManager.setPlayPerformanceMode.
+        ThreeManager.setPlayPerformanceMode(true);
+        // (nova função a pedido do usuário) Liga a IA de otimização de
+        // gráficos assim que o Play começa — no Editor ela fica desligada,
+        // só importa manter o FPS alto durante o jogo de verdade.
+        if (typeof AIOptimizer !== "undefined") AIOptimizer.enable();
+        // (nova função a pedido do usuário) Agrupa Parts estáticas idênticas
+        // em THREE.InstancedMesh pra reduzir draw calls durante o Play —
+        // ver comentário completo em InstancingManager.
+        if (typeof InstancingManager !== "undefined") InstancingManager.build();
 
         // Remove qualquer rig de prévia de animação esquecido no Workspace
         // (segurança extra, além do close() do AnimEditor).
@@ -20302,6 +20937,20 @@ const Simulation = (() => {
 
     function _stop() {
         _active = false;
+        // (OTIMIZAÇÃO) Devolve o SSAO ao estado de antes do Play — ver
+        // ThreeManager.setPlayPerformanceMode / chamada em _start().
+        ThreeManager.setPlayPerformanceMode(false);
+        // (nova função a pedido do usuário) Desliga a IA de gráficos junto
+        // com o Play — volta pro nível que a pessoa escolheu na mão no Editor.
+        if (typeof AIOptimizer !== "undefined") AIOptimizer.disable();
+        // (nova função) Desfaz os lotes de instancing e devolve a
+        // visibilidade das Parts originais — volta tudo ao normal no Editor.
+        if (typeof InstancingManager !== "undefined") InstancingManager.teardown();
+        // (nova função a pedido do usuário — VR) Sem personagem/física não há
+        // o que rastrear em 1ª pessoa — encerra a sessão VR junto, por
+        // qualquer caminho que pare o Play (botão Stop, Esc, script, etc.).
+        if (typeof VRManager !== "undefined" && VRManager.isPresenting()) VRManager.exitVR();
+        if (typeof CameraVR !== "undefined" && CameraVR.isActive()) CameraVR.exitCameraVR();
         LuaEngine.stop("play"); // derruba só os Scripts/LocalScripts do Play, preserva um preview em andamento
         AnimatorRuntime.stopAll(); // encerra qualquer animator:Play() ainda tocando
         _destroyPhysics();
@@ -20489,7 +21138,27 @@ const Simulation = (() => {
             const size = p.Size || { x:1, y:1, z:1 };
             const pos  = p.Position || { x:0, y:0, z:0 };
             const rot  = p.Rotation || { x:0, y:0, z:0 };
-            if (p.Visibilidade === false) return; // parte invisível (ex.: HumanoidRootPart) não é desenhada
+            // (CORREÇÃO) Antes, uma part invisível (ex.: HumanoidRootPart, que é
+            // SEMPRE invisível por convenção) saía deste forEach com `return`
+            // ANTES de registrar `nodeByName[part.name] = part` — ou seja, o
+            // HumanoidRootPart NUNCA entrava em `nodeByName`. Isso quebrava por
+            // completo a ponte script→física: `getPlayerRootNodeId()` (mais
+            // abaixo, em Simulation) lê exatamente `_playerRigNodes["HumanoidRootPart"]`,
+            // e como esse node nunca existia ali, a função sempre devolvia null.
+            // Resultado prático: escrever `character.HumanoidRootPart.Position =
+            // Vector3.new(...)` num Script NUNCA acionava `Simulation.teleportPlayerTo`
+            // (a condição em LuaEngine.setProp comparava null === node.id, sempre
+            // falso), e a sincronização inversa (física → node.properties.Position,
+            // usada pra LER a posição real do player) também nunca rodava — o
+            // HumanoidRootPart ficava com Position sempre travada no valor do
+            // template (ex.: {0,3,0}), nunca refletindo onde o player está de
+            // verdade nem podendo ser movido por script.
+            // Agora: o REGISTRO do node (`nodeByName`) acontece sempre, pra
+            // QUALQUER Part filha do rig, visível ou não. Só a CRIAÇÃO DA MESH
+            // (o que aparece desenhado na cena 3D) continua pulando parts
+            // invisíveis — que é o comportamento visual correto.
+            nodeByName[part.name] = part;
+            if (p.Visibilidade === false) return; // só pula o DESENHO; o node já foi registrado acima
             let color;
             try { color = new THREE.Color(p.Color || "#cccccc"); } catch(_) { color = new THREE.Color(0xcccccc); }
             const mesh = new THREE.Mesh(
@@ -20505,7 +21174,6 @@ const Simulation = (() => {
             mesh.castShadow = true;
             group.add(mesh);
             byName[part.name] = mesh;
-            nodeByName[part.name] = part;
             minY = Math.min(minY, pos.y - (size.y || 1) / 2);
             maxY = Math.max(maxY, pos.y + (size.y || 1) / 2);
         });
@@ -20776,6 +21444,9 @@ const Simulation = (() => {
         AnimatorRuntime.tick(dt);
         if (!_player || !_world) return;
         _pollGamepad();
+        // ── Content Streaming: descarrega/recarrega Parts estáticas
+        //    distantes (ver STREAM_NEAR/STREAM_FAR acima) ──
+        _updateStreaming(dt);
         Plugins.runHook("tick", dt);
         _updateEquippedTool();
         _applyEquippedToolPose();
@@ -20812,6 +21483,30 @@ const Simulation = (() => {
         if (_kd("s")) inputF -= 1;
         if (_kd("d")) inputR += 1;
         if (_kd("a")) inputR -= 1;
+        // (nova função a pedido do usuário — VR) Analógico esquerdo do
+        // controle VR anda igual W/A/S/D (soma-se ao teclado, não substitui
+        // — dá pra usar os dois). Analógico direito gira o rig (yaw), já
+        // que em VR não há mouse pra olhar ao redor horizontalmente pelo
+        // corpo. Ambos vêm de VRManager.pollInput(), que já aplica a
+        // "zona morta" do analógico.
+        if (typeof VRManager !== "undefined" && VRManager.isPresenting()) {
+            const vrIn = VRManager.pollInput();
+            inputF += -vrIn.moveY;
+            inputR +=  vrIn.moveX;
+            _yaw -= vrIn.turnX * ARROW_TURN_SPEED * dt;
+        }
+        // (nova função a pedido do usuário) "VR por Câmera" — sem headset
+        // de verdade (WebXR), a webcam/câmera do celular, PC ou TV rastreia
+        // a posição da cabeça e vira olhar ao redor, tipo um VR "de
+        // pobre" (cardboard sem sensor). Só roda quando não há VR real
+        // ativo (os dois se excluiriam) e devolve um DELTA (não um valor
+        // absoluto), pra somar em cima do que o mouse/setas já giraram —
+        // ver CameraVR.pollLook() logo abaixo, no módulo novo.
+        if (typeof CameraVR !== "undefined" && CameraVR.isActive() && !(typeof VRManager !== "undefined" && VRManager.isPresenting())) {
+            const camIn = CameraVR.pollLook(dt);
+            _yaw   += camIn.dYaw;
+            _pitch  = Math.max(PITCH_MIN, Math.min(PITCH_MAX, _pitch + camIn.dPitch));
+        }
 
         const sinY = Math.sin(_yaw), cosY = Math.cos(_yaw);
         // Vetor "frente" da câmera projetado no plano horizontal
@@ -20890,8 +21585,17 @@ const Simulation = (() => {
         /* ─ Lote 2 — Spring/AlignPosition/AlignOrientation (forças manuais) ─ */
         _applySoftConstraints();
 
-        /* ─ Avança o mundo físico ─ */
-        _world.step(1 / 60, dt, 3);
+        /* ─ Avança o mundo físico ─
+           (OTIMIZAÇÃO — pedido do usuário: queda de FPS no Play) maxSubSteps
+           limita quantos passos de física "de catch-up" rodam quando dt fica
+           maior que 1/60 (ou seja, exatamente quando o FPS já caiu). Com 3,
+           um frame lento podia disparar 3 passos INTEIROS do solver só pra
+           recuperar o atraso — o que deixa o frame ainda mais lento, entra
+           num ciclo vicioso (cai FPS → mais sub-steps → cai mais FPS ainda).
+           Com 2, a física acompanha levemente mais devagar em quedas de
+           FPS bem extremas (imperceptível na prática), mas nunca agrava
+           uma queda de FPS que já estava acontecendo. */
+        _world.step(1 / 60, dt, 2);
 
         /* ─ (correção — continuação) Restaura a velocidade horizontal ao
            valor calculado ANTES do step, ignorando o quanto a fricção do
@@ -21006,21 +21710,38 @@ const Simulation = (() => {
         /* ─ Câmera do jogador — 3ª pessoa orbital OU 1ª pessoa (Melhoria #8),
            escolhida via StarterPlayer.CameraMode ─ */
         const cam = ThreeManager.getCamera();
+        // (nova função a pedido do usuário — VR) Com o headset presente, a
+        // câmera é sempre tratada como 1ª pessoa, mesmo que StarterPlayer.
+        // CameraMode esteja em "ThirdPerson" (ex.: sessão iniciada no meio
+        // do jogo) — ver também o guard em toggleCameraMode().
+        const _vrOn = typeof VRManager !== "undefined" && VRManager.isPresenting();
 
-        if (cameraMode === "FirstPerson") {
+        if (cameraMode === "FirstPerson" || _vrOn) {
             // Câmera nos "olhos" do personagem; só a CABEÇA é ocultada
             // (igual ao Roblox real), corpo/pernas continuam visíveis
             // ao olhar pra baixo.
             _player.visible = true;
             if (_playerHead) _playerHead.visible = false;
-            const eyeY = _player.position.y + (3.5 * (_player.scale.x || 1));
-            cam.position.set(_player.position.x, eyeY, _player.position.z);
-            const lookDir = new THREE.Vector3(
-                -Math.sin(_yaw) * Math.cos(_pitch),
-                Math.sin(_pitch),
-                -Math.cos(_yaw) * Math.cos(_pitch)
-            );
-            cam.lookAt(cam.position.clone().add(lookDir));
+            if (_vrOn) {
+                // (nova função a pedido do usuário — VR) Em VR não movemos a
+                // câmera diretamente — ela é filha do "rig" do VRManager, e
+                // o WebXR aplica por cima o rastreio de verdade da cabeça
+                // (posição + rotação do headset). Aqui só posicionamos o
+                // PISO do rig na posição do personagem (pés) e o giramos
+                // pelo yaw atual — exatamente a mesma direção horizontal
+                // usada pelo lookDir abaixo (fora do VR), então olhar ao
+                // redor com a cabeça soma-se naturalmente a essa base.
+                VRManager.updateRig(_player.position.x, _player.position.y, _player.position.z, _yaw);
+            } else {
+                const eyeY = _player.position.y + (3.5 * (_player.scale.x || 1));
+                cam.position.set(_player.position.x, eyeY, _player.position.z);
+                const lookDir = new THREE.Vector3(
+                    -Math.sin(_yaw) * Math.cos(_pitch),
+                    Math.sin(_pitch),
+                    -Math.cos(_yaw) * Math.cos(_pitch)
+                );
+                cam.lookAt(cam.position.clone().add(lookDir));
+            }
         } else {
             _player.visible = true;
             if (_playerHead) _playerHead.visible = true;
@@ -21046,6 +21767,14 @@ const Simulation = (() => {
 
     /** Alterna 1ª/3ª pessoa em tempo real durante o Play (tecla V) */
     function toggleCameraMode() {
+        // (nova função a pedido do usuário — VR) Com o headset ativo a
+        // câmera SEMPRE é 1ª pessoa (é a própria cabeça do jogador) — não
+        // faz sentido nenhum trocar pra 3ª pessoa nesse estado, então a
+        // tecla V (e qualquer outro chamador) vira um no-op com aviso.
+        if (typeof VRManager !== "undefined" && VRManager.isPresenting()) {
+            UI.showToast("🥽 Em VR a câmera é sempre em 1ª pessoa.");
+            return;
+        }
         const sply = Tree.find("sply");
         if (!sply?.properties) return;
         sply.properties.CameraMode = sply.properties.CameraMode === "FirstPerson" ? "ThirdPerson" : "FirstPerson";
@@ -21310,6 +22039,18 @@ const Simulation = (() => {
         return true;
     }
 
+    /** (nova função — usada pelo AIOptimizer) Ajusta em tempo real os raios
+     *  de Content Streaming (ver STREAM_NEAR/STREAM_FAR acima). Quando o
+     *  novo "far" é menor que antes, força uma varredura imediata (não
+     *  espera o próximo tick de STREAM_INTERVAL) pra já descarregar o que
+     *  ficou fora do novo raio e aliviar a GPU/física sem demora. */
+    function setStreamDistances(near, far) {
+        if (typeof near === "number" && near > 0) STREAM_NEAR = near;
+        if (typeof far  === "number" && far  > 0) STREAM_FAR  = far;
+        _streamAccum = STREAM_INTERVAL; // força varredura no próximo update(dt)
+    }
+    function getStreamDistances() { return { near: STREAM_NEAR, far: STREAM_FAR }; }
+
     return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, getLocalPlayerCharacterId, get active() { return _active; },
              getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId,
              // (novas funções) ponte de controle do player pra scripts — ver comentário acima
@@ -21321,7 +22062,952 @@ const Simulation = (() => {
              // (nova função a pedido do usuário) posições pro chat de voz por proximidade
              getLocalPlayerPosition, getRemotePlayerPosition,
              // (nova função a pedido do usuário) suporte a controle Xbox/PS4/PS5 + joystick de toque
-             setupControlsUI, refreshControlDeviceLabel };
+             setupControlsUI, refreshControlDeviceLabel,
+             // (nova função — Content Streaming ajustável pelo AIOptimizer)
+             setStreamDistances, getStreamDistances };
+})();
+
+/* ================================================================
+   MÓDULO · AI OTIMIZADOR DE GRÁFICOS  (função nova a pedido do usuário)
+   ─────────────────────────────────────────────────────────────────
+   "IA que mexe nos gráficos inteiro, procura o melhor jeito de
+   otimizar e vai aprendendo": não é uma rede neural (isso rodando
+   dentro de um HTML sozinho não seria realista nem melhor que uma
+   regra bem feita) — é um otimizador adaptativo por tentativa e erro,
+   parecido com o que motores de jogo grandes chamam de "dynamic
+   resolution"/"adaptive quality", só que aqui abrange TODAS as
+   opções de "Configurações Gráficas" de uma vez (sombra, SSAO, AA,
+   Bloom, resolução, distância de renderização) MAIS os raios do
+   Content Streaming (ver setStreamDistances no módulo Simulation),
+   em 5 "degraus" prontos (mesmos nomes que já existem em _gfx.quality:
+   extreme/low/medium/high/ultra).
+
+   Como decide:
+     1) A cada poucos segundos, olha a média de FPS recente;
+     2) Se estiver ruim, desce um degrau (menos bonito, mais rápido);
+     3) Se estiver sobrando FPS por tempo suficiente, ARRISCA subir um
+        degrau — é a parte "procura o melhor jeito": ela não fica
+        satisfeita no primeiro nível que funciona, tenta melhorar até
+        achar o teto real da máquina;
+     4) Se subir e o FPS cair nos primeiros segundos, desiste e volta
+        pro degrau anterior;
+     5) "Aprende": ao ficar estável tempo suficiente num degrau, grava
+        no localStorage o melhor degrau já visto PARA ESSE NÍVEL DE
+        COMPLEXIDADE DE CENA (baldes por nº de triângulos). Na próxima
+        vez que abrir uma cena parecida (mesmo balde), já começa
+        direto nesse degrau em vez de testar tudo de novo do zero —
+        esse é o "aprendizado" persistente entre sessões.
+   ================================================================ */
+const AIOptimizer = (() => {
+    const RUNGS = ["extreme", "low", "medium", "high", "ultra"]; // do mais leve pro mais pesado
+
+    // Pacote completo por degrau — cobre tudo que dá pra mexer em
+    // "Configurações Gráficas" na mão, mais os raios de streaming.
+    const PRESETS = {
+        extreme: { shadows:false, ssao:false, aa:false, bloom:false, quality:"extreme", shadowQuality:"baixa", renderDistance:"curta",   streamNear:70,  streamFar:140 },
+        low:     { shadows:true,  ssao:false, aa:false, bloom:false, quality:"low",     shadowQuality:"baixa", renderDistance:"media",   streamNear:100, streamFar:190 },
+        medium:  { shadows:true,  ssao:false, aa:true,  bloom:true,  quality:"medium",  shadowQuality:"media", renderDistance:"media",   streamNear:120, streamFar:220 },
+        high:    { shadows:true,  ssao:true,  aa:true,  bloom:true,  quality:"high",    shadowQuality:"alta",  renderDistance:"longa",   streamNear:140, streamFar:260 },
+        ultra:   { shadows:true,  ssao:true,  aa:true,  bloom:true,  quality:"ultra",   shadowQuality:"ultra", renderDistance:"extrema", streamNear:200, streamFar:400 },
+    };
+
+    const STORAGE_KEY          = "rse_ai_optimizer_memory_v1";
+    const EVAL_INTERVAL        = 3.0;  // segundos entre avaliações (evita reagir a 1 pico isolado)
+    const FPS_LOW              = 42;   // média abaixo disso → degrau ruim, desce
+    const FPS_HIGH             = 55;   // média acima disso (sustentado) → tenta subir
+    const STABLE_TIME_TO_LEARN = 12;   // segundos sem precisar descer → grava esse degrau como confiável
+    const BUCKET_SIZE          = 50000; // agrupa cenas por faixas de 50k triângulos
+
+    let _enabled     = false;
+    let _rungIdx     = 3;               // começa em "high" (padrão de fábrica) até decidir algo melhor
+    let _accum       = 0;
+    let _stableTimer = 0;
+    let _bucketKey   = null;
+    let _memory       = _loadMemory();
+    let _fpsHistory   = [];             // últimas leituras (1x/seg) dentro da janela de avaliação
+    const _log        = [];             // últimas decisões — útil pra debug/UI futura
+
+    function _loadMemory() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch (_) { return {}; }
+    }
+    function _saveMemory() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_memory)); } catch (_) {}
+    }
+    function _bucketFor(triangles) {
+        return String(Math.round((triangles || 0) / BUCKET_SIZE) * BUCKET_SIZE);
+    }
+
+    function _applyRung(idx, reason) {
+        idx = Math.max(0, Math.min(RUNGS.length - 1, idx));
+        _rungIdx = idx;
+        const p = PRESETS[RUNGS[idx]];
+        ThreeManager.setGraphicsSettings({
+            shadows: p.shadows, ssao: p.ssao, aa: p.aa, bloom: p.bloom,
+            quality: p.quality, shadowQuality: p.shadowQuality, renderDistance: p.renderDistance,
+        });
+        if (typeof Simulation !== "undefined" && Simulation.setStreamDistances) {
+            Simulation.setStreamDistances(p.streamNear, p.streamFar);
+        }
+        _stableTimer = 0;
+        _log.unshift(`[IA Gráficos] → ${RUNGS[idx]} (${reason})`);
+        if (_log.length > 20) _log.length = 20;
+    }
+
+    /** Liga o otimizador — chamado ao entrar no Play (é quando o FPS
+     *  realmente importa; no Editor o _gfx.quality escolhido na mão
+     *  continua valendo sem interferência). */
+    function enable() {
+        if (_enabled) return;
+        _enabled     = true;
+        _accum       = 0;
+        _stableTimer = 0;
+        _fpsHistory  = [];
+        const triangles = ThreeManager.getTriangleCount ? ThreeManager.getTriangleCount() : 0;
+        _bucketKey = _bucketFor(triangles);
+        // "Aprendizado": se já existe um degrau confiável salvo pra esse
+        // nível de complexidade de cena, começa direto nele — não perde
+        // tempo re-testando do zero uma máquina/cena que já se provou.
+        const learned = _memory[_bucketKey];
+        const startIdx = (typeof learned === "number") ? learned : 3; // sem memória → começa em "high"
+        _applyRung(startIdx, learned != null ? "nível aprendido para esta cena" : "nível padrão inicial");
+        UI.log(`🧠 IA de Gráficos ativa — começando em "${RUNGS[startIdx]}"${learned != null ? " (aprendido de sessões anteriores)" : ""}.`, "info");
+    }
+
+    function disable() {
+        _enabled = false;
+    }
+
+    /** Chamada 1x/seg de fora (ver _renderLoop) com o FPS já medido nesse
+     *  segundo — o próprio otimizador decide, a cada EVAL_INTERVAL
+     *  segundos, se deve mexer em algo. */
+    function reportFrame(dt, fps) {
+        if (!_enabled) return;
+        _accum       += dt;
+        _stableTimer += dt;
+        _fpsHistory.push(fps);
+        if (_fpsHistory.length > 30) _fpsHistory.shift();
+
+        // Grava como "confiável" um degrau que aguentou tempo suficiente
+        // sem precisar descer — é o que alimenta o aprendizado persistente.
+        if (_stableTimer >= STABLE_TIME_TO_LEARN) {
+            const known = _memory[_bucketKey];
+            if (known == null || _rungIdx > known) {
+                _memory[_bucketKey] = _rungIdx;
+                _saveMemory();
+            }
+            _stableTimer = 0;
+        }
+
+        if (_accum < EVAL_INTERVAL) return;
+        _accum = 0;
+
+        const avg = _fpsHistory.reduce((a, b) => a + b, 0) / _fpsHistory.length;
+
+        if (avg < FPS_LOW && _rungIdx > 0) {
+            // Ruim demais → desce um degrau e "esquece" que o de cima era
+            // confiável (a cena/máquina mudou de comportamento nesse meio
+            // tempo — não insiste num nível que acabou de falhar).
+            if (_memory[_bucketKey] >= _rungIdx) {
+                _memory[_bucketKey] = _rungIdx - 1;
+                _saveMemory();
+            }
+            _applyRung(_rungIdx - 1, `fps médio ${avg.toFixed(0)} abaixo do alvo`);
+        } else if (avg > FPS_HIGH && _rungIdx < RUNGS.length - 1) {
+            // Sobra FPS → arrisca subir um degrau pra "procurar" o teto
+            // real de qualidade que dá pra manter nessa máquina/cena.
+            _applyRung(_rungIdx + 1, `fps médio ${avg.toFixed(0)} com folga — testando nível melhor`);
+        }
+    }
+
+    function isEnabled() { return _enabled; }
+    function getCurrentRung() { return RUNGS[_rungIdx]; }
+    function getLog() { return _log.slice(); }
+    /** Apaga tudo que a IA aprendeu até agora (útil se a máquina mudou de
+     *  hardware ou se algo ficou "preso" num degrau ruim por engano). */
+    function forgetLearnedSettings() {
+        _memory = {};
+        _saveMemory();
+        UI.log("IA de Gráficos: memória de otimização apagada.", "info");
+    }
+
+    return { enable, disable, reportFrame, isEnabled, getCurrentRung, getLog, forgetLearnedSettings };
+})();
+
+/* ================================================================
+   MÓDULO 13B · VR MANAGER  (nova função a pedido do usuário)
+   ─────────────────────────────────────────────────────────────────
+   Suporte a realidade virtual via WebXR ("Enter VR"), com:
+     · Rastreio de CABEÇA de verdade — a câmera vira filha de um "rig"
+       (dolly) que representa o chão/posição do jogador; o próprio
+       WebXR soma por cima a posição/rotação real do headset dentro
+       desse rig, então mexer a cabeça de verdade olha ao redor.
+     · Rastreio de MÃOS de verdade (hand-tracking) — cada junta dos
+       dedos (frame.getJointPose) vira uma esferinha na cena, ou,
+       quando o dispositivo só tem controles físicos (sem
+       hand-tracking), um modelo simples de controle na mão.
+     · Câmera SEMPRE em 1ª pessoa enquanto o VR estiver ativo — ver o
+       guard em Simulation.toggleCameraMode() e o "_vrOn" dentro de
+       Simulation._updatePlayer (câmera).
+     · Analógico dos controles: esquerdo anda (soma ao WASD), direito
+       gira o corpo/rig — ver VRManager.pollInput(), consumido dentro
+       de Simulation.update(dt).
+   ================================================================ */
+const VRManager = (() => {
+    let _supported   = false;
+    let _session     = null;
+    let _vrRig       = null;               // "dolly": pai da câmera + mãos/controles dentro do VR
+    let _camOriginalParent = null;
+    let _wasFirstPersonBeforeVR = null;    // CameraMode salvo, restaurado ao sair
+    let _wasPlayModeBeforeEnter = false;   // se o Play já estava rodando ao entrar em VR
+    const _controllerGrips = [null, null]; // modelo físico simples (fallback sem hand-tracking)
+    const _handTrackingActive = [false, false];
+    const _jointMeshes = [[], []];         // esferas de junta por mão (0=esquerda,1=direita)
+    const _handColors  = [0x38bdf8, 0xf472b6]; // esquerda azul, direita rosa
+
+    // 25 juntas por mão, conforme a WebXR Hand Input API
+    const JOINT_NAMES = [
+        "wrist",
+        "thumb-metacarpal","thumb-phalanx-proximal","thumb-phalanx-distal","thumb-tip",
+        "index-finger-metacarpal","index-finger-phalanx-proximal","index-finger-phalanx-intermediate","index-finger-phalanx-distal","index-finger-tip",
+        "middle-finger-metacarpal","middle-finger-phalanx-proximal","middle-finger-phalanx-intermediate","middle-finger-phalanx-distal","middle-finger-tip",
+        "ring-finger-metacarpal","ring-finger-phalanx-proximal","ring-finger-phalanx-intermediate","ring-finger-phalanx-distal","ring-finger-tip",
+        "pinky-finger-metacarpal","pinky-finger-phalanx-proximal","pinky-finger-phalanx-intermediate","pinky-finger-phalanx-distal","pinky-finger-tip"
+    ];
+
+    const STICK_DEADZONE = 0.15;
+    let _input = { moveX: 0, moveY: 0, turnX: 0 };
+
+    /** Checa suporte a "immersive-vr" e mostra/esconde o botão de VR
+     *  (chamado 1x no boot — ver DOMContentLoaded no fim do arquivo). */
+    async function checkSupport() {
+        try {
+            _supported = !!(navigator.xr && await navigator.xr.isSessionSupported("immersive-vr"));
+        } catch (_) { _supported = false; }
+        const btn = document.getElementById("btn-enter-vr");
+        if (btn) {
+            btn.classList.toggle("hidden", !_supported);
+            btn.classList.toggle("flex", _supported);
+        }
+        return _supported;
+    }
+
+    function isPresenting() {
+        const renderer = ThreeManager.getRenderer();
+        return !!(renderer && renderer.xr && renderer.xr.isPresenting);
+    }
+
+    /** Cria (uma única vez) o rig/dolly e os placeholders visuais das mãos. */
+    function _ensureRig() {
+        if (_vrRig) return;
+        const scene = ThreeManager.getScene();
+        _vrRig = new THREE.Group();
+        _vrRig.name = "__vrRig";
+        scene.add(_vrRig);
+
+        for (let h = 0; h < 2; h++) {
+            // Modelo simples de controle físico (fallback quando o
+            // dispositivo não tem hand-tracking ou a mão ainda não foi
+            // detectada nesse frame) — um pequeno cilindro colorido.
+            const grip = new THREE.Group();
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.018, 0.026, 0.11, 10),
+                new THREE.MeshStandardMaterial({ color: _handColors[h], roughness: 0.35, metalness: 0.5 })
+            );
+            body.rotation.x = Math.PI / 2;
+            const tip = new THREE.Mesh(
+                new THREE.SphereGeometry(0.02, 8, 8),
+                new THREE.MeshStandardMaterial({ color: _handColors[h], emissive: _handColors[h], emissiveIntensity: 0.3 })
+            );
+            tip.position.z = -0.07;
+            grip.add(body, tip);
+            grip.visible = false;
+            _vrRig.add(grip);
+            _controllerGrips[h] = grip;
+
+            // Esferinhas de junta (mostradas só quando hand-tracking real
+            // está disponível para aquela mão — ver update()).
+            const geo = new THREE.SphereGeometry(0.011, 8, 8);
+            const mat = new THREE.MeshStandardMaterial({ color: _handColors[h], roughness: 0.4, metalness: 0.1 });
+            const meshes = [];
+            for (let j = 0; j < JOINT_NAMES.length; j++) {
+                const m = new THREE.Mesh(j === 0 ? new THREE.SphereGeometry(0.02, 8, 8) : geo, mat);
+                m.visible = false;
+                _vrRig.add(m);
+                meshes.push(m);
+            }
+            _jointMeshes[h] = meshes;
+        }
+    }
+
+    /** Move o "piso" do rig pra posição do jogador (Simulation._updatePlayer
+     *  chama isto todo frame, em vez de setar cam.position/lookAt como faz
+     *  fora do VR) — a cabeça de verdade é somada por cima disso pelo WebXR. */
+    function updateRig(x, y, z, yaw) {
+        if (!_vrRig) return;
+        _vrRig.position.set(x, y, z);
+        _vrRig.rotation.set(0, yaw, 0);
+    }
+
+    /** Lê o analógico dos controles VR (session.inputSources[i].gamepad) —
+     *  esquerdo = mover, direito = girar. Chamado por Simulation.update(dt). */
+    function pollInput() {
+        _input.moveX = 0; _input.moveY = 0; _input.turnX = 0;
+        if (!_session) return _input;
+        for (const src of _session.inputSources) {
+            const gp = src.gamepad;
+            if (!gp || !gp.axes || gp.axes.length < 4) continue;
+            // Layout padrão "xr-standard": axes[2]/[3] = analógico (touchpad/thumbstick)
+            const ax = gp.axes[2] || 0, ay = gp.axes[3] || 0;
+            if (src.handedness === "left") {
+                if (Math.abs(ax) > STICK_DEADZONE) _input.moveX = ax;
+                if (Math.abs(ay) > STICK_DEADZONE) _input.moveY = ay;
+            } else if (src.handedness === "right") {
+                if (Math.abs(ax) > STICK_DEADZONE) _input.turnX = ax;
+            }
+        }
+        return _input;
+    }
+
+    /** Chamado a cada quadro (dentro de ThreeManager._renderLoop, só quando
+     *  presenting) — atualiza as esferas de junta das mãos e o modelo de
+     *  controle físico de fallback. */
+    function update(frame) {
+        _ensureRig();
+        if (!frame || !_session) return;
+        const renderer = ThreeManager.getRenderer();
+        const referenceSpace = renderer.xr.getReferenceSpace();
+        if (!referenceSpace) return;
+
+        const seenHand = [false, false];
+        for (const src of _session.inputSources) {
+            const hi = src.handedness === "left" ? 0 : (src.handedness === "right" ? 1 : null);
+            if (hi === null) continue;
+
+            if (src.hand) {
+                // ── Hand-tracking real: uma esfera por junta ──
+                seenHand[hi] = true;
+                _handTrackingActive[hi] = true;
+                if (_controllerGrips[hi]) _controllerGrips[hi].visible = false;
+                const meshes = _jointMeshes[hi];
+                for (let j = 0; j < JOINT_NAMES.length; j++) {
+                    const jointSpace = src.hand.get(JOINT_NAMES[j]);
+                    const mesh = meshes[j];
+                    if (!jointSpace || !mesh) { if (mesh) mesh.visible = false; continue; }
+                    const pose = frame.getJointPose ? frame.getJointPose(jointSpace, referenceSpace) : null;
+                    if (!pose) { mesh.visible = false; continue; }
+                    // Posições/orientações do getJointPose já vêm no MESMO
+                    // espaço de referência que o rig representa — como as
+                    // esferas são filhas do próprio _vrRig, isso compõe
+                    // certinho com a posição/giro do jogador no mundo.
+                    mesh.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                    mesh.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                    mesh.visible = true;
+                }
+            } else if (src.gripSpace || src.targetRaySpace) {
+                // ── Sem hand-tracking: mostra o modelo simples de controle ──
+                _handTrackingActive[hi] = false;
+                _jointMeshes[hi].forEach(m => m.visible = false);
+                const space = src.gripSpace || src.targetRaySpace;
+                const pose = frame.getPose ? frame.getPose(space, referenceSpace) : null;
+                const grip = _controllerGrips[hi];
+                if (pose && grip) {
+                    grip.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                    grip.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                    grip.visible = true;
+                }
+            }
+        }
+        // Mão que não apareceu neste frame (ex.: saiu do campo de rastreio) — esconde
+        for (let h = 0; h < 2; h++) {
+            if (!seenHand[h] && _handTrackingActive[h]) {
+                _handTrackingActive[h] = false;
+                _jointMeshes[h].forEach(m => m.visible = false);
+            }
+        }
+    }
+
+    /** Entra em VR: pede a sessão WebXR, reparenta a câmera pro rig, força
+     *  1ª pessoa e (se o Play ainda não estava rodando) inicia o Play. */
+    async function enterVR() {
+        if (!_supported) { UI.showToast("🥽 Este navegador/dispositivo não suporta VR (WebXR)."); return; }
+        if (isPresenting()) return;
+        // (nova função) Os dois modos de VR se excluem — se a "VR por
+        // Câmera" estiver ligada, desliga ela antes de entrar na VR real.
+        if (typeof CameraVR !== "undefined" && CameraVR.isActive()) CameraVR.exitCameraVR();
+        try {
+            const session = await navigator.xr.requestSession("immersive-vr", {
+                optionalFeatures: ["local-floor", "hand-tracking", "bounded-floor"]
+            });
+            _session = session;
+            const renderer = ThreeManager.getRenderer();
+            try { await renderer.xr.setReferenceSpaceType("local-floor"); } catch (_) {}
+            await renderer.xr.setSession(session);
+
+            // (correção) Garante que o Play já esteja rodando ANTES de
+            // mexer na câmera — Simulation._start() guarda a posição atual
+            // da câmera do editor pra restaurar depois no Stop; se a gente
+            // já tivesse zerado/reparentado a câmera pro rig antes disso,
+            // esse "save" salvaria (0,0,0) por engano, e ao sair do Play a
+            // câmera do editor apareceria teleportada pra origem do mundo.
+            _wasPlayModeBeforeEnter = Simulation.active;
+            if (!Simulation.active) Simulation.toggle();
+
+            _ensureRig();
+            const cam = ThreeManager.getCamera();
+            _camOriginalParent = cam.parent || null;
+            if (_camOriginalParent) _camOriginalParent.remove(cam);
+            cam.position.set(0, 0, 0);
+            cam.rotation.set(0, 0, 0);
+            cam.quaternion.identity();
+            _vrRig.add(cam);
+
+            const sply = Tree.find("sply");
+            _wasFirstPersonBeforeVR = sply?.properties?.CameraMode || "ThirdPerson";
+            if (sply?.properties) sply.properties.CameraMode = "FirstPerson";
+
+            const label = document.getElementById("btn-enter-vr-label");
+            if (label) label.textContent = "Sair do VR";
+            UI.showToast("🥽 VR ativado — cabeça e mãos sendo rastreadas, câmera em 1ª pessoa.");
+            UI.log("🥽 Sessão WebXR iniciada — rastreio de cabeça e mãos ativo.", "success");
+
+            session.addEventListener("end", _onSessionEnd);
+        } catch (err) {
+            console.error("[VRManager] Falha ao entrar em VR:", err);
+            UI.showToast("⚠️ Não foi possível iniciar a sessão VR.");
+            _session = null;
+        }
+    }
+
+    function exitVR() {
+        if (_session) { try { _session.end(); } catch (_) {} }
+        else _onSessionEnd(); // sessão já tinha caído sozinha — só limpa o estado local
+    }
+
+    function toggleVR() {
+        if (isPresenting()) exitVR();
+        else enterVR();
+    }
+
+    /** Limpeza chamada tanto pelo nosso exitVR() quanto pelo evento nativo
+     *  "end" da sessão (ex.: usuário tira o headset/encerra pelo sistema). */
+    function _onSessionEnd() {
+        const renderer = ThreeManager.getRenderer();
+        const cam = ThreeManager.getCamera();
+        if (_vrRig && cam.parent === _vrRig) {
+            _vrRig.remove(cam);
+            if (_camOriginalParent) _camOriginalParent.add(cam);
+        }
+        if (_vrRig) {
+            _controllerGrips.forEach(g => { if (g) g.visible = false; });
+            _jointMeshes.forEach(arr => arr.forEach(m => m.visible = false));
+        }
+        // Restaura o modo de câmera de antes de entrar em VR.
+        const sply = Tree.find("sply");
+        if (sply?.properties && _wasFirstPersonBeforeVR) {
+            sply.properties.CameraMode = _wasFirstPersonBeforeVR;
+        }
+        // Se o Play não estava rodando antes de entrarmos em VR, para ele
+        // também ao sair — não deixa o jogo "preso" rodando sem querer.
+        if (!_wasPlayModeBeforeEnter && Simulation.active) Simulation.toggle();
+
+        _session = null;
+        const label = document.getElementById("btn-enter-vr-label");
+        if (label) label.textContent = "VR";
+        try { if (renderer) renderer.xr.setSession(null); } catch (_) {}
+        UI.showToast("🥽 VR encerrado.");
+    }
+
+    return { checkSupport, isPresenting, enterVR, exitVR, toggleVR, updateRig, pollInput, update };
+})();
+
+/* ================================================================
+   MÓDULO 13C · CAMERA VR MANAGER  (nova função a pedido do usuário)
+   ─────────────────────────────────────────────────────────────────
+   "VR por Câmera" — pro VR funcionar em aparelhos SEM headset/WebXR
+   (celular, PC, notebook, TV com câmera/webcam), usando a própria
+   câmera do dispositivo pra rastrear a CABEÇA.
+
+   (melhoria a pedido do usuário) Antes isso só olhava a POSIÇÃO do
+   rosto no quadro (a pessoa deslocava a cabeça de leve pros lados).
+   Agora usa o MediaPipe Face Landmarker, que devolve uma matriz de
+   transformação 3D real do rosto — dá pra saber se a pessoa girou a
+   cabeça pra CIMA, BAIXO, LADO (yaw/pitch/roll de verdade), não só se
+   ela se deslocou.
+
+   (OTIMIZAÇÃO — remoção do rastreamento de mão) O módulo rodava dois
+   modelos MediaPipe por quadro (Face Landmarker + Hand Landmarker),
+   dobrando o custo de inferência, o tempo de carregamento inicial (2
+   modelos baixados/inicializados) e o trabalho de desenho no canvas de
+   overlay. Como o foco real do recurso é olhar ao redor com a cabeça,
+   o Hand Landmarker foi removido por completo — sobra mais orçamento
+   de CPU/GPU pro Face Landmarker rodar com menos frame-skip e mais
+   responsivo, e o app fica mais leve e mais rápido pra carregar.
+
+   LIMITAÇÃO FÍSICA HONESTA: uma câmera comum (webcam/celular/TV) só
+   enxerga o rosto de frente — passado ~35-45° de giro pro lado o
+   rosto fica de perfil/de costas e a câmera PERDE o rastreio (não tem
+   jeito de ver através da própria cabeça da pessoa). Pra ainda dar pra
+   "fazer um 360", este módulo tem um truque: se a pessoa chegar perto
+   do limite que a câmera enxerga e DEPOIS sair do rastreio (girou mais
+   rápido que a câmera consegue acompanhar), a câmera do jogo continua
+   girando sozinha na mesma direção até o rosto reaparecer — como se a
+   pessoa tivesse "chutado" o giro e ele completasse a volta. Não é
+   rastreio de verdade nesse trecho (fisicamente impossível com 1
+   câmera), é uma aproximação — mas dá pra girar 360° de verdade.
+   ================================================================ */
+const CameraVR = (() => {
+    const TASKS_VISION_VER = "0.10.3";
+    const WASM_URL  = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VER}/wasm`;
+    const MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VER}/vision_bundle.mjs`;
+    const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+    // (OTIMIZAÇÃO) Frame-skip agora é DINÂMICO: começa em 1 (o Face
+    // Landmarker sozinho, sem o Hand Landmarker, é leve o bastante pra
+    // rodar praticamente todo quadro) e o próprio app ajusta sozinho pra
+    // cima (até FRAME_SKIP_MAX, poupando bateria/CPU num aparelho fraco) ou
+    // pra baixo (até FRAME_SKIP_MIN, mais responsivo num aparelho forte) de
+    // acordo com quanto tempo o Face Landmarker realmente gastou nos
+    // últimos quadros — ver _adaptFrameSkip(). Antes era um número fixo só,
+    // então ou sobrava performance num PC rápido ou faltava num celular
+    // fraco. (OTIMIZAÇÃO) O orçamento de tempo por quadro também caiu de
+    // 22ms pra 14ms: sem o Hand Landmarker concorrendo pelo mesmo orçamento,
+    // um custo bem menor já é "caro" — reagir mais cedo mantém a detecção
+    // fluida em aparelhos mais fracos.
+    const FRAME_SKIP_MIN = 1;
+    const FRAME_SKIP_MAX = 3;
+    let   _frameSkip      = 1;
+    const PROC_BUDGET_MS  = 14;         // acima disso = sobe o skip; bem abaixo = desce o skip
+    let   _procTimeEMA     = 8;         // média móvel (EMA) do tempo de detecção, em ms
+
+    const SENS_YAW   = 1.35;            // multiplicador: 1 rad de giro real de cabeça → 1.35 rad de olhar no jogo
+    const SENS_PITCH = 1.15;
+    const YAW_EDGE   = 0.62;            // ~35° — perto do limite que a câmera ainda enxerga o rosto de perfil
+    const SPIN_RATE  = 2.6;             // rad/s do giro contínuo simulado enquanto o rosto está fora de vista
+
+    // (MELHORIA — rastreamento de rosto) Suavização ADAPTATIVA em vez de um
+    // lerp fixo: quando o movimento da cabeça é pequeno (rosto quase parado)
+    // filtra bastante pra tirar o "tremido" do sensor; quando o movimento é
+    // grande (virada rápida de cabeça) filtra pouco pra não ficar com
+    // sensação de atraso/"chiclete". É uma versão simplificada do filtro
+    // "One Euro", clássico pra suavizar tracking de rosto/mão sem atraso.
+    const SMOOTH_MIN = 0.14;            // filtro forte quando parado (menos jitter)
+    const SMOOTH_MAX = 0.55;            // filtro fraco quando virando rápido (menos lag)
+    const SMOOTH_VEL_GAIN = 3.2;        // o quanto a velocidade angular "abre" o filtro
+
+    // (nova função a pedido do usuário) Sensibilidade da câmera com o rosto
+    // — multiplicador aplicado em cima de SENS_YAW/SENS_PITCH, ajustável
+    // pelo slider do painel (0.4x a 2.5x) e salvo no localStorage pra não
+    // precisar reconfigurar toda vez que entra na VR por Câmera.
+    const SETTINGS_KEY = "camvr_settings_v1";
+    let _sensMult = 1.0;
+
+    let _supported = false, _libLoaded = false, _active = false;
+    let _stream = null, _rafHandle = null, _frameCounter = 0;
+    let _faceLandmarker = null;
+    let _invertYaw = false, _invertPitch = false;
+    let _wasPlayModeBeforeEnter = false, _wasFirstPersonBeforeEnter = null;
+
+    // (OTIMIZAÇÃO) Canvas oculto pra REDUZIR a resolução do quadro entregue
+    // ao Face Landmarker quando o aparelho está no limite (frame-skip já no
+    // máximo e ainda assim demorando) — a detecção fica bem mais barata
+    // processando, por exemplo, 240x180 em vez de 480x360, sem precisar
+    // reiniciar a webcam nem mudar a resolução exibida no preview.
+    let _detCanvas = null, _detCtx = null;
+    let _useDownscale = false;
+    const DOWNSCALE_W = 240, DOWNSCALE_H = 180;
+
+    // Ângulos brutos da cabeça lidos da matriz de transformação facial
+    // (radianos), e a calibração "olhando em frente" (ver recenter()).
+    let _headYaw = 0, _headPitch = 0, _headRoll = 0;
+    let _baseYaw = 0, _basePitch = 0;
+    let _faceDetected = false;
+
+    // Suavização + mecanismo de "giro contínuo" além do alcance da câmera
+    // (ver comentário grande no topo do módulo).
+    let _smoothYaw = 0, _smoothPitch = 0;
+    let _yawBase = 0;                  // deslocamento acumulado durante um "giro além do alcance"
+    let _holdDir = 0;                  // -1 / 0 / +1 — direção do giro contínuo em andamento
+    let _appliedYaw = 0, _appliedPitch = 0; // quanto já foi somado no _yaw/_pitch da Simulation (delta)
+    let _lastFaceTs = 0;               // performance.now() da última leitura — usado pra medir velocidade angular
+
+    function _els() {
+        return {
+            btn: document.getElementById("btn-enter-cam-vr"),
+            label: document.getElementById("btn-enter-cam-vr-label"),
+            panel: document.getElementById("cam-vr-panel"),
+            video: document.getElementById("cam-vr-video"),
+            canvas: document.getElementById("cam-vr-canvas"),
+            status: document.getElementById("cam-vr-status"),
+            angles: document.getElementById("cam-vr-angles"),
+            sensSlider: document.getElementById("cam-vr-sensitivity"),
+            sensLabel: document.getElementById("cam-vr-sensitivity-label"),
+        };
+    }
+
+    /** (nova função a pedido do usuário) Lê sensibilidade/inversão salvas do
+     *  localStorage — chamado 1x no boot, junto com checkSupport(). Se nunca
+     *  foi configurado antes, mantém os padrões (1.0x, sem inverter). */
+    function _loadSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+            if (saved) {
+                if (typeof saved.sensMult === "number") _sensMult = Math.max(0.4, Math.min(2.5, saved.sensMult));
+                _invertYaw   = !!saved.invertYaw;
+                _invertPitch = !!saved.invertPitch;
+            }
+        } catch (_) { /* localStorage indisponível — segue com o padrão */ }
+    }
+    function _saveSettings() {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensMult: _sensMult, invertYaw: _invertYaw, invertPitch: _invertPitch })); }
+        catch (_) { /* storage indisponível/cheio — não é crítico, só perde a preferência salva */ }
+    }
+    /** (nova função a pedido do usuário) Slider "Sensibilidade da câmera
+     *  (rosto)" do painel — 0.4x (bem suave, pra quem se irrita fácil com
+     *  giro grande) até 2.5x (vira o olhar bem rápido com pouco movimento
+     *  real de cabeça, bom pra quem tem alcance de pescoço menor). */
+    function setSensitivity(v) {
+        _sensMult = Math.max(0.4, Math.min(2.5, parseFloat(v) || 1.0));
+        _saveSettings();
+        const { sensLabel } = _els();
+        if (sensLabel) sensLabel.textContent = _sensMult.toFixed(2) + "x";
+    }
+    function getSensitivity() { return _sensMult; }
+
+    /** Checa se o navegador tem câmera (getUserMedia) e mostra o botão —
+     *  chamado 1x no boot, igual VRManager.checkSupport(). Não checa
+     *  permissão ainda (isso só é pedido quando o usuário liga o recurso). */
+    async function checkSupport() {
+        _loadSettings();
+        _supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+        const { btn } = _els();
+        if (btn) {
+            btn.classList.toggle("hidden", !_supported);
+            btn.classList.toggle("flex", _supported);
+        }
+        return _supported;
+    }
+
+    function isActive() { return _active; }
+
+    /** (OTIMIZAÇÃO) Carrega o MediaPipe Tasks Vision (só o Face Landmarker
+     *  agora — o Hand Landmarker foi removido) sob demanda, só na 1ª vez
+     *  que o recurso é ligado. Um único modelo pra baixar/inicializar deixa
+     *  o primeiro carregamento bem mais rápido do que antes, com 2. */
+    async function _ensureLib() {
+        if (_libLoaded && _faceLandmarker) return true;
+        const { FilesetResolver, FaceLandmarker } = await import(/* webpackIgnore: true */ MODULE_URL);
+        const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
+
+        async function _createWithFallback(Cls, opts) {
+            try {
+                return await Cls.createFromOptions(fileset, { ...opts, baseOptions: { ...opts.baseOptions, delegate: "GPU" } });
+            } catch (_) {
+                // Nem todo aparelho tem aceleração GPU pro WASM — cai pra CPU.
+                return await Cls.createFromOptions(fileset, { ...opts, baseOptions: { ...opts.baseOptions, delegate: "CPU" } });
+            }
+        }
+
+        _faceLandmarker = await _createWithFallback(FaceLandmarker, {
+            baseOptions: { modelAssetPath: FACE_MODEL_URL },
+            outputFacialTransformationMatrixes: true,
+            outputFaceBlendshapes: false,
+            runningMode: "VIDEO",
+            numFaces: 1,
+            // (MELHORIA — rastreamento de rosto) confiança de detecção um
+            // pouco mais baixa (acha o rosto mais fácil em luz ruim/ângulo
+            // de perfil) combinada com confiança de TRACKING mais alta
+            // (uma vez que achou, só solta o rosto se tiver bem certeza que
+            // perdeu) — resultado: menos "Procurando rosto…" piscando à toa.
+            minFaceDetectionConfidence: 0.45,
+            minFacePresenceConfidence: 0.45,
+            minTrackingConfidence: 0.6
+        });
+        _libLoaded = true;
+        return true;
+    }
+
+    /** Liga a câmera + rastreio e transforma o Play em "VR por câmera". */
+    async function enterCameraVR() {
+        if (!_supported) { UI.showToast("📷 Este navegador/dispositivo não tem câmera disponível."); return; }
+        if (_active) return;
+        if (typeof VRManager !== "undefined" && VRManager.isPresenting()) VRManager.exitVR();
+        const { btn, label, panel, video, status } = _els();
+        try {
+            UI.showToast("📷 Carregando rastreio de rosto (1ª vez pode demorar alguns segundos)…");
+            await _ensureLib();
+
+            _stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 } },
+                audio: false
+            });
+            if (video) {
+                video.srcObject = _stream;
+                await video.play().catch(() => {});
+            }
+
+            // Mesma lógica do VRManager: garante que o Play já esteja
+            // rodando ANTES de forçar 1ª pessoa, e lembra o estado anterior
+            // pra restaurar tudo direitinho ao sair.
+            _wasPlayModeBeforeEnter = Simulation.active;
+            if (!Simulation.active) Simulation.toggle();
+
+            const sply = Tree.find("sply");
+            _wasFirstPersonBeforeEnter = sply?.properties?.CameraMode || "ThirdPerson";
+            if (sply?.properties) sply.properties.CameraMode = "FirstPerson";
+
+            _headYaw = _headPitch = _headRoll = 0;
+            _baseYaw = _basePitch = 0;
+            _smoothYaw = _smoothPitch = _yawBase = 0;
+            _appliedYaw = _appliedPitch = 0;
+            _holdDir = 0;
+            _faceDetected = false;
+            _lastFaceTs = performance.now();
+            _frameSkip = FRAME_SKIP_MIN;
+            _procTimeEMA = 8;
+            _useDownscale = false;
+            _frameCounter = 0;
+            _active = true;
+
+            // (nova função) Sincroniza os controles do painel (checkboxes de
+            // inversão + slider de sensibilidade) com o que foi carregado do
+            // localStorage em checkSupport()/_loadSettings(), pra pessoa não
+            // precisar reconfigurar toda vez que entra na VR por Câmera.
+            const { sensSlider, sensLabel } = _els();
+            const invX = document.getElementById("cam-vr-invert");
+            const invP = document.getElementById("cam-vr-invert-pitch");
+            if (invX) invX.checked = _invertYaw;
+            if (invP) invP.checked = _invertPitch;
+            if (sensSlider) sensSlider.value = String(_sensMult);
+            if (sensLabel) sensLabel.textContent = _sensMult.toFixed(2) + "x";
+
+            if (panel) panel.classList.remove("hidden");
+            if (btn) btn.classList.add("studio-active");
+            if (label) label.textContent = "Sair da VR por Câmera";
+            if (status) status.textContent = "Procurando rosto…";
+
+            _rafHandle = requestAnimationFrame(_rafLoop);
+            UI.showToast("📷 VR por Câmera ativo — gire a cabeça pra olhar ao redor (cima/baixo/lado).");
+            UI.log("📷 VR por Câmera ativo — rastreando rotação real da cabeça (yaw/pitch/roll) pela webcam.", "success");
+        } catch (err) {
+            console.error("[CameraVR] Falha ao ligar VR por câmera:", err);
+            UI.showToast("⚠️ Não foi possível iniciar o rastreio (câmera negada/indisponível ou falha ao carregar o modelo).");
+            _cleanup();
+        }
+    }
+
+    function _cleanup() {
+        _active = false;
+        if (_rafHandle) { cancelAnimationFrame(_rafHandle); _rafHandle = null; }
+        if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+        const { video, canvas } = _els();
+        if (video) video.srcObject = null;
+        if (canvas) { const ctx = canvas.getContext("2d"); ctx && ctx.clearRect(0, 0, canvas.width, canvas.height); }
+        _useDownscale = false;
+    }
+
+    function exitCameraVR() {
+        if (!_active) return;
+        _cleanup();
+
+        const sply = Tree.find("sply");
+        if (sply?.properties && _wasFirstPersonBeforeEnter) {
+            sply.properties.CameraMode = _wasFirstPersonBeforeEnter;
+        }
+        if (!_wasPlayModeBeforeEnter && Simulation.active) Simulation.toggle();
+
+        const { btn, label, panel, status, angles } = _els();
+        if (panel) panel.classList.add("hidden");
+        if (btn) btn.classList.remove("studio-active");
+        if (label) label.textContent = "VR por Câmera";
+        if (status) status.textContent = "";
+        if (angles) angles.textContent = "";
+        UI.showToast("📷 VR por Câmera encerrado.");
+    }
+
+    function toggle() { _active ? exitCameraVR() : enterCameraVR(); }
+
+    /** Recalibra o "olhar em frente" pra rotação atual da cabeça — útil se
+     *  a pessoa não estava olhando reto pra câmera ao ligar o recurso.
+     *  Chamado pelo botão "Centralizar" do painel. */
+    function recenter() {
+        _baseYaw = _headYaw; _basePitch = _headPitch;
+        _smoothYaw = 0; _smoothPitch = 0; _yawBase = 0; _holdDir = 0;
+        UI.showToast("📷 Centralizado — essa é a nova posição neutra.");
+    }
+
+    function setInvertX(v) { _invertYaw = !!v; _saveSettings(); }     // mantém nome pra compatibilidade com o checkbox existente
+    function setInvertPitch(v) { _invertPitch = !!v; _saveSettings(); }
+
+    /** Extrai yaw/pitch/roll (radianos) da matriz de transformação 3D do
+     *  rosto que o Face Landmarker devolve — é a ROTAÇÃO real da cabeça,
+     *  não só a posição dela no quadro. Reaproveita THREE.Matrix4/Euler,
+     *  que a engine já usa em todo lugar. */
+    function _extractHeadAngles(matrixData) {
+        const m = new THREE.Matrix4().fromArray(matrixData);
+        const euler = new THREE.Euler().setFromRotationMatrix(m, "YXZ");
+        return { yaw: euler.y, pitch: euler.x, roll: euler.z };
+    }
+
+    /** Loop principal — roda em requestAnimationFrame (ligado à taxa de
+     *  atualização da tela), mas só executa a detecção pesada a cada
+     *  _frameSkip quadros (dinâmico — ver _adaptFrameSkip) pra poupar CPU/bateria. */
+    function _rafLoop() {
+        if (!_active) return;
+        _frameCounter++;
+        if (_frameCounter % _frameSkip === 0) _processFrame();
+        _rafHandle = requestAnimationFrame(_rafLoop);
+    }
+
+    /** (OTIMIZAÇÃO) Ajusta _frameSkip sozinho de acordo com quanto tempo a
+     *  detecção (Face+Hand Landmarker) realmente gastou, em média (EMA).
+     *  Aparelho forte sobrando tempo → desce o skip (mais fluido/preciso).
+     *  Aparelho fraco estourando o orçamento → sobe o skip (poupa
+     *  CPU/bateria antes de travar o app inteiro). Se MESMO no teto de skip
+     *  o aparelho continuar devagar, liga o downscale (processa a imagem
+     *  bem menor) — o próximo nível de economia, antes de simplesmente
+     *  deixar o app lento. Só desliga o downscale quando sobra bastante
+     *  margem de novo, com uma folga (hysteresis) pra não ficar
+     *  ligando/desligando toda hora. */
+    function _adaptFrameSkip(procMs) {
+        _procTimeEMA += (procMs - _procTimeEMA) * 0.15;
+        if (_procTimeEMA > PROC_BUDGET_MS && _frameSkip < FRAME_SKIP_MAX) _frameSkip++;
+        else if (_procTimeEMA < PROC_BUDGET_MS * 0.45 && _frameSkip > FRAME_SKIP_MIN) _frameSkip--;
+
+        if (!_useDownscale && _frameSkip >= FRAME_SKIP_MAX && _procTimeEMA > PROC_BUDGET_MS) {
+            _useDownscale = true;
+        } else if (_useDownscale && _procTimeEMA < PROC_BUDGET_MS * 0.35 && _frameSkip <= FRAME_SKIP_MIN + 1) {
+            _useDownscale = false;
+        }
+    }
+
+    /** (OTIMIZAÇÃO) Devolve a "fonte" de imagem que os Landmarkers devem
+     *  processar: o vídeo cru normalmente, ou um canvas bem menor (ver
+     *  DOWNSCALE_W/H) quando _useDownscale está ligado. Como os landmarks
+     *  do MediaPipe são NORMALIZADOS (0–1), reduzir a resolução de entrada
+     *  não muda nenhuma conta do resto do código — só acelera a inferência. */
+    function _getDetectionSource(video) {
+        if (!_useDownscale) return video;
+        if (!_detCanvas) {
+            _detCanvas = document.createElement("canvas");
+            _detCanvas.width = DOWNSCALE_W;
+            _detCanvas.height = DOWNSCALE_H;
+            _detCtx = _detCanvas.getContext("2d", { willReadFrequently: true });
+        }
+        _detCtx.drawImage(video, 0, 0, DOWNSCALE_W, DOWNSCALE_H);
+        return _detCanvas;
+    }
+
+    function _processFrame() {
+        const { video, canvas, status, angles } = _els();
+        if (!video || video.readyState < 2 || !_faceLandmarker) return;
+        const ts = performance.now();
+        const _procStart = ts; // (OTIMIZAÇÃO) marca o início pra medir custo real da detecção
+        const src = _getDetectionSource(video); // (OTIMIZAÇÃO) vídeo cru ou canvas reduzido, ver _adaptFrameSkip
+
+        let faceRes = null;
+        try { faceRes = _faceLandmarker.detectForVideo(src, ts); } catch (e) { console.error("[CameraVR] Erro no Face Landmarker:", e); }
+
+        // ── Rosto: extrai yaw/pitch/roll reais da matriz de transformação ──
+        const matrixes = faceRes?.facialTransformationMatrixes;
+        if (matrixes && matrixes.length) {
+            const { yaw, pitch, roll } = _extractHeadAngles(matrixes[0].data);
+            _headYaw = yaw; _headPitch = pitch; _headRoll = roll;
+            _faceDetected = true;
+            _lastFaceTs = ts;
+            if (status) status.textContent = "Rosto detectado ✓";
+        } else {
+            _faceDetected = false;
+            if (status) status.textContent = "Procurando rosto…";
+        }
+        if (angles) {
+            const toDeg = r => Math.round(r * 180 / Math.PI);
+            angles.textContent = _faceDetected
+                ? `yaw ${toDeg(_headYaw - _baseYaw)}°  pitch ${toDeg(_headPitch - _basePitch)}°  roll ${toDeg(_headRoll)}°`
+                : "";
+        }
+
+        _drawOverlay(video, canvas, matrixes && matrixes.length ? faceRes.faceLandmarks?.[0] : null);
+
+        // (OTIMIZAÇÃO) tempo real gasto neste quadro de detecção → ajusta o
+        // frame-skip pro próximo ciclo.
+        _adaptFrameSkip(performance.now() - _procStart);
+    }
+
+    /** Desenha, no canvas sobreposto ao preview, um ponto no nariz (âncora
+     *  visual do rosto) e o contorno do rosto detectado. */
+    function _drawOverlay(video, canvas, faceLandmarks) {
+        if (!canvas) return;
+        canvas.width = video.videoWidth || 480;
+        canvas.height = video.videoHeight || 360;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const W = canvas.width, H = canvas.height;
+
+        if (faceLandmarks && faceLandmarks[1]) {
+            const nose = faceLandmarks[1]; // ponta do nariz — âncora visual da "cabeça"
+            ctx.fillStyle = "#22c55e";
+            ctx.beginPath();
+            ctx.arc(nose.x * W, nose.y * H, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // (MELHORIA — rastreamento de rosto) além do pontinho no nariz,
+            // desenha um contorno leve do rosto (usando o bounding box dos
+            // landmarks), deixando visualmente claro que o rosto INTEIRO
+            // está sendo rastreado, não só um ponto.
+            let minX = 1, minY = 1, maxX = 0, maxY = 0;
+            for (let k = 0; k < faceLandmarks.length; k += 4) { // amostra 1 a cada 4 pontos — suficiente pro contorno, mais barato
+                const p = faceLandmarks[k];
+                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+            }
+            ctx.strokeStyle = "rgba(34,197,94,0.55)";
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(minX * W, minY * H, (maxX - minX) * W, (maxY - minY) * H);
+        }
+    }
+
+    /** Chamado a cada frame por Simulation.update(dt) — devolve o DELTA de
+     *  yaw/pitch desde a última chamada (nunca um valor absoluto), pra
+     *  compor certinho com mouse/setas/analógico sem "brigar" com eles. */
+    function pollLook(dt) {
+        if (_faceDetected) {
+            _holdDir = 0;
+            const rawYaw   = (_headYaw   - _baseYaw)   * (_invertYaw   ? -1 : 1);
+            const rawPitch = (_headPitch - _basePitch) * (_invertPitch ? -1 : 1);
+
+            const targetYaw   = _yawBase + rawYaw * SENS_YAW * _sensMult;
+            const targetPitch = rawPitch * SENS_PITCH * _sensMult;
+            // (MELHORIA — rastreamento de rosto) filtro adaptativo: quanto
+            // maior a diferença entre o alvo e o valor suavizado atual (ou
+            // seja, quanto mais rápido a cabeça está girando), menos filtro
+            // aplica — vira rápido sem sensação de atraso. Parado, filtra
+            // forte e tira o tremido. Ver SMOOTH_MIN/SMOOTH_MAX no topo.
+            const diff = Math.abs(targetYaw - _smoothYaw) + Math.abs(targetPitch - _smoothPitch);
+            const dynSmooth = Math.min(SMOOTH_MAX, SMOOTH_MIN + diff * SMOOTH_VEL_GAIN);
+            _smoothYaw   += (targetYaw   - _smoothYaw)   * dynSmooth;
+            _smoothPitch += (targetPitch - _smoothPitch) * dynSmooth;
+
+            // Perto do limite que a câmera ainda enxerga de perfil: arma a
+            // direção do giro contínuo pro caso o rastreio se perca no
+            // próximo quadro (ver bloco abaixo).
+            if (Math.abs(rawYaw) > YAW_EDGE) _holdDir = Math.sign(rawYaw);
+        } else if (_holdDir !== 0 && dt) {
+            // Rosto sumiu do quadro logo depois de chegar na borda do
+            // alcance — a pessoa provavelmente continuou girando a cabeça
+            // além do que a câmera consegue enxergar. Continua o giro
+            // sozinho na mesma direção até o rosto reaparecer.
+            const step = _holdDir * SPIN_RATE * dt;
+            _yawBase   += step;
+            _smoothYaw += step;
+        }
+
+        const dYaw   = _smoothYaw   - _appliedYaw;
+        const dPitch = _smoothPitch - _appliedPitch;
+        _appliedYaw   = _smoothYaw;
+        _appliedPitch = _smoothPitch;
+        return { dYaw, dPitch };
+    }
+
+    return { checkSupport, isActive, enterCameraVR, exitCameraVR, toggle, recenter, setInvertX, setInvertPitch, setSensitivity, getSensitivity, pollLook };
 })();
 
 /* ================================================================
@@ -21767,6 +23453,8 @@ function setupKeyboard() {
             UI.closeModal('plugin-manager-modal');
             UI.closeAllDropdowns();
             if (Simulation.active) Simulation.toggle();
+            if (typeof VRManager !== "undefined" && VRManager.isPresenting()) VRManager.exitVR();
+            if (typeof CameraVR !== "undefined" && CameraVR.isActive()) CameraVR.exitCameraVR();
             if (typeof AnimEditor !== "undefined" && AnimEditor.active) AnimEditor.close();
             if (typeof ToolPoseEditor !== "undefined" && ToolPoseEditor.active) ToolPoseEditor.close();
         if (typeof ToolBuildEditor !== "undefined" && ToolBuildEditor.active) ToolBuildEditor.close();
@@ -21907,6 +23595,8 @@ window.addEventListener('DOMContentLoaded', () => {
     _initStep("configurar o teclado", setupKeyboard);
     _initStep("configurar controle (Xbox/PS4/PS5) e joystick de toque", Simulation.setupControlsUI);
     _initStep("configurar redimensionador Explorer/Properties", setupExplorerPropertiesResizer);
+    _initStep("checar suporte a VR/WebXR (nova função)", () => VRManager.checkSupport());
+    _initStep("checar suporte a VR por Câmera (nova função)", () => CameraVR.checkSupport());
     _initStep("carregar plugins salvos", Plugins.loadAllStored);
     _initStep("iniciar o autosave", App._startAutosaveLoop);
     // (nova função) Sincroniza o catálogo do Toolbox com o GitHub assim que
