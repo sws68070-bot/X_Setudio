@@ -453,7 +453,7 @@
                 </div>
 
                 <button type="button" onclick="document.getElementById('account-login-file-input').click()" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5"><i class="fa-solid fa-file-arrow-up"></i> Carregar arquivo de conta (.json)</button>
-                <input type="file" id="account-login-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onFileSelected(this)">
+                <input type="file" id="account-login-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onAccountFileSelected(this)">
             </div>
         </div>
     </div>
@@ -594,6 +594,22 @@
 
         <div class="border-t studio-border"></div>
 
+        <!-- ═══ (nova função a pedido do usuário) Arquivo de conta — diferente
+             do backup completo abaixo: leva SÓ os dados desta conta logada
+             (perfil, senha em hash, amizades, só as SUAS conversas, e o
+             repositório/token do GitHub se essa conta usar um) — nunca as
+             outras contas que porventura estejam salvas neste navegador.
+             É o que os botões "Carregar arquivo de conta" (tela inicial e
+             trocar de conta) esperam — ver LocalBackup.downloadAccount()/
+             _restoreAccount(). ═══ -->
+        <div class="flex flex-col gap-2 bg-studio-input border studio-border rounded px-3 py-2">
+            <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-solid fa-id-card text-emerald-400"></i> Arquivo desta conta</span>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">Gera um arquivo .json só com os dados de <b id="account-file-owner-preview" class="text-zinc-400">-</b> — pra entrar nela em outro navegador/computador. Não leva outras contas nem outros dados deste navegador.</p>
+            <button onclick="LocalBackup.downloadAccount()" class="w-full px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> Baixar arquivo de conta (.json)</button>
+        </div>
+
+        <div class="border-t studio-border"></div>
+
         <!-- ═══ (nova função a pedido do usuário) Backup local em arquivo —
              não depende de internet nem de GitHub: baixa TUDO que está
              salvo neste navegador (conta, senha em hash, amizades,
@@ -602,13 +618,13 @@
              .json, e permite carregar esse arquivo de volta — aqui mesmo
              ou em outro navegador/computador — pra restaurar tudo. ═══ -->
         <div class="flex flex-col gap-2 bg-studio-input border studio-border rounded px-3 py-2">
-            <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-solid fa-floppy-disk text-sky-400"></i> Backup local (arquivo)</span>
-            <p class="text-zinc-600 text-[10px] leading-relaxed">Salva tudo o que está guardado neste navegador — conta, amizades, mensagens, projetos, plugins e o token do GitHub (se houver) — num arquivo .json. Não precisa de internet nem de repositório configurado.</p>
+            <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-solid fa-floppy-disk text-sky-400"></i> Backup local completo (arquivo)</span>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">Salva TUDO o que está guardado neste navegador — <b class="text-zinc-400">inclusive outras contas salvas aqui</b>, mensagens, projetos, plugins e o token do GitHub (se houver) — num arquivo .json. Use isso pra migrar/restaurar o navegador inteiro, não pra logar numa conta específica em outro lugar (pra isso, use "Arquivo desta conta" acima).</p>
             <span id="backup-local-status" class="text-[10px] text-zinc-500"></span>
 
-            <button onclick="LocalBackup.download()" class="w-full px-3 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> Baixar backup (.json)</button>
+            <button onclick="LocalBackup.download()" class="w-full px-3 py-2 bg-sky-700 hover:bg-sky-600 text-white rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> Baixar backup completo (.json)</button>
 
-            <label class="text-zinc-400 text-[10px] font-bold mt-1">Carregar um backup</label>
+            <label class="text-zinc-400 text-[10px] font-bold mt-1">Carregar um backup completo</label>
             <div id="backup-drop-zone"
                  class="border-2 border-dashed studio-border rounded-lg px-3 py-4 flex flex-col items-center gap-1.5 cursor-pointer text-center transition-colors"
                  onclick="document.getElementById('backup-file-input').click()"
@@ -616,11 +632,11 @@
                  ondragleave="LocalBackup.handleDragLeave(event)"
                  ondrop="LocalBackup.handleDrop(event)">
                 <i class="fa-solid fa-file-arrow-up text-xl text-zinc-500"></i>
-                <span class="text-zinc-400 text-[10px]">Arraste o arquivo de backup (.json) aqui<br>ou clique para escolher</span>
+                <span class="text-zinc-400 text-[10px]">Arraste o arquivo de backup completo (.json) aqui<br>ou clique para escolher</span>
             </div>
             <input type="file" id="backup-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onFileSelected(this)">
 
-            <p class="text-zinc-600 text-[9px] leading-relaxed border-t studio-border pt-1.5 mt-1">⚠️ Carregar um backup <b class="text-zinc-400">sobrescreve</b> os dados atuais deste navegador. Guarde o arquivo baixado em lugar seguro — quem tiver esse arquivo tem acesso ao token do GitHub salvo nele, se houver um.</p>
+            <p class="text-zinc-600 text-[9px] leading-relaxed border-t studio-border pt-1.5 mt-1">⚠️ Carregar um backup completo <b class="text-zinc-400">sobrescreve TUDO</b> o que está neste navegador, inclusive outras contas salvas aqui. Guarde o arquivo baixado em lugar seguro — quem tiver esse arquivo tem acesso ao token do GitHub salvo nele, se houver um.</p>
         </div>
 
         <div class="border-t studio-border"></div>
@@ -664,7 +680,7 @@
                  um arquivo de backup (.json) — mesmo mecanismo do Backup local
                  das Configurações, só que acessível direto daqui. -->
             <button onclick="document.getElementById('account-switcher-file-input').click()" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-2 justify-center"><i class="fa-solid fa-file-arrow-up"></i> Carregar arquivo de conta</button>
-            <input type="file" id="account-switcher-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onFileSelected(this)">
+            <input type="file" id="account-switcher-file-input" accept="application/json,.json" class="hidden" onchange="LocalBackup.onAccountFileSelected(this)">
             <button onclick="Account.closeAccountSwitcher()" class="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs">Cancelar</button>
         </div>
     </div>
@@ -1404,6 +1420,17 @@
             </div>
             <p class="text-[11px] text-zinc-500 -mt-2">Ainda não liga um modo VR de verdade — é só um teste de configuração por enquanto (fica salvo pra quando essa função existir de fato).</p>
 
+            <!-- (nova função a pedido do usuário) Botão pra ligar/desligar a IA de
+                 otimização automática de gráficos (AIOptimizer) — ela ajusta sombra/
+                 SSAO/AA/bloom/qualidade sozinha durante o Play conforme o FPS medido.
+                 Vem DESATIVADA por padrão; só liga de verdade durante o Play se o
+                 usuário marcar este checkbox aqui. -->
+            <div class="flex items-center justify-between border-t studio-border pt-3">
+                <span class="text-zinc-300">🧠 IA de otimização automática de gráficos</span>
+                <input type="checkbox" id="gfx-ai-optimizer" class="rounded accent-cyan-500 w-4 h-4" onchange="UI.setGfxAIOptimizer(this.checked)">
+            </div>
+            <p class="text-[11px] text-zinc-500 -mt-2">Desativada por padrão. Quando ligada, durante o Play ela sobe/desce sombra, SSAO, AA, bloom e qualidade automaticamente pra manter o FPS bom.</p>
+
             <button onclick="UI.resetGraphicsSettings()" class="w-full mt-2 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 text-xs">↺ Restaurar padrão de fábrica (Auto)</button>
         </div>
     </div>
@@ -1948,6 +1975,8 @@ const META = (() => {
         Beam:           { icon:"fa-solid fa-bolt text-rose-400" },
         Sky:            { icon:"fa-solid fa-cloud-sun text-sky-400" },
         BloomEffect:    { icon:"fa-solid fa-sun text-amber-400" },
+        Camera:         { icon:"fa-solid fa-camera text-emerald-300" },
+        CameraGui:      { icon:"fa-solid fa-tv text-emerald-400" },
         WeldConstraint: { icon:"fa-solid fa-link text-stone-400" },
         HingeConstraint:{ icon:"fa-solid fa-circle-nodes text-stone-400" },
         RopeConstraint: { icon:"fa-solid fa-bezier-curve text-stone-400" },
@@ -2382,6 +2411,14 @@ function getDefaultProps(cls) {
                          // total, até 3 = superexposto/estourado.
                          AmbientBrightness:1 },
         BloomEffect:   { Intensity:1, Threshold:0.9, Size:24 },
+        // (nova função a pedido do usuário) Camera — objeto posicionável no
+        // Workspace (Position/Rotation como uma Part). "Ativa" decide se, no
+        // Play, a visão do jogador vira a desta câmera (ver Simulation).
+        Camera:        { Position:{x:0,y:5,z:0}, Rotation:{x:0,y:0,z:0}, FOV:70, Ativa:false },
+        // (nova função a pedido do usuário) CameraGui — GUI (vive dentro de
+        // um ScreenGui, igual Frame/ImageLabel) que transmite ao vivo o que
+        // uma Camera do Workspace está vendo, tipo um monitor de CCTV.
+        CameraGui:     { PosX:20, PosY:20, SizeX:280, SizeY:170, BgColor:"#000000", Transparência:0, CameraId:"", Label:"CÂMERA" },
         WeldConstraint:{ Part0Id:"", Part1Id:"", Enabled:true },
         HingeConstraint:{ Part0Id:"", Part1Id:"", LimitsEnabled:false },
         RopeConstraint:{ Part0Id:"", Part1Id:"", Length:10, Thickness:0.1, ColorHex:"#ffaa00" },
@@ -3265,6 +3302,69 @@ const ThreeManager = (() => {
     // atual, guardado aqui pro VRManager usar (rastreio de juntas da mão via
     // frame.getJointPose só existe dentro do callback do próprio XR).
     let _xrFrame = null;
+    /* ================================================================
+       (nova função a pedido do usuário) CAMERA GUI — feeds ao vivo
+       ─────────────────────────────────────────────────────────────
+       Cada <canvas class="camera-gui-canvas"> criado por _processUI()
+       (ver rebuildHUD) ganha aqui seu próprio THREE.WebGLRenderer + uma
+       PerspectiveCamera "fantasma" posicionada igual ao objeto Camera
+       referenciado em CameraId — é assim que a GUI "vê" o que a câmera vê,
+       como um monitor de CCTV, sem afetar a câmera principal do jogador.
+       ================================================================ */
+    const _cameraFeedRenderers = new Map(); // nodeId(GUI) -> { renderer, cam, w, h }
+    function _updateCameraGuiFeeds() {
+        // Descarta renderers cujo <canvas> já não existe mais no DOM (a
+        // GUI foi reconstruída/removida) — evita vazar contextos WebGL.
+        _cameraFeedRenderers.forEach((entry, id) => {
+            if (!document.body.contains(entry.renderer.domElement)) {
+                entry.renderer.dispose();
+                _cameraFeedRenderers.delete(id);
+            }
+        });
+        const canvases = document.querySelectorAll(".camera-gui-canvas");
+        if (!canvases.length) return;
+        canvases.forEach(canvas => {
+            const nodeId = canvas.dataset.nodeId;
+            const guiNode = Tree.find(nodeId);
+            if (!guiNode) return;
+            const camId   = guiNode.properties?.CameraId;
+            const camNode = camId ? Tree.find(camId) : null;
+            const w = canvas.clientWidth  || 280;
+            const h = canvas.clientHeight || 170;
+            if (w < 2 || h < 2) return;
+            let entry = _cameraFeedRenderers.get(nodeId);
+            if (!entry) {
+                const r = new THREE.WebGLRenderer({ canvas, antialias:false, alpha:false });
+                r.setPixelRatio(1);
+                r.shadowMap.enabled = false; // feed de monitor: sombra custa caro e some pouco numa tela pequena
+                const cam2 = new THREE.PerspectiveCamera(70, w / h, 0.1, 1000);
+                entry = { renderer:r, cam:cam2, w:0, h:0 };
+                _cameraFeedRenderers.set(nodeId, entry);
+            }
+            if (entry.w !== w || entry.h !== h) {
+                entry.renderer.setSize(w, h, false);
+                entry.cam.aspect = w / h;
+                entry.w = w; entry.h = h;
+            }
+            if (!camNode) {
+                entry.renderer.setClearColor(0x000000, 1);
+                entry.renderer.clear();
+                return;
+            }
+            const pos = camNode.properties.Position || { x:0, y:5, z:0 };
+            const rot = camNode.properties.Rotation || { x:0, y:0, z:0 };
+            entry.cam.position.set(pos.x, pos.y, pos.z);
+            entry.cam.rotation.set(
+                THREE.MathUtils.degToRad(rot.x || 0),
+                THREE.MathUtils.degToRad(rot.y || 0),
+                THREE.MathUtils.degToRad(rot.z || 0));
+            const fov = camNode.properties.FOV || 70;
+            if (entry.cam.fov !== fov) { entry.cam.fov = fov; }
+            entry.cam.updateProjectionMatrix();
+            entry.renderer.render(scene, entry.cam);
+        });
+    }
+
     function _renderLoop(_time, frame) {
         // (nova função a pedido do usuário — VR) Antes chamávamos
         // requestAnimationFrame(_renderLoop) manualmente pra agendar o
@@ -3471,6 +3571,10 @@ const ThreeManager = (() => {
         else renderer.render(scene, camera);
         renderer.shadowMap.autoUpdate = false;
         renderer.shadowMap.needsUpdate = false; // consumido neste frame; só liga de novo via markDirty/Play
+        // (nova função a pedido do usuário) Atualiza os monitores de
+        // CameraGui (feeds ao vivo das Camera do Workspace) — depois do
+        // render principal, pra não competir por buffers com o composer.
+        _updateCameraGuiFeeds();
     }
 
     /* Marca cena como suja → sync no próximo frame, não imediatamente */
@@ -3682,6 +3786,17 @@ const ThreeManager = (() => {
 
         const single = ids.length === 1 ? Tree.find(ids[0]) : null;
         const singleMesh = single ? objectMap.get(single.id) : null;
+
+        // (correção) Locked existia nas Properties mas não travava nada —
+        // dava pra mover/girar/escalar a Part normalmente pelo gizmo mesmo
+        // marcada como travada. Agora, se a única Part selecionada estiver
+        // Locked, o gizmo simplesmente não anexa nela (continua selecionável
+        // e visível nas Properties, só não é possível arrastar).
+        if (single?.properties?.Locked) {
+            transform.detach();
+            UI.showToast?.(`🔒 "${single.name}" está travada (Locked) — destrave para mover`);
+            return;
+        }
 
         // Caso simples: 1 objeto físico, sem filhos físicos -> attach direto
         if (single && singleMesh && META.PHYSICAL.has(single.className) && !_hasPhysicalDescendant(single)) {
@@ -3993,7 +4108,24 @@ const ThreeManager = (() => {
         Wood:           { roughness:0.85, metalness:0.0,  emissive:false, envMapIntensity:0.15 },
         Concrete:       { roughness:0.95, metalness:0.0,  emissive:false, envMapIntensity:0.1  },
         Ice:            { roughness:0.06, metalness:0.0,  emissive:false, envMapIntensity:0.9  },
+        // ── (nova função a pedido do usuário) Mais materiais, no mesmo
+        // espírito dos presets do Roblox real — cada um com sua própria
+        // combinação de rugosidade/metalicidade/reflexo de ambiente. ──
+        Glass:          { roughness:0.02, metalness:0.0,  emissive:false, envMapIntensity:1.1, opacityMul:0.35 },
+        ForceField:     { roughness:0.3,  metalness:0.0,  emissive:true,  envMapIntensity:0.3, opacityMul:0.5  },
+        Foil:           { roughness:0.2,  metalness:1.0,  emissive:false, envMapIntensity:1.7  },
+        DiamondPlate:   { roughness:0.45, metalness:0.85, emissive:false, envMapIntensity:1.2  },
+        Rubber:         { roughness:0.9,  metalness:0.0,  emissive:false, envMapIntensity:0.08 },
+        Fabric:         { roughness:0.97, metalness:0.0,  emissive:false, envMapIntensity:0.05 },
+        Cobblestone:    { roughness:0.98, metalness:0.0,  emissive:false, envMapIntensity:0.08 },
+        Brick:          { roughness:0.92, metalness:0.0,  emissive:false, envMapIntensity:0.1  },
+        Marble:         { roughness:0.25, metalness:0.0,  emissive:false, envMapIntensity:0.45 },
+        Sand:           { roughness:1.0,  metalness:0.0,  emissive:false, envMapIntensity:0.05 },
+        Ground:         { roughness:1.0,  metalness:0.0,  emissive:false, envMapIntensity:0.04 },
+        Cardboard:      { roughness:0.95, metalness:0.0,  emissive:false, envMapIntensity:0.05 },
     };
+    // Lista usada pelo dropdown "Material" nas Properties — ver buildPropertiesPanel().
+    const MATERIAL_NAMES = Object.keys(MATERIAL_PRESETS);
 
     // Melhoria gráfica v4 · item 3 — textura quadriculada real do baseplate,
     // igual ao xadrez cinza clássico do Roblox Studio, gerada via canvas
@@ -4053,11 +4185,18 @@ const ThreeManager = (() => {
                 });
             }
             mat.color = color;
-            mat.transparent = transparent || mesh.userData.isTruss;
-            mat.opacity = mesh.userData.isTruss ? 0.8 : opacity;
-            mat.roughness = preset.roughness;
+            // (nova função a pedido do usuário) "Reflectance" — igual ao
+            // Roblox real, é um slider 0..1 independente do Material que
+            // adiciona reflexo de ambiente por cima do preset (e reduz um
+            // pouco a rugosidade, pra dar aquele acabamento "polido").
+            // Antes esse slider já existia nas Properties mas não fazia
+            // NADA visualmente — só ficava guardado no properties.
+            const reflectance = Math.max(0, Math.min(1, props.Reflectance || 0));
+            mat.transparent = transparent || mesh.userData.isTruss || preset.opacityMul !== undefined;
+            mat.opacity = mesh.userData.isTruss ? 0.8 : opacity * (preset.opacityMul ?? 1);
+            mat.roughness = Math.max(0.02, preset.roughness * (1 - reflectance * 0.6));
             mat.metalness = preset.metalness;
-            mat.envMapIntensity = preset.envMapIntensity ?? 0.3;
+            mat.envMapIntensity = (preset.envMapIntensity ?? 0.3) + reflectance * 1.8;
             if (preset.emissive) {
                 mat.emissive = color;
                 mat.emissiveIntensity = 1.1;
@@ -4128,11 +4267,15 @@ const ThreeManager = (() => {
                 const isTruss = node.className === "TrussPart";
                 const geo = _makeGeo(node.className);
                 obj = new THREE.Mesh(geo, null);
-                obj.castShadow    = true;
                 obj.receiveShadow = true;
                 obj.userData      = { nodeId:node.id, className:node.className, isTruss };
                 scene.add(obj); objectMap.set(node.id, obj);
             }
+            // (correção) CastShadow existia nas Properties mas era ignorado —
+            // o mesh sempre projetava sombra (fixo em true na criação, acima).
+            // Agora é resincronizado a cada passagem, então desmarcar a caixa
+            // no painel realmente para de projetar sombra dessa Part.
+            obj.castShadow = p.CastShadow !== false;
             // (correção) MeshPart inserido pelo catálogo "Inserir Objeto"
             // mostra um campo MeshId no painel de Propriedades, mas antes
             // preenchê-lo não fazia nada — o objeto continuava sendo o
@@ -4175,11 +4318,28 @@ const ThreeManager = (() => {
                 // (nova função) EdgeHighlight — contorno destacado nas arestas
                 _syncEdgeHighlight(obj, p);
             }
-            if (p.Position) obj.position.set(p.Position.x, p.Position.y, p.Position.z);
-            if (p.Rotation) obj.rotation.set(
-                THREE.MathUtils.degToRad(p.Rotation.x||0),
-                THREE.MathUtils.degToRad(p.Rotation.y||0),
-                THREE.MathUtils.degToRad(p.Rotation.z||0));
+            // (correção — bug real do "física não funciona nas Parts soltas")
+            // Durante o Play, este trecho rodava pra TODA Part sempre que
+            // _syncDirtyScene() disparava (ex.: um Script qualquer mudando
+            // qualquer propriedade em QUALQUER lugar da árvore chama
+            // markDirty()) — e resetava obj.position/rotation pro valor
+            // "estático" salvo em node.properties, sobrescrevendo o que a
+            // física Cannon.js tinha acabado de calcular pra Parts soltas
+            // (Anchored:false) alguns milissegundos antes, em
+            // Simulation.update() → "mesh.position.copy(body.position)".
+            // Resultado: Parts sem Anchored pareciam "não cair" — a física
+            // rodava certinha por baixo, só o visual voltava pro lugar
+            // antigo a cada frame. Agora, durante o Play, só Parts Anchored
+            // (paradas/movidas por script) têm posição/rotação sincronizadas
+            // aqui — Parts soltas ficam por conta exclusiva da física.
+            const _skipXform = Simulation.active && p.Anchored === false;
+            if (!_skipXform) {
+                if (p.Position) obj.position.set(p.Position.x, p.Position.y, p.Position.z);
+                if (p.Rotation) obj.rotation.set(
+                    THREE.MathUtils.degToRad(p.Rotation.x||0),
+                    THREE.MathUtils.degToRad(p.Rotation.y||0),
+                    THREE.MathUtils.degToRad(p.Rotation.z||0));
+            }
             obj.visible = p.Visibilidade !== false;
             // ── Otimização (pesquisada em técnicas de jogos web) ──
             // Parts Anchored (estáticas) nunca mudam de posição/rotação/escala
@@ -4193,6 +4353,41 @@ const ThreeManager = (() => {
             if (p.Anchored) { obj.matrixAutoUpdate = false; obj.updateMatrix(); }
             else if (obj.matrixAutoUpdate === false) { obj.matrixAutoUpdate = true; } // virou solta (ex.: Script mudou Anchored) → volta ao normal
             parentMesh = obj;
+
+        } else if (node.className === "Camera") {
+            // (nova função a pedido do usuário) Instância "Camera" — objeto
+            // posicionável no Workspace (Position/Rotation, igual a uma Part)
+            // que representa uma câmera de verdade. Sua propriedade "Ativa"
+            // (bool) é o que decide se, durante o Play, a visão do jogador
+            // passa a ser a desta câmera — ver Simulation._updateActiveCamera().
+            // O gizmo (corpo + "lente") só existe visualmente no Editor —
+            // fica invisível durante o Play, pra não aparecer feito uma Part
+            // de verdade flutuando na cena.
+            if (!obj) {
+                obj = new THREE.Group();
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.5, 0.4, 0.6),
+                    new THREE.MeshStandardMaterial({ color:0x222222, roughness:0.5, metalness:0.3 }));
+                const lens = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.16, 0.2, 0.3, 16),
+                    new THREE.MeshStandardMaterial({ color:0x0ea5e9, roughness:0.2, metalness:0.6, emissive:0x0ea5e9, emissiveIntensity:0.25 }));
+                lens.rotation.x = Math.PI / 2;
+                lens.position.z = -0.42;
+                body.add(lens);
+                obj.add(body);
+                obj.userData = { nodeId:node.id, className:"Camera" };
+                scene.add(obj); objectMap.set(node.id, obj);
+            }
+            if (p.Position) obj.position.set(p.Position.x, p.Position.y, p.Position.z);
+            if (p.Rotation) obj.rotation.set(
+                THREE.MathUtils.degToRad(p.Rotation.x||0),
+                THREE.MathUtils.degToRad(p.Rotation.y||0),
+                THREE.MathUtils.degToRad(p.Rotation.z||0));
+            // Gizmo some durante o Play (a câmera "de verdade" é o próprio
+            // ThreeManager.getCamera() sendo teleportado pra cá quando Ativa=true).
+            obj.visible = !(typeof Simulation !== "undefined" && Simulation.active);
+            const lensMat = obj.children[0]?.children?.[0]?.material;
+            if (lensMat) lensMat.emissiveIntensity = p.Ativa ? 0.9 : 0.25;
 
         } else if (META.LIGHTS.has(node.className)) {
             if (!obj) {
@@ -4213,8 +4408,7 @@ const ThreeManager = (() => {
                 scene.add(tgt); obj.target = tgt; obj.userData.targetAdded = true;
             }
 
-        } else if (META.EFFECTS.has(node.className)) {
-            const isSmoke = node.className === "Smoke";
+
             if (!obj) {
                 const n = isSmoke ? 40 : 60, pos = new Float32Array(n*3).fill(0);
                 const geo = new THREE.BufferGeometry();
@@ -4931,6 +5125,9 @@ const ThreeManager = (() => {
         setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings, applyBalancedGfxPreset,
         setPlayPerformanceMode,
         getFps, getTriangleCount,
+        // (nova função a pedido do usuário) Lista de materiais disponível para o
+        // dropdown "Material" nas Properties — vem direto do MATERIAL_PRESETS.
+        MATERIAL_NAMES,
     };
 })();
 
@@ -6311,11 +6508,12 @@ const Explorer = (() => {
         { cat:"📝 SCRIPTS", items:["Script","LocalScript","ModuleScript"] },
         { cat:"🟦 EFEITOS & LUZES", items:["Sparkles","Fire","Smoke","ParticleEmitter","Trail","Beam","Sky","BloomEffect","PointLight","SurfaceLight","SpotLight"] },
         { cat:"🔗 CONSTRAINTS", items:["WeldConstraint","HingeConstraint","RopeConstraint","SpringConstraint","RodConstraint","AlignPosition","AlignOrientation","BodyVelocity","LinearVelocity","BodyForce","BodyPosition"] },
-        { cat:"📺 GUI", items:["ScreenGui","SurfaceGui","BillboardGui","Frame","ScrollingFrame","CanvasGroup","TextLabel","TextButton","TextBox","ImageLabel","ImageButton","UICorner","UIGradient","UIStroke","UIGridLayout","UIListLayout","UIPadding","UIAspectRatioConstraint"] },
+        { cat:"📺 GUI", items:["ScreenGui","SurfaceGui","BillboardGui","Frame","ScrollingFrame","CanvasGroup","TextLabel","TextButton","TextBox","ImageLabel","ImageButton","CameraGui","UICorner","UIGradient","UIStroke","UIGridLayout","UIListLayout","UIPadding","UIAspectRatioConstraint"] },
         { cat:"🌐 REDE", items:["RemoteEvent","RemoteFunction"] },
         { cat:"💿 AUDIO", items:["Sound","SoundGroup"] },
         { cat:"👥 JOGADORES & TIMES", items:["Team","Tool"] },
         { cat:"🧍 PERSONAGEM", items:["Humanoid","Attachment","ProximityPrompt","Animator"] },
+        { cat:"🎥 CÂMERA", items:["Camera"] },
         { cat:"📂 ORG", items:["Folder","Model"] },
     ];
 
@@ -6489,6 +6687,9 @@ const Explorer = (() => {
         const node = Tree.find(id);
         if (!node) return;
         if (META.isService(node)) { UI.log("Serviço protegido não pode ser deletado.", "error"); return; }
+        // (correção) Locked agora também protege contra exclusão (Delete/menu
+        // Explorer) — antes a propriedade só existia visualmente no painel.
+        if (node.properties?.Locked) { UI.log(`🔒 "${node.name}" está travada (Locked) — desmarque antes de deletar.`, "error"); return; }
         History.snapshot();
         ThreeManager.cleanupNode(node);
         Tree.remove(id);
@@ -6793,11 +6994,43 @@ function _processUI(node, parent, editorMode = false) {
                 }
                 break;
 
+
+
             case "ImageLabel":
                 el = document.createElement("img");
                 el.src = p.ImageUrl || "";
                 el.style.objectFit = "cover";
                 break;
+
+            case "CameraGui": {
+                // (nova função a pedido do usuário) "Monitor" de GUI que
+                // transmite ao vivo a visão de uma Camera do Workspace —
+                // igual a uma câmera de segurança/CCTV. O <canvas> é
+                // atualizado a cada frame por ThreeManager._updateCameraGuiFeeds()
+                // (só faz sentido durante o Play — no Editor mostra "SEM SINAL").
+                el = document.createElement("div");
+                el.style.position = "relative";
+                el.style.overflow = "hidden";
+                el.style.background = "#000";
+                const canvas = document.createElement("canvas");
+                canvas.className = "camera-gui-canvas";
+                canvas.dataset.nodeId = c.id;
+                canvas.style.width = "100%";
+                canvas.style.height = "100%";
+                canvas.style.display = "block";
+                el.appendChild(canvas);
+                const label = document.createElement("div");
+                label.className = "absolute top-1 left-1.5 text-[9px] font-mono text-red-400 flex items-center gap-1 pointer-events-none";
+                label.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> ${p.Label || "CÂMERA"}`;
+                el.appendChild(label);
+                if (editorMode) {
+                    const noSignal = document.createElement("div");
+                    noSignal.className = "absolute inset-0 flex items-center justify-center text-zinc-600 text-[10px] font-mono";
+                    noSignal.textContent = p.CameraId ? "▶ Play para ver a transmissão" : "sem Camera selecionada";
+                    el.appendChild(noSignal);
+                }
+                break;
+            }
 
             case "ImageButton":
                 el = document.createElement("div");
@@ -6851,7 +7084,7 @@ function _processUI(node, parent, editorMode = false) {
             }
 
             // ── Frame/ScreenGui também são clicáveis no Editor ────
-            if (editorMode && (c.className === "Frame" || c.className === "ScrollingFrame" || c.className === "CanvasGroup")) {
+            if (editorMode && (c.className === "Frame" || c.className === "ScrollingFrame" || c.className === "CanvasGroup" || c.className === "CameraGui")) {
                 el.style.pointerEvents = "auto";
                 el.style.cursor        = "pointer";
                 el.title = `[${c.className}] ${c.name}`;
@@ -9368,6 +9601,16 @@ const LuaEngine = (() => {
                 const p = node.properties[prop];
                 Simulation.teleportPlayerTo(p.x, p.y, p.z);
             }
+            // (correção) Anchored/CanCollide/Massless/Weight/Density mudando
+            // via Script durante o Play precisam refletir no corpo físico
+            // JÁ MONTADO — antes isso só era lido 1x ao montar a física
+            // (_buildBodies), então o Script mudava o valor no Explorer mas
+            // a Part continuava se comportando como antes até Stop/Play.
+            if ((prop === "Anchored" || prop === "CanCollide" || prop === "Massless" ||
+                 prop === "Weight" || prop === "Density") &&
+                typeof Simulation !== "undefined" && Simulation.syncPhysicsProperty) {
+                Simulation.syncPhysicsProperty(node.id, prop);
+            }
             // (correção de performance) Position/Health/Color etc. mudando via
             // script NÃO precisam reconstruir o Explorer inteiro — só Name
             // (tratado acima, antes deste bloco) muda o que aparece na árvore.
@@ -10538,6 +10781,25 @@ UserInputService = setmetatable({}, { __index = function(_, key)
         local rawConnect = sig.Connect
         sig.Connect = function(self, fn)
             return rawConnect(self, function(rawKey) fn(__wrapInputObject(rawKey), false) end)
+        end
+        return sig
+    elseif key == "InputChanged" then
+        -- (correção) faltava este ramo — sem ele, UserInputService.InputChanged
+        -- virava nil e qualquer script que fizesse
+        -- UserInputService.InputChanged:Connect(...) (ex.: zoom da câmera pela
+        -- rodinha do mouse) quebrava com "attempt to index a nil value
+        -- (field 'InputChanged')". O host dispara "__UserInputService"/"InputChanged"
+        -- com deltaY bruto do evento wheel (ver _onCameraWheel), então embrulha
+        -- num "input" no formato Roblox (UserInputType.MouseWheel + Position.Z).
+        local sig = __makeSignal("__UserInputService", key)
+        local rawConnect = sig.Connect
+        sig.Connect = function(self, fn)
+            return rawConnect(self, function(deltaY)
+                fn({
+                    UserInputType = { Name = "MouseWheel" },
+                    Position = { X = 0, Y = 0, Z = (deltaY or 0) > 0 and -1 or 1 },
+                })
+            end)
         end
         return sig
     elseif key == "IsKeyDown" then
@@ -14813,6 +15075,10 @@ const UI = (() => {
         _toggleDetailedStatsPanel(gfx.detailedStats === true);
         // (nova função a pedido do usuário) VR (teste) e dispositivo de controle detectado
         document.getElementById("gfx-vr-test").checked = gfx.vrTest === true;
+        // (nova função a pedido do usuário) Reflete a preferência salva da IA de
+        // otimização gráfica — desativada por padrão.
+        const aiCk = document.getElementById("gfx-ai-optimizer");
+        if (aiCk && typeof AIOptimizer !== "undefined") aiCk.checked = AIOptimizer.isUserEnabled();
         if (typeof Simulation !== "undefined" && Simulation.refreshControlDeviceLabel) Simulation.refreshControlDeviceLabel();
         const idx = Math.max(0, GFX_QUALITY_STEPS.indexOf(gfx.quality));
         document.getElementById("gfx-quality-slider").value = idx;
@@ -14838,6 +15104,16 @@ const UI = (() => {
         document.getElementById("gfx-quality-label").textContent = GFX_QUALITY_LABELS[quality];
         ThreeManager.setGraphicsSettings({ quality });
         showToast(quality === "auto" ? "🎚️ Qualidade: automática (ajusta sozinha pelo FPS)" : `🎚️ Qualidade travada em: ${GFX_QUALITY_LABELS[quality]}`);
+    }
+    // (nova função a pedido do usuário) Liga/desliga a IA de otimização
+    // automática de gráficos — só é a PREFERÊNCIA; ela só entra em ação de
+    // verdade durante o Play (ver Simulation._start). Vem desativada por padrão.
+    function setGfxAIOptimizer(checked) {
+        if (typeof AIOptimizer === "undefined") return;
+        AIOptimizer.setUserEnabled(checked);
+        showToast(checked
+            ? "🧠 IA de otimização de gráficos ativada — vai ajustar sozinha durante o Play."
+            : "🧠 IA de otimização de gráficos desativada.");
     }
     function setGfxToggle(key, checked) {
         ThreeManager.setGraphicsSettings({ [key]: checked });
@@ -15210,10 +15486,15 @@ const UI = (() => {
         if (node.properties) {
             Object.entries(node.properties).forEach(([k, v]) => {
                 if (k === "Source" || k === "_gltfImported" || k === "keyframes" || k === "PoseParts" || k === "PartsConfig") return;
-                if (k === "Face" && (node.className === "SurfaceGui" || node.className === "SurfaceLight")) {
+                if (k === "FillDirection" && node.className === "UIListLayout") {
+                    c.appendChild(_selectRow(k, v, ["Vertical","Horizontal"], nv => { node.properties[k]=nv; ThreeManager.markDirty(); rebuildHUD(); }));
+                } else if (k === "Face" && (node.className === "SurfaceGui" || node.className === "SurfaceLight")) {
                     c.appendChild(_selectRow(k, v, ["Front","Back","Top","Bottom","Right","Left"], nv => { node.properties[k]=nv; ThreeManager.markDirty(); }));
                 } else if (k === "Material" && META.PHYSICAL.has(node.className)) {
-                    c.appendChild(_selectRow(k, v, ["Plastic","SmoothPlastic","Neon","Metal","Wood","Concrete","Ice"], nv => { node.properties[k]=nv; ThreeManager.markDirty(); }));
+                    // (nova função a pedido do usuário) Lista de materiais expandida —
+                    // ThreeManager.MATERIAL_NAMES vem direto do MATERIAL_PRESETS, então
+                    // qualquer material novo adicionado lá já aparece aqui automaticamente.
+                    c.appendChild(_selectRow(k, v, ThreeManager.MATERIAL_NAMES || ["Plastic","SmoothPlastic","Neon","Metal","Wood","Concrete","Ice"], nv => { node.properties[k]=nv; ThreeManager.markDirty(); }));
                 } else if (k === "CameraMode" && node.className === "StarterPlayer") {
                     c.appendChild(_selectRow(k, v, ["ThirdPerson","FirstPerson"], nv => { node.properties[k]=nv; }));
                 } else if (k === "RigType" && node.className === "Humanoid") {
@@ -15224,6 +15505,12 @@ const UI = (() => {
                     // este Animator poder ser reaproveitado em qualquer um,
                     // não só no rig R6 padrão do jogador.
                     c.appendChild(_modelPickerRow(k, v, nv => { node.properties[k]=nv; }));
+                } else if (k === "CameraId" && node.className === "CameraGui") {
+                    // (nova função a pedido do usuário) Picker da Camera que
+                    // este monitor de GUI vai transmitir.
+                    c.appendChild(_cameraPickerRow(k, v, nv => { node.properties[k]=nv; rebuildHUD(); }));
+                } else if (k === "FOV" && node.className === "Camera") {
+                    c.appendChild(_sliderRow(k, v, 10, 120, 1, nv => { node.properties[k]=parseFloat(nv); }));
                 } else if (k === "CharacterScale") {
                     c.appendChild(_sliderRow(k, v, 0.5, 3, 0.05, nv => { node.properties[k]=parseFloat(nv); }));
                 } else if (k === "GripScale" && node.className === "Tool") {
@@ -15464,6 +15751,33 @@ const UI = (() => {
     /** (nova função) Dropdown com todos os Model existentes no Workspace,
      *  pra apontar o TargetModel de um Animator pra qualquer rig — R6, R15
      *  ou um Model customizado montado à mão. */
+    /** (nova função a pedido do usuário) Picker de Câmera — usado pelo
+     *  CameraGui.CameraId, lista todos os objetos "Camera" do Workspace pra
+     *  escolher qual câmera este monitor de GUI vai transmitir. */
+    function _cameraPickerRow(label, value, cb) {
+        const d = document.createElement("div");
+        d.className = "flex flex-col gap-1 bg-studio-panel p-1.5 rounded border border-zinc-800/60 font-mono";
+        const l = document.createElement("label"); l.className = "text-zinc-400 text-[10px] font-bold"; l.textContent = label;
+        d.appendChild(l);
+        const sel = document.createElement("select");
+        sel.className = "w-full bg-studio-input border border-zinc-700 rounded px-2 py-1 text-white text-[11px] focus:outline-none focus:border-blue-500";
+        const empty = document.createElement("option");
+        empty.value = ""; empty.textContent = "— nenhuma —"; empty.selected = !value;
+        sel.appendChild(empty);
+        const cams = [];
+        (function walk(n) {
+            if (n.className === "Camera") cams.push(n);
+            (n.children || []).forEach(walk);
+        })(State.tree);
+        cams.forEach(cn => {
+            const o = document.createElement("option");
+            o.value = cn.id; o.textContent = cn.name; o.selected = cn.id === value;
+            sel.appendChild(o);
+        });
+        sel.onchange = e => cb(e.target.value || "");
+        d.appendChild(sel); return d;
+    }
+
     function _modelPickerRow(label, value, cb) {
         const d = document.createElement("div");
         d.className = "flex flex-col gap-1 bg-studio-panel p-1.5 rounded border border-zinc-800/60 font-mono";
@@ -15516,7 +15830,7 @@ const UI = (() => {
 
     return { log, clearConsole, getLogHistory, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
               openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
-              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxFpsCap, setGfxFpsCapCustom, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
+              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxAIOptimizer, setGfxFpsCap, setGfxFpsCapCustom, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
 })();
 
 /* ================================================================
@@ -16329,21 +16643,32 @@ const Account = (() => {
         const cleanPath = ACCOUNTS_PATH.split("/").map(encodeURIComponent).join("/");
         return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cleanPath}`;
     }
+    // (otimização de token — mesma ideia do Multiplayer._ghGet) accounts.json
+    // pode ser grande (todas as contas) e é relido com frequência (poll de
+    // pedidos de amizade, toda troca de conta etc.) — cache de ETag evita
+    // rebaixar o arquivo inteiro quando nada mudou.
+    let _acctEtag = null; // { etag, data, sha }
     /** Lê accounts.json do repositório configurado. */
     async function _ghGetAccounts() {
         const cfg = GithubStorage.getConfig();
         if (!cfg) return { ok:false, error:"GitHub não configurado.", data:null, sha:null };
         try {
+            const headers = { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" };
+            if (_acctEtag?.etag) headers["If-None-Match"] = _acctEtag.etag;
             const res = await fetch(`${_accApiUrl(cfg)}?ref=${encodeURIComponent(cfg.branch || "main")}`, {
-                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" },
+                headers,
                 cache: "no-store",
             });
-            if (res.status === 404) return { ok:true, data:[], sha:null };
+            if (res.status === 304 && _acctEtag) return { ok:true, data: _acctEtag.data, sha: _acctEtag.sha };
+            if (res.status === 404) { _acctEtag = null; return { ok:true, data:[], sha:null }; }
             if (!res.ok) return { ok:false, error:`Erro HTTP ${res.status} ao ler as contas.`, data:null, sha:null };
             const json = await res.json();
             let parsed = [];
             try { parsed = JSON.parse(_b64ToUtf8Acc(json.content)); } catch (_) { parsed = []; }
-            return { ok:true, data: Array.isArray(parsed) ? parsed : [], sha: json.sha };
+            const list = Array.isArray(parsed) ? parsed : [];
+            const etag = res.headers.get("etag");
+            if (etag) _acctEtag = { etag, data: list, sha: json.sha };
+            return { ok:true, data: list, sha: json.sha };
         } catch (e) {
             return { ok:false, error:"Falha de rede: " + e.message, data:null, sha:null };
         }
@@ -16363,6 +16688,7 @@ const Account = (() => {
             });
             if (!res.ok) return { ok:false, status: res.status, error: (res.status === 409) ? "Conflito (409)" : `Erro HTTP ${res.status}` };
             const json = await res.json();
+            _acctEtag = null; // arquivo mudou, descarta cache
             return { ok:true, sha: json.content?.sha || null };
         } catch (e) {
             return { ok:false, error:"Falha de rede: " + e.message };
@@ -16632,7 +16958,13 @@ const Account = (() => {
        relendo accounts.json em segundo plano — igual ao loop de presença
        que o Multiplayer já usa — e avisa na hora se chegou pedido novo,
        sem precisar sair e entrar de novo ou dar F5. */
-    const FRIEND_POLL_MS = 15000;
+    // (ajustado a pedido do usuário — otimização de token) Isso aqui baixa
+    // o accounts.json INTEIRO (todas as contas, com hash de senha e tudo)
+    // a cada rodada — e desde que o "toc-toc" instantâneo via
+    // users/{nome}.json existe (ver Multiplayer._checkMyInboxAndRequests),
+    // esse poll aqui é só uma rede de segurança, não o caminho principal.
+    // Por isso pode ficar bem mais espaçado sem perder nada na prática.
+    const FRIEND_POLL_MS = 60000; // era 15000
     let _friendPollTimer = null;
     function _startFriendRequestPoll() {
         if (_friendPollTimer) return;
@@ -17257,6 +17589,8 @@ const Account = (() => {
         if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
         else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
         _renderGithubFieldsInline();
+        const ownerPreview = document.getElementById("account-file-owner-preview");
+        if (ownerPreview) ownerPreview.textContent = _current.username;
         // (nova função) Atualiza o resumo de dados locais disponíveis pra
         // backup toda vez que a barra de configurações é aberta/redesenhada.
         try { if (typeof LocalBackup !== "undefined") LocalBackup.refreshStatus(); } catch (_) {}
@@ -17821,6 +18155,107 @@ const LocalBackup = (() => {
         }
     }
 
+    /** (nova função a pedido do usuário) Gera um arquivo .json só com os
+     *  dados da conta ATUALMENTE logada neste navegador — diferente do
+     *  download() acima, que leva TUDO (inclusive outras contas salvas
+     *  aqui). É esse arquivo que os botões "Carregar arquivo de conta"
+     *  (tela inicial e trocar de conta) esperam receber de volta. */
+    function downloadAccount() {
+        let accounts = [], session = {};
+        try { accounts = JSON.parse(localStorage.getItem("engine_accounts_v1") || "[]"); } catch (_) {}
+        try { session = JSON.parse(localStorage.getItem("engine_session_v1") || "null") || {}; } catch (_) {}
+        const me = accounts.find(a => a.id === session.currentId);
+        if (!me) { UI.showToast("⚠️ Entre numa conta antes de baixar o arquivo dela."); return; }
+
+        // Só as conversas que envolvem ESTA conta — a chave é
+        // "usuarioA::usuarioB" (minúsculo, ordenado — ver Account._convKey).
+        let allMessages = {};
+        try { allMessages = JSON.parse(localStorage.getItem("engine_messages_v1") || "{}"); } catch (_) {}
+        const uname = String(me.username || "").toLowerCase();
+        const myMessages = {};
+        Object.keys(allMessages).forEach(key => {
+            if (key.split("::").includes(uname)) myMessages[key] = allMessages[key];
+        });
+
+        // O token/repositório do GitHub vai junto porque, sem ele, essa
+        // conta não consegue ser acessada de outro navegador (é o que faz
+        // a "portabilidade" funcionar) — mas nada de OUTRAS contas.
+        let githubConfig = null;
+        try { githubConfig = JSON.parse(localStorage.getItem("github_storage_config_v1") || "null"); } catch (_) {}
+
+        const payload = {
+            __app: "Roblox Studio Engine v3",
+            __kind: "account-file",
+            __version: 1,
+            exportedAt: new Date().toISOString(),
+            data: { account: me, messages: myMessages, githubConfig },
+        };
+        try {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `conta-${me.username}-${stamp}.json`.replace(/\s+/g, "_");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            UI.showToast(`💾 Arquivo da conta "${me.username}" baixado — só os dados dela.`);
+        } catch (e) {
+            UI.showToast("⚠️ Não consegui gerar o arquivo: " + e.message);
+        }
+    }
+
+    /** (nova função a pedido do usuário) Aplica um arquivo de CONTA (gerado
+     *  por downloadAccount() acima) — ao contrário de _restore(), isso
+     *  MESCLA em vez de sobrescrever: só adiciona/atualiza a conta de
+     *  dentro do arquivo (por id), só mescla as conversas dela, e só toca
+     *  no token do GitHub se este navegador ainda não tiver um configurado.
+     *  Nenhuma outra conta/conversa/configuração já salva aqui é apagada. */
+    function _restoreAccount(payload) {
+        const d = payload && payload.data;
+        if (!d || typeof d !== "object" || !d.account || !d.account.id || !d.account.username) {
+            UI.showToast("⚠️ Arquivo inválido — não parece um arquivo de conta deste app.");
+            return;
+        }
+        const acc = d.account;
+        const includesToken = !!(d.githubConfig && d.githubConfig.token);
+        if (!confirm(`Entrar na conta "${acc.username}" neste navegador${includesToken ? " (o arquivo inclui um token do GitHub)" : ""}? Isso NÃO mexe em outras contas já salvas aqui.`)) return;
+        try {
+            let accounts = [];
+            try { accounts = JSON.parse(localStorage.getItem("engine_accounts_v1") || "[]"); } catch (_) {}
+            const idx = accounts.findIndex(a => a.id === acc.id);
+            if (idx >= 0) accounts[idx] = acc; else accounts.push(acc);
+            localStorage.setItem("engine_accounts_v1", JSON.stringify(accounts));
+
+            if (d.messages && typeof d.messages === "object") {
+                let allMessages = {};
+                try { allMessages = JSON.parse(localStorage.getItem("engine_messages_v1") || "{}"); } catch (_) {}
+                Object.keys(d.messages).forEach((key) => { allMessages[key] = d.messages[key]; });
+                localStorage.setItem("engine_messages_v1", JSON.stringify(allMessages));
+            }
+
+            // Só grava o repositório/token se este navegador AINDA não tiver
+            // um configurado — pra não trocar o repositório de quem já usa
+            // o app aqui sem querer.
+            if (d.githubConfig && !localStorage.getItem("github_storage_config_v1")) {
+                localStorage.setItem("github_storage_config_v1", JSON.stringify(d.githubConfig));
+            }
+
+            let session = { currentId: null, loggedIds: [] };
+            try { session = JSON.parse(localStorage.getItem("engine_session_v1") || "null") || session; } catch (_) {}
+            session.currentId = acc.id;
+            session.loggedIds = Array.from(new Set([...(session.loggedIds || []), acc.id]));
+            localStorage.setItem("engine_session_v1", JSON.stringify(session));
+
+            UI.showToast(`✅ Conta "${acc.username}" carregada! Recarregando...`);
+            setTimeout(() => location.reload(), 700);
+        } catch (e) {
+            UI.showToast("⚠️ Erro ao carregar a conta: " + e.message);
+        }
+    }
+
     /** Aplica um backup já convertido em objeto JS — sobrescreve o
      *  localStorage deste navegador e recarrega a página, pra todos os
      *  módulos (conta, projetos, plugins...) reiniciarem já lendo os
@@ -17864,6 +18299,29 @@ const LocalBackup = (() => {
         _readFile(file);
         input.value = ""; // permite escolher o mesmo arquivo de novo depois
     }
+    /** (nova função) Ligado aos <input type="file"> dos botões "Carregar
+     *  arquivo de conta" — só aceita arquivos gerados por downloadAccount()
+     *  (__kind "account-file"); se alguém tentar carregar um backup
+     *  completo aqui, avisa em vez de sobrescrever tudo por engano. */
+    function onAccountFileSelected(input) {
+        const file = input?.files?.[0];
+        if (!file) return;
+        if (!/\.json$/i.test(file.name)) { UI.showToast("⚠️ Escolha um arquivo .json de conta."); input.value = ""; return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+            let parsed = null;
+            try { parsed = JSON.parse(reader.result); }
+            catch (_) { UI.showToast("⚠️ Não consegui ler esse arquivo — não é um JSON válido."); return; }
+            if (parsed && parsed.__kind === "local-backup") {
+                UI.showToast("⚠️ Esse é um arquivo de BACKUP COMPLETO, não um arquivo de conta — carregue-o em Configurações → Backup local completo.");
+                return;
+            }
+            _restoreAccount(parsed);
+        };
+        reader.onerror = () => UI.showToast("⚠️ Falha ao ler o arquivo.");
+        reader.readAsText(file, "utf-8");
+        input.value = "";
+    }
     /** Arrastar-e-soltar na área de backup — realce visual só enquanto
      *  o arquivo está sendo arrastado por cima. */
     function handleDragOver(e) {
@@ -17882,7 +18340,7 @@ const LocalBackup = (() => {
         _readFile(file);
     }
 
-    return { download, onFileSelected, handleDragOver, handleDragLeave, handleDrop, refreshStatus };
+    return { download, downloadAccount, onFileSelected, onAccountFileSelected, handleDragOver, handleDragLeave, handleDrop, refreshStatus };
 })();
 
 /* ================================================================
@@ -17912,16 +18370,24 @@ const LocalBackup = (() => {
    ================================================================ */
 const Multiplayer = (() => {
     const ROOM_PATH = (code) => `rooms/${code}.json`;
-    const HEARTBEAT_MS = 10000;  // atualiza minha presença a cada 10s
-    const POLL_MS = 6000;        // relê o estado da sala a cada 6s
-    const STALE_MS = 30000;      // sem heartbeat há 30s = considerado fora da sala
+    // (ajustado a pedido do usuário — otimização de token/commits) Esses
+    // intervalos foram alongados pra gerar bem menos commits no repositório
+    // configurado. Cada heartbeat/presença é um PUT (commit de verdade) na
+    // Contents API — com os valores antigos (10s/15s) dava >4 commits por
+    // minuto por pessoa logada, mesmo fora de uma sala. Só aumente de volta
+    // se o "atraso" pra ver amigo/sala atualizar incomodar mais que o gasto
+    // de token — não há problema de corretude em deixar mais lento, só de
+    // latência de sincronização.
+    const HEARTBEAT_MS = 20000;  // atualiza minha presença NA SALA a cada 20s (era 10s)
+    const POLL_MS = 8000;        // relê o estado da sala a cada 8s (era 6s)
+    const STALE_MS = 45000;      // sem heartbeat há 45s = considerado fora da sala (era 30s)
     // (nova função) Toda sala precisa ter pelo menos 1 pessoa ativa pra
     // "existir" de verdade — se todo mundo fechou o navegador sem clicar
     // em "Sair" (aba fechada à força, sem internet no momento, etc.) e
     // ninguém dá sinal de vida há mais que isso, a sala é considerada
     // abandonada e apagada do repositório na próxima vez que alguém tentar
     // criar/entrar com esse código.
-    const ROOM_INACTIVE_MS = 60000;
+    const ROOM_INACTIVE_MS = 90000;
 
     // (nova função) Perfil público "online" de cada conta, salvo no mesmo
     // repositório GitHub como users/{nome-em-minúsculo}.json — status
@@ -17929,8 +18395,12 @@ const Multiplayer = (() => {
     // visualização usam esse arquivo. Ver Módulo 12A · Account pra tudo
     // que continua só em localStorage (perfil "de verdade", mensagens etc.).
     const USER_PATH = (username) => `users/${String(username || "").trim().toLowerCase()}.json`;
-    const PRESENCE_MS = 15000;      // atualiza meu status online a cada 15s
-    const PRESENCE_STALE_MS = 40000; // sem atualização há 40s = considerado offline
+    // Esse aqui é o que mais pesava: rodava em SEGUNDO PLANO O TEMPO TODO
+    // (esteja você numa sala ou só de boa no editor), fazendo 1 commit a
+    // cada 15s só pra dizer "ainda tô aqui". Foi pro triplo (45s) — o status
+    // online ainda funciona igual, só demora um pouco mais pra atualizar.
+    const PRESENCE_MS = 45000;       // atualiza meu status online a cada 45s (era 15s)
+    const PRESENCE_STALE_MS = 110000; // sem atualização há 110s = considerado offline (era 40s)
 
     let _room = null;   // último estado lido da sala (cache local)
     let _code = null;   // código da sala atual
@@ -18066,21 +18536,39 @@ const Multiplayer = (() => {
         return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cleanPath}`;
     }
 
+    // (nova função — otimização de token/dados) Cache de ETag por caminho.
+    // A Contents API do GitHub devolve um header ETag em todo GET; se a
+    // gente reenviar esse valor em "If-None-Match" e o arquivo não mudou
+    // desde a última vez, a API responde 304 (sem baixar o conteúdo de
+    // novo) — mais leve pro navegador e, segundo a documentação do GitHub,
+    // requisições condicionais que voltam 304 não descontam do limite de
+    // uso da API. Como o poll/presença relê os MESMOS arquivos repetidas
+    // vezes e na maioria das vezes nada mudou, isso evita rebaixar (e
+    // re-parsear) o arquivo inteiro toda hora à toa.
+    const _etagCache = new Map(); // path -> { etag, data, sha }
+    function _invalidateEtag(path) { _etagCache.delete(path); }
+
     /** Lê um arquivo qualquer do repositório configurado. Devolve
      *  { ok, data, sha } — data é null se o arquivo não existir ainda. */
     async function _ghGet(path) {
         const cfg = GithubStorage.getConfig();
         if (!cfg) return { ok: false, error: "GitHub não configurado.", data: null, sha: null };
+        const cached = _etagCache.get(path);
         try {
+            const headers = { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" };
+            if (cached?.etag) headers["If-None-Match"] = cached.etag;
             const res = await fetch(`${_apiUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch || "main")}`, {
-                headers: { "Authorization": `token ${cfg.token}`, "Accept": "application/vnd.github+json" },
+                headers,
                 cache: "no-store",
             });
-            if (res.status === 404) return { ok: true, data: null, sha: null };
+            if (res.status === 304 && cached) return { ok: true, data: cached.data, sha: cached.sha };
+            if (res.status === 404) { _invalidateEtag(path); return { ok: true, data: null, sha: null }; }
             if (!res.ok) return { ok: false, error: `Erro HTTP ${res.status} ao ler a sala.`, data: null, sha: null };
             const json = await res.json();
             let parsed = null;
             try { parsed = JSON.parse(_b64ToUtf8(json.content)); } catch (_) { parsed = null; }
+            const etag = res.headers.get("etag");
+            if (etag) _etagCache.set(path, { etag, data: parsed, sha: json.sha });
             return { ok: true, data: parsed, sha: json.sha };
         } catch (e) {
             return { ok: false, error: "Falha de rede: " + e.message, data: null, sha: null };
@@ -18110,6 +18598,7 @@ const Multiplayer = (() => {
             });
             if (!res.ok) return { ok: false, status: res.status, error: (res.status === 409) ? "Conflito (409)" : `Erro HTTP ${res.status}` };
             const json = await res.json();
+            _invalidateEtag(path); // (otimização de token) o arquivo mudou — descarta o ETag em cache
             return { ok: true, sha: json.content?.sha || null };
         } catch (e) {
             return { ok: false, error: "Falha de rede: " + e.message };
@@ -18134,6 +18623,7 @@ const Multiplayer = (() => {
                 keepalive: true,
             });
             if (!res.ok) return { ok: false, status: res.status, error: `Erro HTTP ${res.status}` };
+            _invalidateEtag(path);
             return { ok: true };
         } catch (e) {
             return { ok: false, error: "Falha de rede: " + e.message };
@@ -19427,8 +19917,8 @@ const Multiplayer = (() => {
 
     async function _pushMyPresence() {
         const me = _me();
-        if (!me || !GithubStorage.hasConfig()) return;
-        await _writeUser(me.username, (current) => {
+        if (!me || !GithubStorage.hasConfig()) return null;
+        const res = await _writeUser(me.username, (current) => {
             const base = current || _myPresenceBase(me);
             base.id = me.id;
             base.username = me.username;
@@ -19439,16 +19929,25 @@ const Multiplayer = (() => {
             base.inbox = base.inbox || [];
             return base;
         }, "Atualiza status online (nova função)");
+        // (otimização de token) o próprio _writeUser já fez um GET fresco
+        // antes do PUT — devolve esse mesmo dado pra quem chamou aproveitar
+        // (ver _startPresenceLoop), em vez de ler o arquivo de novo do zero
+        // logo em seguida só pra checar a caixa de entrada.
+        return (res && res.ok && !res.aborted) ? res.data : null;
     }
 
     /** Lê meu próprio arquivo de presença: mostra pedidos pendentes de
      *  amizades pra entrar na minha sala, e processa respostas (aceite/
      *  recusa) de pedidos que eu mesmo fiz pra entrar na sala de alguém. */
-    async function _checkMyInboxAndRequests() {
+    async function _checkMyInboxAndRequests(preloaded) {
         const me = _me();
         if (!me || !GithubStorage.hasConfig()) return;
-        const res = await _ghGet(USER_PATH(me.username));
-        if (!res.ok || !res.data) return;
+        // (otimização de token) se quem chamou já tem o dado fresco em mãos
+        // (ex: acabou de vir do PUT de _pushMyPresence), reaproveita — só
+        // faz um GET novo se ninguém passou nada pronto.
+        const data = preloaded !== undefined ? preloaded : (await _ghGet(USER_PATH(me.username))).data;
+        if (!data) return;
+        const res = { ok: true, data };
 
         const incoming = res.data.requests || [];
         const isNew = incoming.length > _myRequests.length;
@@ -19520,16 +20019,23 @@ const Multiplayer = (() => {
         return { online, inRoom: online ? p.currentRoom : null };
     }
 
+    // (otimização de token) Junta os 3 passos do ciclo de presença numa
+    // função só, encadeando o dado que já veio do PUT de _pushMyPresence
+    // pro _checkMyInboxAndRequests — assim cada rodada faz 1 GET+1 PUT
+    // (meu status) + 1 GET por amigo, em vez de 2 GET+1 PUT (meu status)
+    // + 1 GET por amigo como era antes.
+    async function _presenceTick() {
+        const freshData = await _pushMyPresence();
+        await _checkMyInboxAndRequests(freshData);
+        await refreshFriendsPresence();
+    }
+
     function _startPresenceLoop() {
         if (_presenceTimer) return;
-        _pushMyPresence();
-        _checkMyInboxAndRequests();
-        refreshFriendsPresence();
+        _presenceTick();
         _presenceTimer = setInterval(() => {
             if (!Account.isLoggedIn() || !GithubStorage.hasConfig()) return;
-            _pushMyPresence();
-            _checkMyInboxAndRequests();
-            refreshFriendsPresence();
+            _presenceTick();
         }, PRESENCE_MS);
     }
     /** Chamado uma vez no boot do app (ver _initStep no final do arquivo) —
@@ -20080,6 +20586,9 @@ const Simulation = (() => {
         e.preventDefault();
         _camDistance += (e.deltaY > 0 ? 1 : -1) * 1.2;
         _camDistance = Math.max(_CAM_MIN_DIST, Math.min(_CAM_MAX_DIST, _camDistance));
+        // (correção) avisa scripts Lua conectados em UserInputService.InputChanged
+        // (ex.: o CameraScript padrão de StarterPlayer) que a rodinha mexeu.
+        try { LuaEngine.fireEvent("__UserInputService", "InputChanged", [e.deltaY]); } catch (_) {}
     }
     const _mouseSens    = 0.0028;
     const PITCH_MIN     = -1.2, PITCH_MAX = 1.3;
@@ -20464,13 +20973,35 @@ const Simulation = (() => {
             const p   = node.properties || {};
             const pos = p.Position  || { x:0, y:0, z:0 };
             const rot = p.Rotation  || { x:0, y:0, z:0 };
-            // Anchored=true → massa 0 (estático); false → dinâmico
-            const mass = p.Anchored ? 0 : 1;
-
-            // CanCollide=false → nenhum corpo físico, jogador atravessa direto.
-            if (p.CanCollide === false) { node.children?.forEach(c => _buildBodies(c)); return; }
+            // Anchored=true → massa 0 (estático); Massless=true → quase sem massa
+            // (não empurra/derruba outras Parts); senão massa real = Weight × Density
+            // (antes Density só existia como slider decorativo no painel, sem
+            // nenhum efeito na física — agora uma Part mais "densa" pesa mais
+            // de verdade para a mesma Weight, na mesma proporção do Roblox real).
+            const density = Math.max(0.01, Math.min(1, p.Density ?? 0.7));
+            const mass = p.Anchored ? 0 : (p.Massless ? 0.01 : Math.max(0.01, (p.Weight ?? 1) * density));
 
             const body = new CANNON.Body({ mass });
+            // (correção) CanCollide=false NÃO deve mais pular a criação do corpo
+            // inteiro — isso deixava a Part sem gravidade nenhuma, flutuando
+            // parada no ar. Igual Roblox real: o corpo continua existindo e
+            // sofrendo física normalmente (gravidade, damping etc.), só que
+            // sem resposta de colisão — collisionResponse=false faz o Cannon.js
+            // ainda detectar contato (útil pra scripts/eventos), mas não aplica
+            // nenhum impulso de resposta, então o corpo atravessa tudo (e o
+            // jogador atravessa ele) em vez de ficar parado sem gravidade.
+            if (p.CanCollide === false) body.collisionResponse = false;
+            // (correção) Friction/Elasticity eram só campos editáveis no painel
+            // sem efeito nenhum na física — o mundo usava só um valor global
+            // fixo pra fricção/quique de tudo. Agora cada Part usa a própria
+            // Fricção/Elasticidade como um Material real do Cannon.js; quando
+            // as duas Parts em contato têm Material definido, o Cannon.js usa
+            // friction = fricçãoA * fricçãoB (e o mesmo pra restitution) em
+            // vez do valor padrão do mundo — ver World.step() no cannon.js.
+            body.material = new CANNON.Material({
+                friction:    Math.max(0, Math.min(2, p.Friction ?? 0.3)),
+                restitution: Math.max(0, Math.min(1, p.Elasticity ?? 0.5)),
+            });
             // MeshPart importado com Partes configuradas → caixas por sub-parte;
             // senão (ou se nada foi configurado), cai na caixa única de sempre.
             const usedCompound = (node.className === "MeshPart") && _addMeshPartCompoundShapes(node, body);
@@ -20616,6 +21147,69 @@ const Simulation = (() => {
             // acumulados de objetos que já saíram de cima dela.
             if (riders) riders.clear();
         });
+    }
+
+    /** Sincroniza ao vivo o corpo físico já existente de uma Part quando um
+     *  Script muda Anchored/CanCollide/Massless/Weight/Density durante o
+     *  Play (função nova). Antes disso, essas propriedades só eram lidas
+     *  1x, na hora de montar a física (_buildBodies) — um Script fazendo
+     *  parte.Anchored = false, por exemplo, mudava o valor no Explorer mas
+     *  a Part continuava travada no ar até apertar Stop/Play de novo. */
+    function syncPhysicsProperty(nodeId, prop) {
+        if (!_world) return; // não está em Play — nada a sincronizar agora
+        const body = _bodies.get(nodeId);
+        if (!body) return;
+        const node = Tree.find(nodeId);
+        if (!node) return;
+        const p = node.properties || {};
+
+        if (prop === "CanCollide") {
+            // false → corpo continua existindo e sofrendo física normal,
+            // só sem resposta de colisão (atravessa tudo, igual Roblox real).
+            body.collisionResponse = (p.CanCollide !== false);
+            return;
+        }
+
+        if (prop === "Anchored" || prop === "Massless" || prop === "Weight" || prop === "Density") {
+            const wasStatic = (body.mass === 0);
+            const density   = Math.max(0.01, Math.min(1, p.Density ?? 0.7));
+            const newMass   = p.Anchored ? 0 : (p.Massless ? 0.01 : Math.max(0.01, (p.Weight ?? 1) * density));
+            const willBeStatic = (newMass === 0);
+
+            body.mass = newMass;
+            body.type = willBeStatic ? CANNON.Body.STATIC : CANNON.Body.DYNAMIC;
+            body.updateMassProperties();
+
+            if (willBeStatic && !wasStatic) {
+                // Virou Anchored agora — some com qualquer velocidade
+                // residual e passa a ser rastreada como plataforma fixa
+                // (só se move se o próprio Script mudar Position/Rotation).
+                body.velocity.set(0, 0, 0);
+                body.angularVelocity.set(0, 0, 0);
+                const pos = p.Position || { x: body.position.x, y: body.position.y, z: body.position.z };
+                const rot = p.Rotation || { x: 0, y: 0, z: 0 };
+                _kinematicLastPos.set(nodeId, { x: pos.x, y: pos.y, z: pos.z, rx: rot.x || 0, ry: rot.y || 0, rz: rot.z || 0 });
+                if (!_kinematicRiders.has(body)) {
+                    const riders = new Set();
+                    _kinematicRiders.set(body, riders);
+                    body.addEventListener("collide", (e) => {
+                        const c = e.contact;
+                        const other = (c.bi === body) ? c.bj : c.bi;
+                        if (!other || other.mass === 0) return; // ignora contato estático-estático
+                        const normalY = (c.bi === body) ? c.ni.y : -c.ni.y;
+                        if (normalY > 0.5) riders.add(other);
+                    });
+                }
+            } else if (!willBeStatic && wasStatic) {
+                // Deixou de ser Anchored — volta a cair/reagir como corpo
+                // solto normal (some do rastreio de plataforma).
+                _kinematicLastPos.delete(nodeId);
+                body.allowSleep = true;
+                body.sleepSpeedLimit = 0.18;
+                body.sleepTimeLimit = 0.5;
+                body.wakeUp();
+            }
+        }
     }
 
     /* ── Play / Stop ───────────────────────────────────────────── */
@@ -20773,6 +21367,21 @@ const Simulation = (() => {
      *  Pular) — os keyframes dele são os MESMOS de qualquer um da sala, por
      *  isso não precisam trafegar de novo, só o nome já resolve. */
     const _remoteAnimNodeCache = new Map(); // nome -> nó Animator (evita andar na árvore todo frame)
+    /** (nova função a pedido do usuário) Procura, em todo o Workspace, o
+     *  primeiro objeto "Camera" com properties.Ativa === true. Retorna null
+     *  se nenhuma câmera estiver ativa (jogador usa a câmera normal). */
+    function _findActiveCameraNode() {
+        const ws = Tree.find("ws");
+        if (!ws) return null;
+        let found = null;
+        (function walk(n) {
+            if (found) return;
+            if (n.className === "Camera" && n.properties?.Ativa === true) { found = n; return; }
+            (n.children || []).forEach(walk);
+        })(ws);
+        return found;
+    }
+
     function _findAnimatorNodeByName(name) {
         if (_remoteAnimNodeCache.has(name)) {
             const cached = _remoteAnimNodeCache.get(name);
@@ -20864,8 +21473,10 @@ const Simulation = (() => {
         ThreeManager.setPlayPerformanceMode(true);
         // (nova função a pedido do usuário) Liga a IA de otimização de
         // gráficos assim que o Play começa — no Editor ela fica desligada,
-        // só importa manter o FPS alto durante o jogo de verdade.
-        if (typeof AIOptimizer !== "undefined") AIOptimizer.enable();
+        // só importa manter o FPS alto durante o jogo de verdade. AGORA só
+        // liga de verdade se o usuário permitiu no botão de Configurações
+        // Gráficas (vem DESATIVADO por padrão — ver AIOptimizer.isUserEnabled).
+        if (typeof AIOptimizer !== "undefined" && AIOptimizer.isUserEnabled()) AIOptimizer.enable();
         // (nova função a pedido do usuário) Agrupa Parts estáticas idênticas
         // em THREE.InstancedMesh pra reduzir draw calls durante o Play —
         // ver comentário completo em InstancingManager.
@@ -20984,7 +21595,19 @@ const Simulation = (() => {
         // MovimentoCameraPulo e o loop de update() já leem direto daqui,
         // então não precisa mais sincronizar nada aqui.
 
-        UI.log("▶ Modo Play ativo — Física Cannon.js (gravidade, colisões reais).", "success");
+        // (correção) Esta mensagem antes era exibida sempre, mesmo quando
+        // _initPhysics() falhava e era engolida pelo _bootStep — o usuário
+        // via "Física ativa" no log mas o update() sempre caía no
+        // `if (!_player || !_world) return;` (por _world ter ficado null),
+        // e nada se movia, sem nenhuma pista visível do motivo real.
+        // Agora a mensagem reflete o estado verdadeiro de _world/_playerBody.
+        if (_world && _playerBody) {
+            UI.log("▶ Modo Play ativo — Física Cannon.js (gravidade, colisões reais).", "success");
+        } else if (!_world) {
+            UI.log("❌ Modo Play ativo, mas a FÍSICA NÃO INICIOU (_world é null) — veja o erro '[Play] Falha ao iniciar a física' acima no log/console. Scripts vão rodar, mas nada vai cair/colidir.", "error");
+        } else {
+            UI.log("⚠️ Modo Play ativo, física do mundo ok, mas o corpo do PLAYER não foi criado (_playerBody é null) — veja '[Play] Falha ao spawnar o player' acima. Objetos do cenário têm física, mas o personagem não.", "error");
+        }
         Plugins.runHook("playStart");
     }
 
@@ -21308,6 +21931,15 @@ const Simulation = (() => {
         ThreeManager.getScene().add(_player);
 
         /* ─ Corpo rígido Cannon.js ─ */
+        // (correção) Se _initPhysics() falhou antes (_world ainda null), o
+        // _world.addBody() de baixo lançava um erro que o _bootStep engolia
+        // — o player ficava visível (mesh Three.js já criada acima) mas sem
+        // NENHUM corpo físico, e sem nenhum aviso claro do motivo. Agora
+        // verifica e avisa explicitamente antes de tentar.
+        if (!_world) {
+            UI.log("❌ Corpo físico do player não foi criado porque _world é null (a física falhou em iniciar antes deste passo) — o personagem vai ficar visível mas sem gravidade/colisão.", "error");
+            return;
+        }
         // Box com meia-altura HALF_H = 2.1 → altura total 4.2 ≈ altura visual
         _playerBody = new CANNON.Body({ mass:70, linearDamping:0.05 });
         _playerBody.addShape(new CANNON.Box(new CANNON.Vec3(0.75*scale, _playerHalfH, 0.75*scale)));
@@ -21763,11 +22395,32 @@ const Simulation = (() => {
         /* ─ Câmera do jogador — 3ª pessoa orbital OU 1ª pessoa (Melhoria #8),
            escolhida via StarterPlayer.CameraMode ─ */
         const cam = ThreeManager.getCamera();
+        // (nova função a pedido do usuário) Objeto "Camera" ativo — se algum
+        // Camera do Workspace estiver com Ativa=true, a visão do jogador
+        // passa a ser a dela (posição/rotação/FOV) até ser desativada (por
+        // Script, ou desmarcando "Ativa" nas Properties). Usa a primeira
+        // encontrada, na ordem da árvore.
+        const _activeCamNode = _findActiveCameraNode();
         // (nova função a pedido do usuário — VR) Com o headset presente, a
         // câmera é sempre tratada como 1ª pessoa, mesmo que StarterPlayer.
         // CameraMode esteja em "ThirdPerson" (ex.: sessão iniciada no meio
         // do jogo) — ver também o guard em toggleCameraMode().
         const _vrOn = typeof VRManager !== "undefined" && VRManager.isPresenting();
+
+        if (_activeCamNode && !_vrOn) {
+            const cp = _activeCamNode.properties || {};
+            const pos = cp.Position || { x:0, y:5, z:0 };
+            const rot = cp.Rotation || { x:0, y:0, z:0 };
+            cam.position.set(pos.x, pos.y, pos.z);
+            cam.rotation.set(
+                THREE.MathUtils.degToRad(rot.x || 0),
+                THREE.MathUtils.degToRad(rot.y || 0),
+                THREE.MathUtils.degToRad(rot.z || 0));
+            if (cp.FOV && cam.fov !== cp.FOV) { cam.fov = cp.FOV; cam.updateProjectionMatrix(); }
+            _player.visible = true;
+            if (_playerHead) _playerHead.visible = true;
+            return;
+        }
 
         if (cameraMode === "FirstPerson" || _vrOn) {
             // Câmera nos "olhos" do personagem; só a CABEÇA é ocultada
@@ -22117,7 +22770,11 @@ const Simulation = (() => {
              // (nova função a pedido do usuário) suporte a controle Xbox/PS4/PS5 + joystick de toque
              setupControlsUI, refreshControlDeviceLabel,
              // (nova função — Content Streaming ajustável pelo AIOptimizer)
-             setStreamDistances, getStreamDistances };
+             setStreamDistances, getStreamDistances,
+             // (nova função) sincroniza ao vivo Anchored/CanCollide/Massless/
+             // Weight/Density no corpo físico quando um Script muda essas
+             // propriedades durante o Play — ver LuaEngine.setProp
+             syncPhysicsProperty };
 })();
 
 /* ================================================================
@@ -22170,6 +22827,23 @@ const AIOptimizer = (() => {
     const FPS_HIGH             = 55;   // média acima disso (sustentado) → tenta subir
     const STABLE_TIME_TO_LEARN = 12;   // segundos sem precisar descer → grava esse degrau como confiável
     const BUCKET_SIZE          = 50000; // agrupa cenas por faixas de 50k triângulos
+
+    // (nova função a pedido do usuário) Interruptor manual da IA — separado
+    // de "_enabled" (que é o estado ligado/desligado DURANTE o Play). Isto
+    // aqui é a PREFERÊNCIA do usuário, lida do botão em Configurações
+    // Gráficas, persistida e com valor padrão DESATIVADO (false) — ou seja,
+    // um projeto novo/limpo (sem nada salvo ainda) sempre começa com a IA
+    // de otimização de gráficos desligada, até a pessoa ligar na mão.
+    const USER_PREF_KEY = "rse_ai_optimizer_user_enabled_v1";
+    let _userEnabled = (() => {
+        try { return localStorage.getItem(USER_PREF_KEY) === "1"; } catch (_) { return false; }
+    })();
+    function isUserEnabled() { return _userEnabled; }
+    function setUserEnabled(on) {
+        _userEnabled = !!on;
+        try { localStorage.setItem(USER_PREF_KEY, _userEnabled ? "1" : "0"); } catch (_) {}
+        if (!_userEnabled && _enabled) disable();
+    }
 
     let _enabled     = false;
     let _rungIdx     = 3;               // começa em "high" (padrão de fábrica) até decidir algo melhor
@@ -22283,7 +22957,7 @@ const AIOptimizer = (() => {
         UI.log("IA de Gráficos: memória de otimização apagada.", "info");
     }
 
-    return { enable, disable, reportFrame, isEnabled, getCurrentRung, getLog, forgetLearnedSettings };
+    return { enable, disable, reportFrame, isEnabled, getCurrentRung, getLog, forgetLearnedSettings, isUserEnabled, setUserEnabled };
 })();
 
 /* ================================================================
