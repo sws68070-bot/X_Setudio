@@ -45,6 +45,24 @@
         #tool-pose-editor-overlay.visible { display:flex; }
         #tool-build-editor-overlay { display:none; }
         #tool-build-editor-overlay.visible { display:flex; }
+        #skin-texture-editor-overlay { display:none; }
+        #skin-texture-editor-overlay.visible { display:flex; }
+        #skin-face-picker-modal { display:none; }
+        #skin-face-picker-modal.visible { display:flex; }
+
+        /* (nova função a pedido do usuário) O Editor de Skin abre numa área
+           SEPARADA, tela cheia de verdade — diferente do modo Play (que,
+           a pedido do usuário, não fica mais fullscreen — ver comentário
+           acima sobre .play-dim/.play-fullscreen-viewport). Por isso usa
+           classes próprias, que realmente têm efeito visual. */
+        .skin-editor-fullscreen-viewport {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 200 !important;
+        }
+        .skin-editor-hide-chrome { display: none !important; }
 
         /* ── Highlight de seleção por raycast ── */
         #raycast-crosshair {
@@ -531,6 +549,32 @@
             <button id="account-theme-toggle-btn" onclick="Account.toggleTheme()" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-white text-[10px] font-bold"></button>
         </div>
 
+        <!-- (nova função a pedido do usuário) Skin do personagem — cada conta
+             escolhe a própria cor de Corpo/Cabeça/Braços/Pernas do boneco.
+             Some se ninguém estiver logado (a div só aparece com _current). -->
+        <div class="flex flex-col gap-2 bg-studio-input border studio-border rounded px-3 py-2">
+            <div class="flex items-center justify-between">
+                <span class="text-zinc-300 text-xs font-bold flex items-center gap-2"><i class="fa-solid fa-shirt"></i> Skin do personagem</span>
+                <button onclick="Account.resetSkin()" title="Restaurar cor padrão" class="text-zinc-500 hover:text-zinc-300 text-[10px]"><i class="fa-solid fa-rotate-left"></i> Padrão</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-center justify-between gap-1 text-zinc-400 text-[10px]">Corpo
+                    <input type="color" id="account-settings-skin-body" class="w-8 h-6 bg-transparent border-0 cursor-pointer" oninput="Account.changeSkinColor('BodyColor', this.value)">
+                </label>
+                <label class="flex items-center justify-between gap-1 text-zinc-400 text-[10px]">Cabeça
+                    <input type="color" id="account-settings-skin-head" class="w-8 h-6 bg-transparent border-0 cursor-pointer" oninput="Account.changeSkinColor('HeadColor', this.value)">
+                </label>
+                <label class="flex items-center justify-between gap-1 text-zinc-400 text-[10px]">Braços
+                    <input type="color" id="account-settings-skin-arm" class="w-8 h-6 bg-transparent border-0 cursor-pointer" oninput="Account.changeSkinColor('ArmColor', this.value)">
+                </label>
+                <label class="flex items-center justify-between gap-1 text-zinc-400 text-[10px]">Pernas
+                    <input type="color" id="account-settings-skin-leg" class="w-8 h-6 bg-transparent border-0 cursor-pointer" oninput="Account.changeSkinColor('LegColor', this.value)">
+                </label>
+            </div>
+            <p class="text-zinc-600 text-[10px] leading-relaxed">Sua cor aparece no seu boneco em Play e (se estiver numa sala) pros outros jogadores também.</p>
+            <button onclick="Account.closeSettingsSidebar(); SkinEditor.open();" class="w-full px-3 py-1.5 bg-fuchsia-900 hover:bg-fuchsia-800 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5"><i class="fa-solid fa-shirt"></i> Editar skin (imagens no corpo)</button>
+        </div>
+
         <!-- Mudar nome de usuário -->
         <div class="flex flex-col gap-1">
             <label class="text-zinc-400 text-xs font-bold">Nome de usuário</label>
@@ -858,6 +902,7 @@
                 <button onclick="App.openPublishModal()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-cloud-arrow-up text-pink-400 w-4"></i> Publicar projeto...</button>
                 <button onclick="App.saveProject()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-floppy-disk text-green-400 w-4"></i> Salvar (copiar JSON)</button>
                 <button onclick="App.openProjectModal()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-folder-open text-yellow-400 w-4"></i> Abrir (JSON)</button>
+                <button onclick="App.openExampleMapsModal()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-map text-pink-300 w-4"></i> Mapas de exemplo...</button>
                 <button onclick="App.restoreAutosave()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-clock-rotate-left text-sky-400 w-4"></i> Restaurar autosave</button>
                 <div class="border-t studio-border my-1"></div>
                 <button onclick="App.saveProjectAs()" class="w-full text-left px-4 py-2.5 hover:bg-zinc-600 flex items-center gap-2 transition-colors"><i class="fa-solid fa-tag text-purple-400 w-4"></i> Salvar projeto com nome...</button>
@@ -1010,6 +1055,17 @@
                 <button id="mp-voice-toggle-btn" onclick="Multiplayer.toggleVoice()" class="hidden px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl items-center gap-2 border border-white/20 transition-all" title="Ativar/desativar chat de voz por proximidade da sala">
                     <i class="fa-solid fa-microphone-slash" id="mp-voice-toggle-icon"></i> <span id="mp-voice-toggle-label">Voz</span>
                 </button>
+                <!-- (nova função a pedido do usuário) Trocar animação na mão —
+                     abre uma listinha (Parado/Andar/Correr/Pular, ou qualquer
+                     outra que exista na pasta Animações) e força o boneco a
+                     tocar a escolhida na hora, mesmo parado. Ver
+                     Simulation.toggleAnimPicker/forcePlayAnim. -->
+                <div class="relative">
+                    <button id="btn-anim-picker" onclick="Simulation.toggleAnimPicker()" class="px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl flex items-center gap-2 border border-white/20 transition-all" title="Forçar uma animação no seu boneco">
+                        <i class="fa-solid fa-person-running"></i> <span>Animação</span>
+                    </button>
+                    <div id="anim-picker-panel" class="hidden absolute right-0 top-full mt-1.5 bg-zinc-900/95 backdrop-blur border border-white/20 rounded-lg shadow-2xl p-1.5 w-40 flex-col gap-1"></div>
+                </div>
             </div>
 
             <!-- (nova função a pedido do usuário) Painel flutuante da "VR por
@@ -1211,6 +1267,49 @@
             </div>
         </div>
 
+        <!-- (nova função a pedido do usuário) Editor VISUAL de SKIN (imagens) —
+             abre pelo botão "👕 Editar skin" no painel de Skin, nas
+             Configurações da conta. Mostra o modelo do player numa área
+             dedicada (viewport cheia, igual aos outros editores) e deixa
+             colocar uma imagem em cada um dos 6 lados (Frente/Trás/
+             Esquerda/Direita/Cima/Baixo) de cada parte do corpo. Salvo na
+             CONTA logada (Account.setSkinTextures) — aparece no boneco em
+             Play e, numa sala, pros outros jogadores também. -->
+        <div id="skin-texture-editor-overlay" class="absolute left-0 right-0 bottom-0 bg-zinc-950/97 border-t-2 border-fuchsia-700 text-zinc-200 font-mono text-xs z-30 flex-col" style="height:280px;">
+            <div class="flex justify-between items-center border-b border-zinc-800 px-3 py-1.5">
+                <span class="text-zinc-200 font-bold flex items-center gap-2"><i class="fa-solid fa-shirt text-fuchsia-400"></i> Editor de Skin (imagens)</span>
+                <div class="flex gap-2 items-center">
+                    <span class="text-zinc-500 text-[10px] hidden sm:inline">Clique num quadrado pra colocar uma imagem naquele lado da parte</span>
+                    <button onclick="SkinEditor.close()" class="px-3 py-1 bg-fuchsia-900 hover:bg-fuchsia-800 text-white font-bold rounded">✕ Salvar e Fechar</button>
+                </div>
+            </div>
+            <div id="skin-texture-parts-list" class="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-2"></div>
+        </div>
+
+        <!-- Popup pra escolher a imagem de UMA face de UMA parte do corpo. -->
+        <div id="skin-face-picker-modal" class="fixed inset-0 bg-black/60 z-40 items-center justify-center">
+            <div class="bg-zinc-900 border-2 border-fuchsia-700 rounded-lg p-4 w-80 flex flex-col gap-3 text-xs text-zinc-200">
+                <div class="flex justify-between items-center">
+                    <span class="font-bold" id="skin-face-picker-title">Torso — Frente</span>
+                    <button onclick="SkinEditor.closeFacePicker()" class="text-zinc-500 hover:text-zinc-300"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="skin-face-picker-preview" class="w-full h-28 bg-zinc-950 border studio-border rounded flex items-center justify-center text-zinc-600 text-[10px] overflow-hidden bg-center bg-cover">sem imagem</div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-zinc-400 text-[10px]">Link da imagem (URL)</label>
+                    <div class="flex gap-1">
+                        <input type="text" id="skin-face-picker-url" placeholder="https://..." class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-[11px]">
+                        <button onclick="SkinEditor.applyUrl()" class="px-2 bg-blue-700 hover:bg-blue-600 rounded text-white font-bold">Usar</button>
+                    </div>
+                </div>
+                <label class="w-full px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-center cursor-pointer">
+                    📁 Enviar imagem do PC
+                    <input type="file" accept="image/*" class="hidden" onchange="SkinEditor.onFileSelected(this)">
+                </label>
+                <button onclick="SkinEditor.removeFace()" class="w-full px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded font-bold">🗑 Remover imagem desse lado</button>
+            </div>
+        </div>
+
+
         <!-- Editor de Modelo da Tool (função nova) — abre pelo botão nas
              Propriedades de uma Tool. Mostra a árvore real da Tool (não é
              prévia/clone) e permite inserir qualquer item da janela Inserir
@@ -1312,6 +1411,16 @@
                  que saem, que são os itens mais caros e menos perceptíveis). -->
             <button onclick="UI.applyBalancedGfxPreset()" class="w-full px-3 py-2 bg-emerald-800 hover:bg-emerald-700 rounded text-emerald-100 text-xs font-bold flex items-center justify-center gap-2">
                 <i class="fa-solid fa-leaf"></i> Padrão leve e bonito (recomendado)
+            </button>
+            <!-- (novo, a pedido do usuário) Preset agressivo pra máquinas de
+                 verdade limitadas (ex.: i3 de 2ª geração + 4GB de RAM, sem
+                 GPU dedicada) — desliga sombra, SSAO, AA e bloom de vez,
+                 trava a resolução no piso e o FPS em 30. É detectado e
+                 aplicado sozinho automaticamente na primeira vez que o
+                 editor abre nesse tipo de máquina, mas fica aqui também
+                 pra quem quiser ligar/conferir na mão a qualquer momento. -->
+            <button onclick="UI.applyWeakPcPreset()" class="w-full px-3 py-2 bg-orange-900 hover:bg-orange-800 rounded text-orange-100 text-xs font-bold flex items-center justify-center gap-2">
+                <i class="fa-solid fa-gauge-simple-low"></i> Modo PC fraco (i3/4GB RAM ou menos)
             </button>
             <div>
                 <label class="text-zinc-300 font-semibold flex items-center justify-between">
@@ -2012,6 +2121,11 @@ const META = (() => {
         SoundGroup:     { icon:"fa-solid fa-sliders text-teal-300" },
         Tool:           { icon:"fa-solid fa-screwdriver-wrench text-orange-300" },
         SpawnLocation:  { icon:"fa-solid fa-person-walking-arrow-right text-lime-400" },
+        // (nova função a pedido do usuário) Accessory — acessório grudado no rig
+        Accessory:      { icon:"fa-solid fa-hat-wizard text-fuchsia-400" },
+        // (nova função a pedido do usuário) Player — entrada automática dentro
+        // da pasta Players, uma pra cada jogador na sala/editor (ver Explorer._syncPlayersFolder)
+        Player:         { icon:"fa-solid fa-user text-blue-300" },
         // ── Lote 2 de expansão (Gameplay/Constraints avançadas) ──
         Attachment:     { icon:"fa-solid fa-thumbtack text-stone-300" },
         ProximityPrompt:{ icon:"fa-solid fa-hand-pointer text-yellow-300" },
@@ -2026,7 +2140,7 @@ const META = (() => {
         BodyForce:         { icon:"fa-solid fa-hand-fist text-cyan-400" },
         BodyPosition:      { icon:"fa-solid fa-map-pin text-cyan-400" },
     };
-    const PHYSICAL   = new Set(["Part","TrussPart","WedgePart","CornerWedgePart","CylinderPart","BallPart","MeshPart","SpawnLocation"]);
+    const PHYSICAL   = new Set(["Part","TrussPart","WedgePart","CornerWedgePart","CylinderPart","BallPart","MeshPart","SpawnLocation","Accessory"]);
     const LIGHTS     = new Set(["PointLight","SurfaceLight","SpotLight"]);
     const EFFECTS    = new Set(["Sparkles","Fire","Smoke","ParticleEmitter","Beam","Trail"]);
     const CONSTRAINTS= new Set(["WeldConstraint","HingeConstraint","RopeConstraint","SpringConstraint","RodConstraint","AlignPosition","AlignOrientation","BodyVelocity","LinearVelocity","BodyForce","BodyPosition"]);
@@ -2231,6 +2345,33 @@ const DEFAULT_TREE = {
               children:[
                 { id:"sm3", name:"script_movimento_girar", className:"Script", expanded:false, children:[],
                   properties:{ Source:"-- Exemplo de movimento: bloco girando continuamente (eixo Y)\nlocal parte = script.Parent\nlocal angulo = 0\n\nwhile true do\n    angulo = angulo + 3\n    parte.Rotation = Vector3.new(0, angulo, 0)\n    wait(0.03)\nend" }}
+              ]},
+            // (nova função a pedido do usuário) Exemplo pronto de "painel de
+            // câmera de segurança" numa parede: uma Camera no Workspace +
+            // uma Part com SurfaceGui contendo o monitor (CameraGui), a
+            // barra pra digitar o nome de quem vai receber a ativação, e os
+            // 3 botões (Ativar/Todos/Desativar) já ligados via LocalScript.
+            { id:"cam1", name:"CameraSeguranca", className:"Camera", expanded:false, children:[],
+              properties:{ Position:{x:0,y:5,z:15}, Rotation:{x:-10,y:180,z:0}, FOV:70, Ativa:false }},
+            { id:"paredecam", name:"Parede_PainelCamera", className:"Part", expanded:true,
+              properties:{ Color:"#5a5a5a", Size:{x:6,y:4,z:0.5}, Position:{x:0,y:2,z:20}, Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"Concrete" },
+              children:[
+                { id:"paineldecamera", name:"PainelDeCamera", className:"SurfaceGui", expanded:true,
+                  properties:{ Face:"Front", CanvasSize:{x:280,y:225}, Enabled:true, AlwaysOnTop:false, Brightness:1 },
+                  children:[
+                    { id:"pdc_monitor", name:"Monitor", className:"CameraGui", expanded:false, children:[],
+                      properties:{ PosX:10, PosY:10, SizeX:260, SizeY:140, BgColor:"#000000", Transparência:0, CameraId:"cam1", Label:"CÂMERA 1" }},
+                    { id:"pdc_barra", name:"BarraNome", className:"TextBox", expanded:false, children:[],
+                      properties:{ PosX:10, PosY:155, Text:"", BgColor:"#1a1a1a", SizeX:260, SizeY:28, Transparência:0, TextColor:"#ffffff", TextSize:12, ClearTextOnFocus:false }},
+                    { id:"pdc_btnativar", name:"BtnAtivar", className:"TextButton", expanded:false, children:[],
+                      properties:{ PosX:10, PosY:190, Text:"Ativar", BgColor:"#1f7a3d", SizeX:82, SizeY:26, Transparência:0, TextColor:"#ffffff", TextSize:11 }},
+                    { id:"pdc_btntodos", name:"BtnTodos", className:"TextButton", expanded:false, children:[],
+                      properties:{ PosX:99, PosY:190, Text:"Todos", BgColor:"#1f5f9e", SizeX:82, SizeY:26, Transparência:0, TextColor:"#ffffff", TextSize:11 }},
+                    { id:"pdc_btndesativar", name:"BtnDesativar", className:"TextButton", expanded:false, children:[],
+                      properties:{ PosX:188, PosY:190, Text:"Desativar", BgColor:"#7a1f1f", SizeX:82, SizeY:26, Transparência:0, TextColor:"#ffffff", TextSize:11 }},
+                    { id:"pdc_script", name:"ControladorDoPainel", className:"LocalScript", expanded:false, children:[],
+                      properties:{ Source:"-- Painel de Câmera (nova função a pedido do usuário)\n-- Digite um nome na barra e toque em 'Ativar' pra ancorar a câmera SÓ\n-- na visão daquele jogador (também aceita 'Fulano, Beltrano' pra dois ou\n-- mais de uma vez). 'Todos' ativa pra sala inteira. 'Desativar' desliga\n-- pra todo mundo. Cada jogador da sala recebe o pedido e só reage se o\n-- nome bater com o dele — então é seguro apertar os botões com a sala\n-- cheia, ninguém mais tem a câmera trocada por engano.\nlocal painel   = script.Parent\nlocal barra    = painel:WaitForChild('BarraNome')\nlocal btnAtivar = painel:WaitForChild('BtnAtivar')\nlocal btnTodos  = painel:WaitForChild('BtnTodos')\nlocal btnDesativar = painel:WaitForChild('BtnDesativar')\nlocal camera = workspace:WaitForChild('CameraSeguranca')\n\nbtnAtivar.MouseButton1Click:Connect(function()\n    local nome = barra.Text\n    if nome ~= '' then\n        camera:AtivarPara(nome)\n        print('📷 Câmera ativada para: ' .. nome)\n    end\nend)\n\nbtnTodos.MouseButton1Click:Connect(function()\n    camera:AtivarParaTodos()\n    print('📷 Câmera ativada para todos da sala.')\nend)\n\nbtnDesativar.MouseButton1Click:Connect(function()\n    camera:DesativarCamera()\n    print('📷 Câmera desativada.')\nend)\n\nprint('Painel de câmera pronto — digite um nome (ou \"Fulano, Beltrano\") e toque em Ativar, ou use Todos/Desativar.')" }}
+                  ]}
               ]}
         ]},
         { id:"lt", name:"Lighting", className:"Lighting", expanded:true, children:[
@@ -2473,6 +2614,17 @@ function getDefaultProps(cls) {
                          PermitirAnimAlterarPose:false,
                          // ── Categoria Conector ──
                          Connected:false },
+        // (nova função a pedido do usuário) Accessory — objeto que gruda
+        // numa parte do rig do player (ex.: "Head" pra um chapéu) e viaja
+        // junto com ela pra sempre (diferente da Tool, que só fica presa
+        // na mão enquanto equipada). Funciona colocando o Accessory como
+        // filho do Model do rig (dentro de StarterPlayer) — ao entrar em
+        // Play, ele aparece grudado na parte escolhida em "AttachTo", tanto
+        // no player local quanto nos outros players da sala (mesmo boneco
+        // é usado pra ambos). Position/Rotation abaixo são o AJUSTE FINO
+        // (offset) relativo ao centro da parte, não posição no mundo.
+        Accessory:     {...base, Size:{x:0.9,y:0.5,z:0.9}, Position:{x:0,y:0.55,z:0}, Color:"#e63946",
+                         CanCollide:false, AttachTo:"Head", AccessoryType:"Chapéu" },
         // ── Categoria Conector: Folder e Model também podem virar um "grupo
         // conectado" — todas as Parts/Models dentro deles (mesmo aninhados)
         // passam a se mover/girar juntas quando Connected está ligado ──
@@ -2640,10 +2792,46 @@ const ThreeManager = (() => {
             default:        return maxAniso; // high, ultra, auto
         }
     }
+    // (nova função — pedido do usuário: otimizar pra PC fraco, ex.: i3 de
+    // 2ª geração + 4GB de RAM) Detecta hardware fraco pra já abrir com um
+    // preset leve, em vez de exigir que a pessoa ache isso sozinha no
+    // modal de Configurações Gráficas depois de já ter travado/engasgado.
+    // navigator.deviceMemory (Chrome/Edge/Android) reporta a RAM aproximada
+    // — 4GB ou menos já é sinal forte de máquina fraca pros padrões de um
+    // editor 3D. Quando a API não existe (Firefox/Safari), usamos o
+    // renderer da GPU (WEBGL_debug_renderer_info) pra pegar chips de vídeo
+    // integrados típicos de CPUs Intel de 1ª/2ª/3ª geração (HD Graphics
+    // 2000/3000/4000), que são exatamente a classe de PC que essa função
+    // mira. Tudo dentro de try/catch — se alguma API não existir ou for
+    // bloqueada, simplesmente não detecta nada (fica no padrão de sempre).
+    function _isLikelyWeakPC() {
+        try {
+            const mem = navigator.deviceMemory;
+            if (typeof mem === "number") return mem <= 4;
+            const cores = navigator.hardwareConcurrency || 8;
+            if (cores > 4) return false;
+            const c = document.createElement("canvas");
+            const gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+            const dbg = gl && gl.getExtension("WEBGL_debug_renderer_info");
+            const renStr = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "";
+            return /HD Graphics (2000|3000|4000)/i.test(renStr);
+        } catch (_) { return false; }
+    }
+    let _weakPcAutoApplied = false;
     function _loadGfxSettings() {
         try {
             const saved = JSON.parse(localStorage.getItem(GFX_SETTINGS_KEY) || "null");
-            if (saved) _gfx = Object.assign({}, _gfx, saved);
+            if (saved) {
+                _gfx = Object.assign({}, _gfx, saved);
+            } else if (_isLikelyWeakPC()) {
+                // Primeira vez abrindo (nada salvo ainda) + hardware detectado
+                // como fraco → já entra com o preset leve de fábrica. Fica
+                // salvo pra próxima vez continuar igual, e a pessoa ainda
+                // pode trocar à vontade no modal de Configurações Gráficas.
+                _gfx = Object.assign({}, _gfx, WEAK_PC_PRESET);
+                _saveGfxSettings();
+                _weakPcAutoApplied = true;
+            }
         } catch (_) {}
     }
     function _saveGfxSettings() {
@@ -2712,6 +2900,24 @@ const ThreeManager = (() => {
         _saveGfxSettings();
         _applyGfxSettings();
     }
+    // (nova função — pedido do usuário) Preset "PC fraco" — pensado pra
+    // máquinas de verdade limitadas (ex.: i3 de 2ª geração + 4GB de RAM,
+    // sem GPU dedicada): desliga TODOS os efeitos caros de pós-processamento
+    // (SSAO, bloom, AA de tela cheia — o serrilhado que sobra é bem menos
+    // grave que travar), derruba a resolução interna pra "extreme" (25% da
+    // resolução real da tela, o piso mais baixo que existe), reduz a sombra
+    // pro tamanho mínimo (512px) e encurta a distância de renderização
+    // (menos objetos/triângulos fora da tela útil pra processar). O teto de
+    // 30fps também ajuda MUITO numa CPU fraca: cada frame a menos processado
+    // é menos JS/física/sync rodando por segundo, não só menos desenho na
+    // GPU. Esse é o nível mais agressivo — sacrifica visual pra garantir que
+    // o editor continue usável em vez de travando.
+    const WEAK_PC_PRESET = { shadows: false, ssao: false, aa: false, bloom: false, quality: "extreme", fpsCap: 30, renderDistance: "curta", shadowQuality: "baixa" };
+    function applyWeakPcPreset() {
+        _gfx = Object.assign({}, WEAK_PC_PRESET);
+        _saveGfxSettings();
+        _applyGfxSettings();
+    }
     function resetGraphicsSettings() {
         _gfx = { shadows: true, ssao: true, aa: true, bloom: true, quality: "auto", fpsCap: 0, renderDistance: "longa", detailedStats: false, shadowQuality: "alta" };
         _saveGfxSettings();
@@ -2759,6 +2965,8 @@ const ThreeManager = (() => {
     //    o delta de transformação a todas as Parts descendentes de uma vez.
     let groupPivot   = null;     // THREE.Object3D fantasma
     let groupMembers = [];       // [{ id, offset:Vector3, rotation:{x,y,z} }]
+    let _accessoryFitPreviewId = null; // (nova função) Model temporário no Workspace usado só durante o arraste de encaixe de um Accessory (ver beginAccessoryFit/_endAccessoryFit)
+    let _accessoryFitTargetId  = null; // id do Accessory sendo encaixado agora — usado pra limpar a prévia se o usuário selecionar outra coisa sem soltar o arraste
 
     // ── Melhoria #6 — cache de imagens usadas em SurfaceGui/BillboardGui ──
     const _imgCache = new Map(); // url → HTMLImageElement
@@ -3236,6 +3444,15 @@ const ThreeManager = (() => {
                 if (typeof ToolPoseEditor !== "undefined" && ToolPoseEditor.active && transform.object.userData?.nodeId) {
                     ToolPoseEditor.onDragEnd(transform.object.userData.nodeId);
                 }
+                // (nova função a pedido do usuário) Accessory arrastado até
+                // perto de uma Part do rig: gruda sozinho nela (atualiza
+                // AttachTo pra parte mais próxima), sem precisar escolher
+                // no dropdown — igual ao pedido de "escolher a parte no
+                // editor arrastando pra grudar", só que sem o sistema de
+                // pose inteiro da Tool.
+                if (transform.object.userData?.className === "Accessory" && transform.object.userData?.nodeId) {
+                    _snapAccessoryToNearestPart(transform.object.userData.nodeId);
+                }
             }
             UI.buildPropertiesPanel();
         });
@@ -3312,17 +3529,53 @@ const ThreeManager = (() => {
        como um monitor de CCTV, sem afetar a câmera principal do jogador.
        ================================================================ */
     const _cameraFeedRenderers = new Map(); // nodeId(GUI) -> { renderer, cam, w, h }
-    function _updateCameraGuiFeeds() {
+    // (nova função a pedido do usuário — otimização) Antes, todo frame
+    // (mesmo em projetos sem NENHUM CameraGui) fazia um
+    // document.querySelectorAll(".camera-gui-canvas") — uma varredura no
+    // DOM inteiro, 60x/seg, só pra descobrir "não tem nenhum". Agora essa
+    // varredura roda no máximo 2x/seg (CAM_GUI_SCAN_MS) e o resultado fica
+    // em cache; a maioria dos projetos nunca usa CameraGui, então o caso
+    // comum vira "olha um array vazio já pronto" em vez de tocar o DOM.
+    const CAM_GUI_SCAN_MS = 500;
+    let _camGuiScanAccum = Infinity; // força 1 varredura já no primeiro frame
+    let _camGuiCanvasCache = [];
+    // (nova função a pedido do usuário) CameraGui dentro de uma Part
+    // (SurfaceGui/BillboardGui) não tem <canvas> real no DOM — ela é só
+    // "pintada" num canvas 2D compartilhado que vira textura (ver
+    // _drawGuiNode/_renderGuiCanvas). Por isso mantemos aqui, à parte, a
+    // lista de CameraGui que vivem dentro de uma dessas duas, junto do id
+    // do SurfaceGui/BillboardGui "dono" (pra saber qual textura redesenhar
+    // sempre que o feed daquela câmera mudar).
+    let _camGuiPartCache = [];
+    function _collectPartCameraGuis(node, rootGuiId, out) {
+        if (!node) return;
+        if (node.className === "SurfaceGui" || node.className === "BillboardGui") rootGuiId = node.id;
+        else if (node.className === "CameraGui" && rootGuiId) out.push({ id: node.id, rootGuiId });
+        (node.children || []).forEach(c => _collectPartCameraGuis(c, rootGuiId, out));
+    }
+    function _updateCameraGuiFeeds(dt) {
         // Descarta renderers cujo <canvas> já não existe mais no DOM (a
         // GUI foi reconstruída/removida) — evita vazar contextos WebGL.
+        // Entradas "de Part" (isPart:true) não têm <canvas> no DOM (o
+        // renderer delas desenha num canvas OFFSCREEN), então são
+        // descartadas só quando o node correspondente sumiu da árvore.
         _cameraFeedRenderers.forEach((entry, id) => {
-            if (!document.body.contains(entry.renderer.domElement)) {
+            if (entry.isPart) {
+                if (!Tree.find(id)) { entry.renderer.dispose(); _cameraFeedRenderers.delete(id); }
+            } else if (!document.body.contains(entry.renderer.domElement)) {
                 entry.renderer.dispose();
                 _cameraFeedRenderers.delete(id);
             }
         });
-        const canvases = document.querySelectorAll(".camera-gui-canvas");
-        if (!canvases.length) return;
+        _camGuiScanAccum += (dt || 0);
+        if (_camGuiScanAccum >= CAM_GUI_SCAN_MS / 1000) {
+            _camGuiCanvasCache = document.querySelectorAll(".camera-gui-canvas");
+            const foundPartGuis = [];
+            _collectPartCameraGuis(State.tree, null, foundPartGuis);
+            _camGuiPartCache = foundPartGuis;
+            _camGuiScanAccum = 0;
+        }
+        const canvases = _camGuiCanvasCache;
         canvases.forEach(canvas => {
             const nodeId = canvas.dataset.nodeId;
             const guiNode = Tree.find(nodeId);
@@ -3362,6 +3615,63 @@ const ThreeManager = (() => {
             if (entry.cam.fov !== fov) { entry.cam.fov = fov; }
             entry.cam.updateProjectionMatrix();
             entry.renderer.render(scene, entry.cam);
+        });
+
+        // ── CameraGui dentro de SurfaceGui/BillboardGui (Part) ──────────
+        // Mesma lógica acima, mas o "canvas" é um <canvas> offscreen criado
+        // por nós (nunca vai pro DOM) e, ao final, precisamos forçar a
+        // textura da Part dona a se redesenhar (_renderGuiCanvas), já que
+        // ela normalmente só é redesenhada quando algo muda via markDirty.
+        _camGuiPartCache.forEach(({ id, rootGuiId }) => {
+            const guiNode = Tree.find(id);
+            if (!guiNode) return;
+            const p = guiNode.properties || {};
+            const camId   = p.CameraId;
+            const camNode = camId ? Tree.find(camId) : null;
+            const w = Math.max(2, Math.min(512, Math.round(p.SizeX) || 280));
+            const h = Math.max(2, Math.min(512, Math.round(p.SizeY) || 170));
+            let entry = _cameraFeedRenderers.get(id);
+            if (!entry) {
+                const offCanvas = document.createElement("canvas");
+                const r = new THREE.WebGLRenderer({ canvas: offCanvas, antialias:false, alpha:false, preserveDrawingBuffer:true });
+                r.setPixelRatio(1);
+                r.shadowMap.enabled = false;
+                const cam2 = new THREE.PerspectiveCamera(70, w / h, 0.1, 1000);
+                entry = { renderer:r, cam:cam2, w:0, h:0, isPart:true };
+                _cameraFeedRenderers.set(id, entry);
+            }
+            if (entry.w !== w || entry.h !== h) {
+                entry.renderer.setSize(w, h, false);
+                entry.cam.aspect = w / h;
+                entry.w = w; entry.h = h;
+            }
+            const playing = typeof Simulation !== "undefined" && Simulation.active;
+            if (playing && camNode) {
+                const pos = camNode.properties.Position || { x:0, y:5, z:0 };
+                const rot = camNode.properties.Rotation || { x:0, y:0, z:0 };
+                entry.cam.position.set(pos.x, pos.y, pos.z);
+                entry.cam.rotation.set(
+                    THREE.MathUtils.degToRad(rot.x || 0),
+                    THREE.MathUtils.degToRad(rot.y || 0),
+                    THREE.MathUtils.degToRad(rot.z || 0));
+                const fov = camNode.properties.FOV || 70;
+                if (entry.cam.fov !== fov) { entry.cam.fov = fov; }
+                entry.cam.updateProjectionMatrix();
+                entry.renderer.render(scene, entry.cam);
+            } else {
+                entry.renderer.setClearColor(0x000000, 1);
+                entry.renderer.clear();
+            }
+            // Redesenha a textura da SurfaceGui/BillboardGui dona pra
+            // refletir o quadro novo desse monitor.
+            const rootObj = objectMap.get(rootGuiId);
+            if (rootObj?.userData?.canvas) {
+                const rootNode = Tree.find(rootGuiId);
+                if (rootNode) {
+                    _renderGuiCanvas(rootNode, rootObj.userData.canvas);
+                    rootObj.userData.texture.needsUpdate = true;
+                }
+            }
         });
     }
 
@@ -3574,7 +3884,7 @@ const ThreeManager = (() => {
         // (nova função a pedido do usuário) Atualiza os monitores de
         // CameraGui (feeds ao vivo das Camera do Workspace) — depois do
         // render principal, pra não competir por buffers com o composer.
-        _updateCameraGuiFeeds();
+        _updateCameraGuiFeeds(dt);
     }
 
     /* Marca cena como suja → sync no próximo frame, não imediatamente */
@@ -4548,6 +4858,37 @@ const ThreeManager = (() => {
                     if (img?.complete && img.naturalWidth) ctx.drawImage(img, x, y, w, h);
                     break;
                 }
+                // (nova função a pedido do usuário) CameraGui dentro de uma
+                // Part (SurfaceGui/BillboardGui) — antes esse case nem
+                // existia aqui, então o monitor simplesmente não aparecia
+                // desenhado na textura (só funcionava dentro de ScreenGui,
+                // que usa DOM real em vez desse canvas 2D). Agora reaproveita
+                // o mesmo THREE.WebGLRenderer "fantasma" mantido por
+                // _updateCameraGuiFeeds() (indexado por c.id em
+                // _cameraFeedRenderers) e copia o quadro já renderizado pra
+                // dentro desta textura via drawImage.
+                case "CameraGui": {
+                    ctx.fillStyle = "#000000";
+                    ctx.fillRect(x, y, w, h);
+                    const feed = _cameraFeedRenderers.get(c.id);
+                    const playing = typeof Simulation !== "undefined" && Simulation.active;
+                    if (playing && feed && feed.w > 1 && feed.h > 1) {
+                        try { ctx.drawImage(feed.renderer.domElement, x, y, w, h); } catch(_) {}
+                    } else {
+                        ctx.fillStyle = "#52525b";
+                        ctx.font = `${Math.max(7, 9 * Math.min(sx, sy))}px monospace`;
+                        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                        ctx.fillText(p.CameraId ? "▶ Play p/ ver" : "sem Camera", x + w/2, y + h/2, w);
+                    }
+                    ctx.fillStyle = "#f87171";
+                    ctx.beginPath();
+                    ctx.arc(x + 7, y + 8, Math.max(1.5, 1.5 * Math.min(sx, sy)), 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.font = `${Math.max(7, 8 * Math.min(sx, sy))}px monospace`;
+                    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+                    ctx.fillText(p.Label || "CÂMERA", x + 12, y + 8, w - 14);
+                    break;
+                }
             }
         } catch(_) {}
         ctx.restore();
@@ -4817,6 +5158,82 @@ const ThreeManager = (() => {
     // vezes por segundo). O elemento nunca é removido/recriado, então basta
     // guardar a referência uma vez.
     let _snapValueEl = null;
+    /* ── Encaixe de Accessory (função nova a pedido do usuário) ───────
+       Um Accessory mora dentro do Model do rig (StarterPlayer), fora do
+       Workspace — e o gizmo só mexe em coisa dentro do Workspace (ver
+       Tree.inWorkspace). Solução (mesmo truque do ToolBuildEditor): cria
+       um Model TEMPORÁRIO dentro do Workspace cujo array de filhos é O
+       MESMO array do Model do rig (mesma referência, não cópia) — assim
+       o Accessory (e as Parts do rig) aparecem de verdade no viewport e
+       dá pra arrastar. Ao soltar, o AttachTo já foi ajustado sozinho
+       (_snapAccessoryToNearestPart) e o Model temporário é removido na
+       hora — fluxo de "um arraste só", sem editor separado. ────────── */
+    function beginAccessoryFit(accNode) {
+        const rigModel = Tree.findParent(accNode.id);
+        if (!rigModel || rigModel.className !== "Model") {
+            UI.showToast("⚠ Coloque o Accessory dentro do Model do rig (junto com Head/Torso/…) antes de encaixar.", 3500);
+            return;
+        }
+        const ws = State.tree.children?.find(c => c.className === "Workspace");
+        if (!ws) return;
+        _endAccessoryFit(); // remove uma prévia anterior, se sobrou alguma
+        const preview = {
+            id: Tree.uuid(),
+            name: "🧷 " + rigModel.name + " (encaixando acessório)",
+            className: "Model",
+            expanded: true,
+            children: rigModel.children, // referência compartilhada de propósito — ver nota acima
+            properties: { Connected:false },
+        };
+        ws.children = ws.children || [];
+        ws.children.push(preview);
+        _accessoryFitPreviewId = preview.id;
+        _accessoryFitTargetId  = accNode.id;
+        Tree.markIndexDirty();
+        markDirty();
+        State.sel = [accNode.id];
+        Explorer.rebuild();
+        attachToSelected();
+        setTransformMode("translate");
+        UI.buildPropertiesPanel();
+        UI.showToast("🧷 Arraste o acessório (segure e mova) até a parte do personagem — solte perto dela pra grudar.", 4000);
+    }
+
+    function _endAccessoryFit() {
+        if (!_accessoryFitPreviewId) return;
+        const ws = State.tree.children?.find(c => c.className === "Workspace");
+        if (ws) ws.children = (ws.children || []).filter(c => c.id !== _accessoryFitPreviewId);
+        _accessoryFitPreviewId = null;
+        _accessoryFitTargetId  = null;
+        Tree.markIndexDirty();
+        markDirty();
+    }
+
+    /** Acha, entre os irmãos do Accessory (mesmo Model do rig), a Part mais
+     *  perto da posição atual do acessório, e atualiza AttachTo pra ela. */
+    function _snapAccessoryToNearestPart(accessoryId) {
+        const accNode = Tree.find(accessoryId);
+        const parent  = Tree.findParent(accessoryId);
+        const accPos  = accNode?.properties?.Position;
+        if (!accNode || !parent?.children || !accPos) return;
+        let nearest = null, nearestD = Infinity;
+        parent.children.forEach(sib => {
+            if (sib.className !== "Part" || sib.id === accessoryId) return;
+            const sp = sib.properties?.Position;
+            if (!sp) return;
+            const d = Math.hypot(accPos.x - sp.x, accPos.y - sp.y, accPos.z - sp.z);
+            if (d < nearestD) { nearestD = d; nearest = sib; }
+        });
+        if (nearest) {
+            accNode.properties.AttachTo = nearest.name;
+            UI.showToast(`🧷 "${accNode.name}" grudado em "${nearest.name}".`, 2500);
+        }
+        _endAccessoryFit();
+        Explorer.rebuild();
+        setTransformMode("select");
+        UI.buildPropertiesPanel();
+    }
+
     function _syncMeshToNode(mesh) {
         const node = Tree.find(mesh.userData.nodeId);
         if (!node?.properties) return;
@@ -4940,6 +5357,10 @@ const ThreeManager = (() => {
     }
 
     function attachToSelected() {
+        // (nova função) Se um encaixe de Accessory ficou pendente (usuário
+        // clicou "Encaixar" mas selecionou outra coisa sem arrastar), limpa
+        // o Model temporário agora — evita deixar lixo no Workspace.
+        if (_accessoryFitPreviewId && State.sel[0] !== _accessoryFitTargetId) _endAccessoryFit();
         _rebuildSelectionHighlight();
         if (State.sel.length === 0 || State.mode === 'select') { transform.detach(); groupMembers = []; _updateGroupBadge(); return; }
         if (Tree.inWorkspace(State.sel[0])) _attach(State.sel);
@@ -5122,12 +5543,14 @@ const ThreeManager = (() => {
         cleanupNode, playSound, pauseSound, setRaycastEnabled, setFOV,
         getObjectMap, getScene, getCamera, getOrbit, getTransform, getRenderer, raycastDistance, raycastHit,
         buildHeldMeshFromTool, setGui3DVisible, isGui3DVisible,
-        setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings, applyBalancedGfxPreset,
+        setGraphicsSettings, getGraphicsSettings, resetGraphicsSettings, applyBalancedGfxPreset, applyWeakPcPreset,
+        wasWeakPcAutoApplied: () => _weakPcAutoApplied,
         setPlayPerformanceMode,
         getFps, getTriangleCount,
         // (nova função a pedido do usuário) Lista de materiais disponível para o
         // dropdown "Material" nas Properties — vem direto do MATERIAL_PRESETS.
         MATERIAL_NAMES,
+        beginAccessoryFit,
     };
 })();
 
@@ -6512,7 +6935,7 @@ const Explorer = (() => {
         { cat:"🌐 REDE", items:["RemoteEvent","RemoteFunction"] },
         { cat:"💿 AUDIO", items:["Sound","SoundGroup"] },
         { cat:"👥 JOGADORES & TIMES", items:["Team","Tool"] },
-        { cat:"🧍 PERSONAGEM", items:["Humanoid","Attachment","ProximityPrompt","Animator"] },
+        { cat:"🧍 PERSONAGEM", items:["Humanoid","Attachment","ProximityPrompt","Animator","Accessory"] },
         { cat:"🎥 CÂMERA", items:["Camera"] },
         { cat:"📂 ORG", items:["Folder","Model"] },
     ];
@@ -6523,7 +6946,78 @@ const Explorer = (() => {
         else { INSERT_CATALOG.push({ cat: catLabel, items: [...items] }); }
     }
 
+    /* ── Pasta Players (função nova a pedido do usuário) ──────────────
+       Preenche, toda vez que o Explorer é reconstruído, uma entrada por
+       jogador atualmente presente — EU (nome da conta ou "Jogador1") mais
+       todo mundo que estiver comigo numa sala (Multiplayer.getActiveMemberNames,
+       já inclui salas abertas tanto no Editor quanto durante o Play). Cada
+       entrada tem um "Character" com as MESMAS Parts (mesmo objeto de
+       properties, não uma cópia) do Model dentro de StarterPlayer — então
+       editar Position/Color/Size etc. aqui É editar o modelo de verdade
+       usado pra montar o rig (ver _buildPlayerRigFromStarterPlayer): muda
+       aqui, muda ao vivo no boneco de todo mundo. */
+    let _lastPlayersSig = null; // evita recriar os nós (e invalidar o índice do Tree) quando nada mudou
+    function _syncPlayersFolder() {
+        const plrs = Tree.find("plrs");
+        if (!plrs) return;
+
+        let myName = "Jogador1";
+        try { if (typeof Account !== "undefined" && Account.isLoggedIn && Account.isLoggedIn()) myName = Account.getDisplayName() || myName; } catch (_) {}
+        let roomNames = [];
+        try { if (typeof Multiplayer !== "undefined" && Multiplayer.getActiveMemberNames) roomNames = Multiplayer.getActiveMemberNames() || []; } catch (_) {}
+
+        const seen = new Set();
+        const names = [];
+        [myName, ...roomNames].forEach(n => {
+            const key = String(n || "").toLowerCase();
+            if (!key || seen.has(key)) return;
+            seen.add(key); names.push(String(n));
+        });
+
+        // Mesmo Model usado de verdade pro rig do player (StarterPlayer/…/R6)
+        const sply = Tree.find("sply");
+        let modelNode = null;
+        if (sply) {
+            (function walk(n) {
+                if (modelNode) return;
+                if (n.className === "Model" && (n.children || []).some(c => c.className === "Part")) { modelNode = n; return; }
+                (n.children || []).forEach(walk);
+            })(sply);
+        }
+
+        // Só recria os nós se o elenco de jogadores OU a lista de Parts do
+        // rig mudou de fato — editar Position/Color etc. muda o objeto
+        // properties (já compartilhado por referência), não essa lista, então
+        // na imensa maioria das chamadas (drag, propriedade editada) isso
+        // sai daqui sem tocar em nada, sem invalidar o índice do Tree.
+        const sig = names.join("|") + "::" + (modelNode ? modelNode.id + ":" + (modelNode.children || []).map(c => c.id).join(",") : "");
+        if (sig === _lastPlayersSig) return;
+        _lastPlayersSig = sig;
+
+        plrs.children = names.map(name => {
+            const safe = name.toLowerCase().replace(/[^a-z0-9]/g, "_") || "jogador";
+            return {
+                id: "plrs_" + safe,
+                name, className: "Player", expanded: false,
+                properties: { DisplayName: name },
+                children: modelNode ? [{
+                    id: "plrs_" + safe + "_char",
+                    name: modelNode.name, className: "Model", expanded: false,
+                    properties: { Connected: false },
+                    children: (modelNode.children || []).map(part => ({
+                        id: "plrs_" + safe + "_" + part.id,
+                        name: part.name, className: part.className, expanded: false,
+                        properties: part.properties, // mesma referência de propósito — ver comentário acima
+                        children: [],
+                    })),
+                }] : [],
+            };
+        });
+        Tree.markIndexDirty();
+    }
+
     function rebuild() {
+        _syncPlayersFolder();
         const root = document.getElementById("explorer-tree");
         root.innerHTML = "";
         State.tree.children?.forEach(s => root.appendChild(_renderNode(s)));
@@ -6645,6 +7139,22 @@ const Explorer = (() => {
         }
         History.snapshot();
         const node = { id:Tree.uuid(), name:cls, className:cls, expanded:false, children:[], properties:getDefaultProps(cls) };
+        // (nova função a pedido do usuário) Accessory recém-inserido: se o
+        // pai já tem a Part-alvo (ex.: "Head"), posiciona o acessório logo
+        // ACIMA dela de cara — assim já aparece encaixado no lugar certo
+        // na hora de inserir, em vez de precisar procurar as coordenadas
+        // certas manualmente (Position aqui usa o MESMO espaço de
+        // coordenadas das outras Parts do rig — ver _buildPlayerRigFromStarterPlayer).
+        if (cls === "Accessory") {
+            const targetPart = (parent.children || []).find(c => c.className === "Part" && c.name === node.properties.AttachTo);
+            if (targetPart?.properties?.Position) {
+                const tp = targetPart.properties.Position;
+                const tsz = targetPart.properties.Size || { x:1, y:1, z:1 };
+                node.properties.Position = { x: tp.x, y: tp.y + (tsz.y || 1) / 2 + 0.25, z: tp.z };
+            } else {
+                UI.showToast(`⚠️ Não achei "${node.properties.AttachTo}" aqui dentro — ajuste o campo AttachTo e a Position nas Propriedades depois de inserir.`, 3500);
+            }
+        }
         if (!parent.children) parent.children = [];
         parent.children.push(node);
         parent.expanded = true;
@@ -8368,6 +8878,198 @@ const ToolPoseEditor = (() => {
 })();
 
 /* ================================================================
+   MÓDULO 10A-2C · SKIN EDITOR  (nova função a pedido do usuário —
+   substitui o antigo "Editor de corpo 3D")
+   ─ Editor VISUAL de imagens: mostra uma prévia do boneco do jogador
+     numa área dedicada (viewport cheia, mesmo esquema dos outros
+     editores) e deixa colocar uma imagem em cada um dos 6 lados
+     (Frente/Trás/Esquerda/Direita/Cima/Baixo) de cada parte do corpo
+     (Torso/Cabeça/Braços/Pernas) — por link (URL) ou enviando um
+     arquivo do PC. A prévia é montada com Simulation.buildStandaloneRig,
+     a MESMA função que monta o boneco de verdade em Play — então o que
+     aparece aqui é exatamente o que vai aparecer jogando, sem duplicar
+     a lógica de montagem do rig. O resultado é salvo na CONTA logada
+     (Account.setSkinTextures), então aparece no seu boneco em Play e,
+     numa sala, pros outros jogadores também (junto com a Skin de cor). */
+const SkinEditor = (() => {
+    const PARTS = ["Torso", "Head", "Left Arm", "Right Arm", "Left Leg", "Right Leg"];
+    const PT_NAMES = { "Torso":"Corpo", "Head":"Cabeça", "Left Arm":"Braço esquerdo", "Right Arm":"Braço direito", "Left Leg":"Perna esquerda", "Right Leg":"Perna direita" };
+    // Mesma ordem/rótulo de face usada dentro de Simulation._buildRigPartMaterial.
+    const FACE_ORDER  = ["front", "back", "left", "right", "top", "bottom"];
+    const FACE_LABELS = { front:"Frente", back:"Trás", left:"Esquerda", right:"Direita", top:"Cima", bottom:"Baixo" };
+    const MAX_IMG_DIM = 256;  // upload é redimensionado pra no máximo isso (px), pra não pesar a conta/rede
+    const JPEG_QUALITY = 0.82;
+
+    let _active = false;
+    let _previewGroup = null;      // THREE.Group solto (fora do Workspace/física) — só visual
+    let _baseSkin = null;          // skin da conta no momento em que abriu (cor etc.), sem mexer
+    let _textures = {};            // cópia de trabalho: { "Torso": { front:url, ... }, ... }
+    let _editing = null;           // { part, face } — face que está aberta no popup agora
+
+    function _findWs() { return Tree.find("ws"); }
+
+    /** Remonta a malha de prévia do zero com a skin de trabalho atual
+     *  (cor da conta + imagens ainda não salvas) — chamado sempre que uma
+     *  imagem é trocada, pra já ver o resultado na hora. */
+    function _rebuildPreview() {
+        if (typeof Simulation === "undefined" || !Simulation.buildStandaloneRig) return;
+        if (_previewGroup) {
+            try { ThreeManager.getScene().remove(_previewGroup); } catch (_) {}
+            _previewGroup = null;
+        }
+        const skinForPreview = Object.assign({}, _baseSkin || {}, { Textures: _textures });
+        const rig = Simulation.buildStandaloneRig(skinForPreview);
+        if (!rig) { UI.showToast("⚠ Nenhum rig R6 encontrado no projeto (esperado em StarterPlayer) — não dá pra mostrar a prévia."); return; }
+        // Mesmo offset lateral usado pelos outros editores de prévia (Tool
+        // Pose/corpo antigo) — aparece do lado do ponto de spawn, sem
+        // sobrepor nada da cena normal.
+        const sp = Tree.find("sp");
+        const base = sp?.properties?.Position || { x:0, y:0, z:0 };
+        rig.group.position.set(base.x - 6, base.y, base.z);
+        ThreeManager.getScene().add(rig.group);
+        _previewGroup = rig.group;
+    }
+
+    function open() {
+        if (_active) close();
+        _baseSkin = (typeof Account !== "undefined" && Account.getMySkin) ? (Account.getMySkin() || {}) : {};
+        _textures = JSON.parse(JSON.stringify(_baseSkin.Textures || {}));
+        _active = true;
+
+        _rebuildPreview();
+
+        document.getElementById("skin-texture-editor-overlay").classList.add("visible");
+        // (nova função a pedido do usuário) Diferente do Play (que não fica
+        // mais fullscreen), o Editor de Skin abre numa área SEPARADA que
+        // cobre a tela toda — header e painéis somem de vez (display:none),
+        // não só ficam "meio apagados" atrás.
+        document.getElementById("panel-left").classList.add("skin-editor-hide-chrome");
+        document.getElementById("panel-right").classList.add("skin-editor-hide-chrome");
+        document.getElementById("app-header").classList.add("skin-editor-hide-chrome");
+        document.getElementById("viewport-section").classList.add("skin-editor-fullscreen-viewport");
+
+        _render();
+        UI.showToast("👕 Editando a skin — clique num quadrado pra colocar uma imagem naquele lado da parte. Gire a câmera (botão direito) pra ver o boneco de todos os ângulos. Esc salva e fecha.");
+    }
+
+    function _render() {
+        const el = document.getElementById("skin-texture-parts-list");
+        if (!el || !_active) return;
+        el.innerHTML = "";
+        PARTS.forEach(partName => {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 bg-studio-input border studio-border rounded px-2 py-2";
+            const facesHtml = FACE_ORDER.map(face => {
+                const url = (_textures[partName] || {})[face];
+                const bg = url ? `style="background-image:url('${url.replace(/'/g, "%27")}');background-size:cover;background-position:center;"` : "";
+                return `<button onclick="SkinEditor.openFacePicker('${partName}','${face}')" title="${FACE_LABELS[face]}"
+                            class="w-9 h-9 rounded border ${url ? "border-fuchsia-500" : "border-zinc-700"} bg-zinc-800 hover:border-fuchsia-400 flex items-center justify-center text-zinc-500 text-[8px] shrink-0" ${bg}>
+                            ${url ? "" : FACE_LABELS[face][0]}
+                        </button>`;
+            }).join("");
+            row.innerHTML = `<span class="w-24 shrink-0 text-zinc-300 font-bold text-[11px]">${PT_NAMES[partName] || partName}</span>
+                              <div class="flex gap-1.5">${facesHtml}</div>`;
+            el.appendChild(row);
+        });
+    }
+
+    function openFacePicker(part, face) {
+        _editing = { part, face };
+        const url = (_textures[part] || {})[face] || "";
+        document.getElementById("skin-face-picker-title").textContent = `${PT_NAMES[part] || part} — ${FACE_LABELS[face]}`;
+        const preview = document.getElementById("skin-face-picker-preview");
+        if (url) { preview.style.backgroundImage = `url('${url}')`; preview.textContent = ""; }
+        else { preview.style.backgroundImage = ""; preview.textContent = "sem imagem"; }
+        // Só preenche o campo de URL se o valor salvo for mesmo um link
+        // (não faz sentido mostrar um dataURL gigante de upload no campo).
+        document.getElementById("skin-face-picker-url").value = (url && !url.startsWith("data:")) ? url : "";
+        document.getElementById("skin-face-picker-modal").classList.add("visible");
+    }
+
+    function closeFacePicker() {
+        _editing = null;
+        document.getElementById("skin-face-picker-modal")?.classList.remove("visible");
+    }
+
+    function _setFace(part, face, value) {
+        if (!_textures[part]) _textures[part] = {};
+        if (value) _textures[part][face] = value;
+        else delete _textures[part][face];
+        if (Object.keys(_textures[part]).length === 0) delete _textures[part];
+        _rebuildPreview();
+        _render();
+    }
+
+    function applyUrl() {
+        if (!_editing) return;
+        const val = (document.getElementById("skin-face-picker-url").value || "").trim();
+        if (!val) { UI.showToast("Cole um link de imagem primeiro."); return; }
+        _setFace(_editing.part, _editing.face, val);
+        closeFacePicker();
+    }
+
+    /** Redimensiona a imagem enviada (máx. MAX_IMG_DIM px no lado maior) e
+     *  converte pra um dataURL JPEG comprimido — evita que a conta (salva
+     *  no accounts.json do GitHub, e mandada pra rede a cada troca de
+     *  skin) fique gigante com fotos em resolução cheia. */
+    function _resizeToDataUrl(file, cb) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width, h = img.height;
+                if (w > h && w > MAX_IMG_DIM) { h = Math.round(h * MAX_IMG_DIM / w); w = MAX_IMG_DIM; }
+                else if (h > MAX_IMG_DIM) { w = Math.round(w * MAX_IMG_DIM / h); h = MAX_IMG_DIM; }
+                const canvas = document.createElement("canvas");
+                canvas.width = w; canvas.height = h;
+                canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                try { cb(canvas.toDataURL("image/jpeg", JPEG_QUALITY)); }
+                catch (_) { cb(reader.result); } // (fallback raro — canvas "tainted" etc.)
+            };
+            img.onerror = () => UI.showToast("⚠ Não consegui abrir essa imagem.");
+            img.src = reader.result;
+        };
+        reader.onerror = () => UI.showToast("⚠ Não consegui ler esse arquivo.");
+        reader.readAsDataURL(file);
+    }
+
+    function onFileSelected(input) {
+        const file = input.files && input.files[0];
+        if (!file || !_editing) return;
+        const { part, face } = _editing;
+        _resizeToDataUrl(file, dataUrl => { _setFace(part, face, dataUrl); closeFacePicker(); });
+        input.value = ""; // permite reenviar o mesmo arquivo depois, se quiser
+    }
+
+    function removeFace() {
+        if (!_editing) return;
+        _setFace(_editing.part, _editing.face, null);
+        closeFacePicker();
+    }
+
+    function close() {
+        if (!_active) return;
+        try { if (typeof Account !== "undefined" && Account.setSkinTextures) Account.setSkinTextures(_textures); } catch (_) {}
+        if (_previewGroup) { try { ThreeManager.getScene().remove(_previewGroup); } catch (_) {} _previewGroup = null; }
+        _active = false;
+        closeFacePicker();
+
+        const ov = document.getElementById("skin-texture-editor-overlay");
+        if (ov) ov.classList.remove("visible");
+        ["panel-left", "panel-right", "app-header"].forEach(id => {
+            document.getElementById(id)?.classList.remove("skin-editor-hide-chrome");
+        });
+        document.getElementById("viewport-section")?.classList.remove("skin-editor-fullscreen-viewport");
+
+        const partCount = Object.keys(_textures).length;
+        UI.showToast(partCount ? `💾 Skin salva — imagens em ${partCount} parte${partCount === 1 ? "" : "s"} do corpo.` : "💾 Skin salva (sem nenhuma imagem).");
+    }
+
+    return { open, close, openFacePicker, closeFacePicker, applyUrl, onFileSelected, removeFace, get active() { return _active; } };
+})();
+
+
+/* ================================================================
    MÓDULO 10A-2B · TOOL BUILD EDITOR  (função nova)
    ─ Editor de MODELO da Tool: diferente do ToolPoseEditor (que posa um
      rig-clone), este edita a árvore REAL da própria Tool — permite
@@ -9839,6 +10541,33 @@ const LuaEngine = (() => {
             return 1;
         });
 
+        // (nova função a pedido do usuário — painel de Câmera) Manda um
+        // pedido de ativar/desativar uma Camera do Workspace pra um jogador
+        // específico da sala (ou "Todos"). Repassa pro módulo Multiplayer,
+        // que aplica na hora localmente (cobre o caso de eu mesmo ser o
+        // alvo, ou de eu nem estar numa sala) e retransmite via WebRTC pros
+        // outros membros — cada cliente decide, com base no PRÓPRIO nome,
+        // se deve ligar/desligar a Camera.Ativa (que já ancora a câmera
+        // real do jogador na Camera, ver Simulation._findActiveCameraNode).
+        def("camCtrlSend", (LT) => {
+            const camId  = lua.lua_tojsstring(LT, 1);
+            const target = lua.lua_tojsstring(LT, 2) || "Todos";
+            const active = !!lua.lua_toboolean(LT, 3);
+            try { if (typeof Multiplayer !== "undefined" && Multiplayer.sendCamCtrl) Multiplayer.sendCamCtrl(camId, target, active); } catch (_) {}
+            return 0;
+        });
+
+        // (nova função a pedido do usuário — painel de Câmera) Lista os
+        // nomes de quem está atualmente na sala (pra preencher a barra de
+        // nome do painel) — vazio se eu não estiver em nenhuma sala.
+        def("getRoomMemberNames", (LT) => {
+            let names = [];
+            try { if (typeof Multiplayer !== "undefined" && Multiplayer.getActiveMemberNames) names = Multiplayer.getActiveMemberNames() || []; } catch (_) {}
+            lua.lua_newtable(LT);
+            names.forEach((n, i) => { lua.lua_pushstring(LT, to_luastring(String(n))); lua.lua_rawseti(LT, -2, i + 1); });
+            return 1;
+        });
+
         /** DataStoreService (função nova) — persistência real entre sessões,
          *  usando localStorage do navegador com um prefixo próprio pra não
          *  colidir com nada mais salvo na mesma origem. Dá "liberdade" pro
@@ -10067,6 +10796,21 @@ InstanceMT.__index = function(self, key)
         return function(s, cls) return __HOST.isA(rawget(s, "__id"), cls) end
     elseif key == "Clone" then
         return function(s) return __wrapInstance(__HOST.clone(rawget(s, "__id"))) end
+    elseif key == "AtivarPara" then
+        -- (função nova a pedido do usuário — painel de Câmera) Camera:AtivarPara(nome)
+        -- liga essa Camera SÓ pra quem tem esse nome (ou uma lista
+        -- "Fulano, Beltrano" pra ativar em dois ou mais de uma vez). Cada
+        -- jogador da sala recebe o pedido e só a sua própria câmera muda —
+        -- a ativação já ancora a visão real dele nesta Camera (Position/
+        -- Rotation/FOV) até ser desativada.
+        return function(s, nome) __HOST.camCtrlSend(rawget(s, "__id"), tostring(nome or "Todos"), true) end
+    elseif key == "AtivarParaTodos" then
+        -- Camera:AtivarParaTodos() — liga essa Camera pra todo mundo da sala de uma vez.
+        return function(s) __HOST.camCtrlSend(rawget(s, "__id"), "Todos", true) end
+    elseif key == "DesativarCamera" then
+        -- Camera:DesativarCamera() ou Camera:DesativarCamera(nome) — desliga
+        -- pra todo mundo (sem argumento) ou só pra um nome/lista específica.
+        return function(s, nome) __HOST.camCtrlSend(rawget(s, "__id"), tostring(nome or "Todos"), false) end
     elseif key == "Play" then
         -- (função nova · categoria Animações) animator:Play() roda de verdade
         -- os keyframes gravados no Editor de Animação; qualquer outra
@@ -10850,6 +11594,10 @@ Players = setmetatable({}, { __index = function(_, key)
 end })
 function Players:GetPlayers() return { __localPlayerObj } end
 function Players:GetPlayerFromCharacter(_char) return __localPlayerObj end
+-- (função nova a pedido do usuário — painel de Câmera) Nomes de quem está
+-- na sala multiplayer agora (tabela de strings; vazia se eu não estiver em
+-- nenhuma sala) — usa pra preencher a barra de nome do painel.
+function Players:GetRoomMemberNames() return __HOST.getRoomMemberNames() end
 
 -- ── BindableEvent / RemoteEvent (função nova) ────────────────────────────
 -- Suporte a comunicação por eventos entre Scripts, igual ao Roblox real.
@@ -15191,6 +15939,14 @@ const UI = (() => {
         openGraphicsSettings();
         showToast("🌿 Configurações gráficas: padrão leve e bonito aplicado.");
     }
+    // (nova função — pedido do usuário) Aplica o preset "PC fraco" (desliga
+    // sombra/SSAO/AA/bloom, qualidade extrema, teto de 30fps) e repopula o
+    // modal pra mostrar os controles já no novo estado.
+    function applyWeakPcPreset() {
+        ThreeManager.applyWeakPcPreset();
+        openGraphicsSettings();
+        showToast("🐢 Modo PC fraco aplicado — efeitos pesados desligados pra rodar melhor em máquinas mais limitadas.");
+    }
     function resetGraphicsSettings() {
         ThreeManager.resetGraphicsSettings();
         openGraphicsSettings(); // repopula os controles do modal com o padrão restaurado
@@ -15482,6 +16238,21 @@ const UI = (() => {
             c.appendChild(mpb);
         }
 
+        // (nova função a pedido do usuário) Accessory — em vez de escolher a
+        // parte-alvo digitando, arraste o acessório (gizmo normal W/E/R,
+        // igual a qualquer Part) até encostar na parte do personagem
+        // desejada — ao soltar, o campo AttachTo é atualizado sozinho pra
+        // parte mais perto (ver ThreeManager._snapAccessoryToNearestPart).
+        // Este botão só seleciona e já deixa o gizmo pronto em modo mover.
+        if (node.className === "Accessory") {
+            const ab = document.createElement("button");
+            ab.className = "w-full flex items-center justify-center gap-2 bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold p-1.5 rounded text-[10px] my-2";
+            ab.innerHTML = `<i class="fa-solid fa-hat-wizard"></i> Encaixar no Personagem`;
+            ab.title = "Arraste o acessório (segure e mova) até a parte do rig onde ele deve grudar — o campo AttachTo se ajusta sozinho pra parte mais próxima ao soltar.";
+            ab.onclick = () => ThreeManager.beginAccessoryFit(node);
+            c.appendChild(ab);
+        }
+
         // Propriedades
         if (node.properties) {
             Object.entries(node.properties).forEach(([k, v]) => {
@@ -15564,6 +16335,13 @@ const UI = (() => {
                     c.appendChild(_sliderRow(k, v, 1, 3, 1, nv => { node.properties[k]=parseFloat(nv); }));
                 } else if (k === "Grip" && node.className === "Tool") {
                     c.appendChild(_selectRow(k, v, ["Right Arm","Left Arm","Right Leg","Left Leg","Head","Torso"], nv => { node.properties[k]=nv; Simulation.refreshEquippedTool?.(); }));
+                } else if (k === "AttachTo" && node.className === "Accessory") {
+                    // (nova função a pedido do usuário) Em qual parte do rig este
+                    // Accessory fica grudado (ex.: "Head" pra um chapéu). Position/
+                    // Rotation continuam sendo o ajuste fino de encaixe.
+                    c.appendChild(_selectRow(k, v, ["Head","Torso","Right Arm","Left Arm","Right Leg","Left Leg","HumanoidRootPart"], nv => { node.properties[k]=nv; ThreeManager.markDirty(); }));
+                } else if (k === "AccessoryType" && node.className === "Accessory") {
+                    c.appendChild(_selectRow(k, v, ["Chapéu","Cabelo","Rosto","Pescoço","Ombro","Costas","Cintura"], nv => { node.properties[k]=nv; }));
                 } else if (k === "MediaType" && node.className === "Tool") {
                     c.appendChild(_selectRow(k, v, ["image","video"], nv => { node.properties[k]=nv; rebuildHUD(); Simulation.refreshEquippedTool?.(); }));
                 } else if (k === "MediaUrl" && node.className === "Tool") {
@@ -15830,7 +16608,7 @@ const UI = (() => {
 
     return { log, clearConsole, getLogHistory, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
               openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
-              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxAIOptimizer, setGfxFpsCap, setGfxFpsCapCustom, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, resetGraphicsSettings };
+              openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxAIOptimizer, setGfxFpsCap, setGfxFpsCapCustom, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, applyWeakPcPreset, resetGraphicsSettings };
 })();
 
 /* ================================================================
@@ -16308,6 +17086,187 @@ const App = (() => {
         UI.log("Novo DataModel instanciado.", "success");
     }
 
+    /* ════════════════════════════════════════════════════════════
+       MAPAS DE EXEMPLO (nova função a pedido do usuário)
+       ─────────────────────────────────────────────────────────────
+       Igual ao "Novo" (resetToNew), mas em vez do DataModel em
+       branco, monta um Workspace já recheado de Parts prontas pra
+       cada tema — Cidade, Arena de Luta, Parkour. Reaproveita o
+       DEFAULT_TREE inteiro (Lighting, StarterGui, StarterPlayer com
+       rig/animações já prontos etc.) e só troca os children do
+       Workspace pela cenografia do exemplo escolhido.
+    ════════════════════════════════════════════════════════════ */
+    let _exIdSeq = 0;
+    function _exId(prefix) { return `ex_${prefix}_${_exIdSeq++}`; }
+    /** Part genérica de exemplo — recebe só o que muda (nome/cor/tamanho/
+     *  posição/material) e completa o resto com valores padrão sensatos. */
+    function _exPart(name, props) {
+        return { id:_exId("p"), name, className:"Part", expanded:false, children:[],
+                 properties:Object.assign({ Color:"#888888", Size:{x:4,y:4,z:4}, Position:{x:0,y:2,z:0},
+                                             Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true,
+                                             Anchored:true, Material:"SmoothPlastic" }, props) };
+    }
+    function _exBaseplate(color, size) {
+        const s = size || 120;
+        return { id:_exId("bp"), name:"Placa_base", className:"Part", expanded:false, children:[],
+                 properties:{ Color:color || "#3a5f3a", Size:{x:s,y:1,z:s}, Position:{x:0,y:-0.5,z:0},
+                              Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"Concrete" }};
+    }
+    function _exSpawn(name, pos) {
+        return { id:_exId("sp"), name: name || "Spaw_original", className:"Part", expanded:false, children:[],
+                 properties:{ Color:"#ff0000", Size:{x:4,y:0.5,z:4}, Position:pos || {x:0,y:0.25,z:0},
+                              Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"SmoothPlastic" }};
+    }
+    /** Monta um novo DataModel a partir do DEFAULT_TREE, mas com os
+     *  children do Workspace substituídos pela lista passada. */
+    function _buildExampleTree(workspaceChildren) {
+        const tree = JSON.parse(JSON.stringify(DEFAULT_TREE));
+        const ws = tree.children.find(c => c.id === "ws");
+        if (ws) ws.children = workspaceChildren;
+        return tree;
+    }
+
+    function _mapCidade() {
+        _exIdSeq = 0;
+        const children = [ _exBaseplate("#4a4a4a", 140), _exSpawn() ];
+        const cores = ["#7a8a99", "#8a7a6a", "#6a8a7a", "#9a8a7a", "#7a7a9a", "#6a7a9a"];
+        let n = 0;
+        for (let gx = -2; gx <= 2; gx++) {
+            for (let gz = -2; gz <= 2; gz++) {
+                if (gx === 0 && gz === 0) continue; // deixa o quarteirão central livre pro spawn
+                const h = 8 + ((gx * 3 + gz * 7 + 11) % 7) * 3; // altura "aleatória" mas determinística
+                children.push(_exPart(`Prédio_${++n}`, {
+                    Color: cores[n % cores.length], Size:{ x:10, y:h, z:10 },
+                    Position:{ x: gx * 24, y: h / 2, z: gz * 24 }, Material:"Concrete"
+                }));
+                // poste de luz na esquina do quarteirão
+                children.push(_exPart(`Poste_${n}`, {
+                    Color:"#2a2a2a", Size:{ x:0.5, y:6, z:0.5 },
+                    Position:{ x: gx * 24 + 6, y:3, z: gz * 24 + 6 }, Material:"Metal"
+                }));
+            }
+        }
+        return _buildExampleTree(children);
+    }
+
+    function _mapArenaDeLuta() {
+        _exIdSeq = 0;
+        const children = [ _exBaseplate("#2f4a2f", 100) ];
+        // Ringue elevado
+        children.push(_exPart("Ringue", { Color:"#c94040", Size:{ x:24, y:1, z:24 }, Position:{ x:0, y:2, z:0 }, Material:"SmoothPlastic" }));
+        children.push(_exPart("FaixaCentral", { Color:"#ffffff", Size:{ x:24, y:1.02, z:0.3 }, Position:{ x:0, y:2, z:0 }, Material:"Neon" }));
+        // Postes nos 4 cantos + cordas (barras finas) em 2 alturas por lado
+        const half = 11;
+        const cantos = [ [-half,-half], [half,-half], [-half,half], [half,half] ];
+        cantos.forEach((c, i) => children.push(_exPart(`Poste_${i+1}`, {
+            Color:"#1a1a1a", Size:{ x:0.6, y:4, z:0.6 }, Position:{ x:c[0], y:4.5, z:c[1] }, Material:"Metal"
+        })));
+        [3, 4.2].forEach((y, li) => {
+            children.push(_exPart(`Corda_Norte_${li+1}`, { Color:"#eeeeee", Size:{ x:half*2, y:0.15, z:0.15 }, Position:{ x:0, y, z:-half }, Material:"SmoothPlastic" }));
+            children.push(_exPart(`Corda_Sul_${li+1}`,   { Color:"#eeeeee", Size:{ x:half*2, y:0.15, z:0.15 }, Position:{ x:0, y, z: half }, Material:"SmoothPlastic" }));
+            children.push(_exPart(`Corda_Leste_${li+1}`, { Color:"#eeeeee", Size:{ x:0.15, y:0.15, z:half*2 }, Position:{ x: half, y, z:0 }, Material:"SmoothPlastic" }));
+            children.push(_exPart(`Corda_Oeste_${li+1}`, { Color:"#eeeeee", Size:{ x:0.15, y:0.15, z:half*2 }, Position:{ x:-half, y, z:0 }, Material:"SmoothPlastic" }));
+        });
+        // Dois spawns em lados opostos do ringue
+        children.push(_exSpawn("Spaw_Lutador1", { x:0, y:2.5, z:-8 }));
+        children.push(_exSpawn("Spaw_Lutador2", { x:0, y:2.5, z: 8 }));
+        // Arquibancada simples ao redor (2 fileiras de cada lado)
+        [[-30,0],[30,0],[0,-30],[0,30]].forEach((p, i) => children.push(_exPart(`Arquibancada_${i+1}`, {
+            Color:"#5a5a6a", Size: (i < 2 ? { x:4, y:2, z:30 } : { x:30, y:2, z:4 }),
+            Position:{ x:p[0], y:1, z:p[1] }, Material:"Concrete"
+        })));
+        return _buildExampleTree(children);
+    }
+
+    function _mapParkour() {
+        _exIdSeq = 0;
+        const children = [ _exBaseplate("#3a3a5a", 60), _exSpawn() ];
+        // Sequência de plataformas subindo em espiral, cada vez mais longe/alta
+        const N = 14;
+        let ang = 0;
+        for (let i = 1; i <= N; i++) {
+            ang += 0.55;
+            const dist = 6 + i * 2.2;
+            const h    = 1 + i * 1.4;
+            const size = Math.max(2.2, 4.2 - i * 0.12); // vai ficando mais apertado
+            children.push(_exPart(`Plataforma_${i}`, {
+                Color: i === N ? "#ffd700" : "#00aaff",
+                Size:{ x:size, y:0.6, z:size },
+                Position:{ x: Math.cos(ang) * dist, y:h, z: Math.sin(ang) * dist },
+                Material: i === N ? "Neon" : "SmoothPlastic"
+            }));
+        }
+        return _buildExampleTree(children);
+    }
+
+    const EXAMPLE_MAPS = [
+        { id:"cidade", name:"Cidade",       icon:"fa-solid fa-city text-sky-400",       desc:"Quarteirões com prédios e postes de luz ao redor de uma praça central.", build:_mapCidade },
+        { id:"arena",  name:"Mapa de Luta", icon:"fa-solid fa-hand-fist text-red-400",  desc:"Ringue elevado com cordas, 2 spawns opostos e arquibancada.",           build:_mapArenaDeLuta },
+        { id:"parkour",name:"Parkour",      icon:"fa-solid fa-person-running text-lime-400", desc:"Plataformas em espiral subindo, cada vez mais estreitas e altas.", build:_mapParkour },
+    ];
+
+    function loadExampleMap(id) {
+        const entry = EXAMPLE_MAPS.find(m => m.id === id);
+        if (!entry) return;
+        if (!confirm(`Abrir o mapa de exemplo "${entry.name}"? O projeto atual não salvo será perdido.`)) return;
+        LuaEngine.stop();
+        State.tree = entry.build();
+        State.sel  = [];
+        UI.closeScriptEditor();
+        Explorer.rebuild();
+        ThreeManager.syncNow();
+        rebuildHUD();
+        UI.log(`Mapa de exemplo "${entry.name}" carregado.`, "success");
+        UI.showToast(`🗺️ "${entry.name}" carregado!`);
+        document.getElementById("example-maps-modal")?.remove();
+    }
+
+    /** Modal simples (montado na hora, sem depender de markup fixo no HTML)
+     *  listando os mapas de exemplo disponíveis, com botão Abrir cada um. */
+    function openExampleMapsModal() {
+        document.getElementById("example-maps-modal")?.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "example-maps-modal";
+        overlay.className = "fixed inset-0 bg-black/70 flex items-center justify-center z-[9999]";
+        overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+        const box = document.createElement("div");
+        box.className = "bg-studio-panel border studio-border rounded-lg w-[440px] max-h-[70vh] flex flex-col shadow-2xl";
+        box.onclick = e => e.stopPropagation();
+
+        const hdr = document.createElement("div");
+        hdr.className = "px-4 py-3 border-b studio-border flex items-center justify-between";
+        hdr.innerHTML = `<span class="font-bold text-sm text-white"><i class="fa-solid fa-map text-pink-300 mr-1"></i> Mapas de exemplo</span>`;
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "text-zinc-400 hover:text-white"; closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        closeBtn.onclick = () => overlay.remove();
+        hdr.appendChild(closeBtn);
+        box.appendChild(hdr);
+
+        const list = document.createElement("div");
+        list.className = "overflow-y-auto p-2 space-y-1.5 flex-1";
+        EXAMPLE_MAPS.forEach(m => {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-3 bg-studio-input p-2.5 rounded border border-zinc-700";
+            const iconWrap = document.createElement("div");
+            iconWrap.className = "w-9 h-9 rounded bg-zinc-800 flex items-center justify-center shrink-0";
+            iconWrap.innerHTML = `<i class="${m.icon} text-base"></i>`;
+            const info = document.createElement("div");
+            info.className = "flex-1 min-w-0";
+            info.innerHTML = `<div class="text-white text-xs font-bold truncate">${m.name}</div><div class="text-zinc-500 text-[10px] leading-snug">${m.desc}</div>`;
+            const openBtn = document.createElement("button");
+            openBtn.className = "px-3 py-1.5 bg-blue-700 hover:bg-blue-600 text-white text-[10px] rounded font-bold shrink-0";
+            openBtn.textContent = "Abrir";
+            openBtn.onclick = () => loadExampleMap(m.id);
+            row.appendChild(iconWrap); row.appendChild(info); row.appendChild(openBtn);
+            list.appendChild(row);
+        });
+        box.appendChild(list);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    }
+
     /** Spawna um NPC com rig R6 completo (Humanoid + HumanoidRootPart + Torso +
      *  Head + braços + pernas) como um Model dentro do Workspace, seguindo
      *  fielmente a hierarquia padrão de um Character do Roblox ── função nova.
@@ -16515,6 +17474,7 @@ const App = (() => {
     return { saveProject, openProjectModal, openGltfModal, resetToNew, spawnNPC,
               downloadProject, quickSave, restoreAutosave, hasAutosave, notifyChanged, _startAutosaveLoop,
               saveProjectAs, loadNamedProject, deleteNamedProject, openNamedProjectsModal,
+              openExampleMapsModal, loadExampleMap,
               openPublishModal, publishProject, _onPublishCoverChange, _onPublishDemosChange,
               openLanding, closeLanding, landingCreateNew, openPublishedProject, deletePublishedProject };
 })();
@@ -16873,6 +17833,11 @@ const Account = (() => {
         // (nova função) Conta criada antes do código de amizade existir —
         // gera um agora, salva no repositório e no índice, sem travar o login.
         if (!acc.friendCode) _backfillFriendCode(acc);
+        // (nova função a pedido do usuário) Liga minha conexão direta
+        // (WebRTC) pra mensagens privadas — a partir de agora, mandar
+        // mensagem pra um amigo online chega na hora, sem depender só do
+        // poll do GitHub (ver Multiplayer.initDMLink/sendDMDirect).
+        if (typeof Multiplayer !== "undefined" && Multiplayer.initDMLink) Multiplayer.initDMLink(acc.username, _onIncomingDM);
     }
     async function _backfillFriendCode(acc) {
         const code = _genFriendCode();
@@ -16894,6 +17859,10 @@ const Account = (() => {
         _current = null;
         applyTheme("dark");
         closeSettingsSidebar();
+        // (nova função a pedido do usuário) Desliga a conexão direta de
+        // mensagens privadas junto com a conta — não faz sentido continuar
+        // respondendo por um usuário que não é mais o logado nesta aba.
+        if (typeof Multiplayer !== "undefined" && Multiplayer.closeDMLink) Multiplayer.closeDMLink();
         renderAll();
     }
     async function switchTo(id) {
@@ -16932,7 +17901,13 @@ const Account = (() => {
         const s = _loadSession();
         if (s.currentId) {
             const acc = _findById(s.currentId);
-            if (acc) { _current = acc; applyTheme(acc.theme || "dark"); }
+            if (acc) {
+                _current = acc; applyTheme(acc.theme || "dark");
+                // (nova função a pedido do usuário) Sessão restaurada ao
+                // recarregar a página — liga a conexão direta de mensagens
+                // privadas igual ao login normal (ver _activate).
+                if (typeof Multiplayer !== "undefined" && Multiplayer.initDMLink) Multiplayer.initDMLink(acc.username, _onIncomingDM);
+            }
         }
         renderAll();
         // (nova função) Se estiver logado e houver repositório configurado,
@@ -17169,6 +18144,53 @@ const Account = (() => {
         if (!_current) return;
         await _persistCurrentField({ photo: dataUrl });
         renderAll();
+    }
+
+    /* (nova função a pedido do usuário) SKIN DO PERSONAGEM - cada conta
+       pode ter sua própria cor de Corpo/Cabeça/Braços/Pernas, em vez de
+       todo mundo usar sempre a mesma cor definida em StarterPlayer. Fica
+       salvo dentro da própria conta (igual foto/tema), então sincroniza
+       pelo GitHub também se tiver configurado. Se a conta não tiver skin
+       própria (null), o boneco usa a cor padrão de StarterPlayer normal. */
+    const DEFAULT_SKIN = { BodyColor:"#00aaff", HeadColor:"#ffcc99", ArmColor:"#ffcc99", LegColor:"#333333" };
+    function getMySkin() { return (_current && _current.skin) ? _current.skin : null; }
+    async function changeSkinColor(part, value) {
+        if (!_current) return;
+        const skin = Object.assign({}, DEFAULT_SKIN, _current.skin || {});
+        skin[part] = value;
+        await _persistCurrentField({ skin });
+        renderAll();
+    }
+    async function resetSkin() {
+        if (!_current) return;
+        await _persistCurrentField({ skin: null });
+        _renderSettingsSidebar();
+        UI.showToast("🎨 Skin restaurada pro padrão do StarterPlayer.");
+    }
+    /** (nova função — arquivada) Tamanhos customizados do corpo, salvos
+     *  antigamente pelo extinto "Editor de corpo 3D". A leitura continua
+     *  existindo em _buildPlayerRigFromStarterPlayer (PartSizes) só por
+     *  compatibilidade com contas que já tinham isso salvo; não tem mais
+     *  nenhum botão na UI que grave um valor novo aqui. */
+    async function setBodySizes(sizes) {
+        if (!_current) return;
+        const skin = Object.assign({}, DEFAULT_SKIN, _current.skin || {});
+        skin.PartSizes = sizes || {};
+        await _persistCurrentField({ skin });
+    }
+    /** (nova função a pedido do usuário) SKIN POR IMAGEM — salva, pelo
+     *  SkinEditor (editor visual "👕 Editar skin"), uma imagem (URL ou
+     *  upload convertido em dataURL) pra cada um dos 6 lados de cada parte
+     *  do corpo (Torso/Cabeça/Braços/Pernas). Fica dentro do mesmo objeto
+     *  `skin` da conta, na chave Textures: { "Torso": { front, back, left,
+     *  right, top, bottom }, ... } — sincroniza pelo GitHub igual ao resto
+     *  da skin, e viaja pros outros jogadores da sala junto com a cor
+     *  (ver Multiplayer.notifyPlayerTransform). */
+    async function setSkinTextures(textures) {
+        if (!_current) return;
+        const skin = Object.assign({}, DEFAULT_SKIN, _current.skin || {});
+        skin.Textures = textures || {};
+        await _persistCurrentField({ skin });
     }
     function onPhotoFileSelected(input) {
         const file = input.files && input.files[0];
@@ -17432,6 +18454,15 @@ const Account = (() => {
         document.getElementById("account-message-input").value = "";
         _renderMessageList(toUsername);
         renderAll();
+        // (nova função a pedido do usuário) Entrega direta via WebRTC —
+        // se o amigo estiver com o app aberto, ele recebe ISSO NA HORA,
+        // sem esperar nenhum poll do GitHub (ver Multiplayer.sendDMDirect
+        // e Account._onIncomingDM). O GitHub abaixo continua gravando em
+        // paralelo pra virar histórico (recuperável offline / outro
+        // aparelho) — não é mais o caminho de entrega em si.
+        if (typeof Multiplayer !== "undefined" && Multiplayer.sendDMDirect) {
+            Multiplayer.sendDMDirect(toUsername, msg).catch(() => {});
+        }
         if (GithubStorage.hasConfig()) {
             const meLower = _current.username.toLowerCase();
             const toLower = toUsername.toLowerCase();
@@ -17452,6 +18483,27 @@ const Account = (() => {
             ]);
             if (results.some(r => !r.ok)) UI.showToast("⚠️ Mensagem salva só neste navegador — não consegui sincronizar com o repositório.");
         }
+    }
+    /** (nova função a pedido do usuário) Chamado pelo Multiplayer quando
+     *  chega uma mensagem direta via WebRTC (ver Multiplayer._dmHandler,
+     *  ligado em Account._activate). Aplica na hora, sem esperar o
+     *  próximo poll do GitHub — que ainda vai trazer a mesma mensagem
+     *  depois (já persistida), daí o dedup por from+text+at. */
+    function _onIncomingDM(msg) {
+        if (!_current || !msg || !msg.from) return;
+        const msgs = _loadMessages();
+        const key = _convKey(_current.username, msg.from);
+        if (!msgs[key]) msgs[key] = [];
+        const sig = msg.from + "|" + msg.text + "|" + msg.at;
+        const already = msgs[key].some(m => (m.from + "|" + m.text + "|" + m.at) === sig);
+        if (!already) { msgs[key].push(msg); _saveMessages(msgs); }
+        if (_currentConversation === msg.from) {
+            markConversationRead(msg.from);
+            _renderMessageList(msg.from);
+        } else if (!already) {
+            UI.showToast(`💬 Nova mensagem de ${msg.from}`);
+        }
+        renderAll();
     }
     async function submitMessage() {
         const to = _currentConversation;
@@ -17492,16 +18544,40 @@ const Account = (() => {
         _renderMessageList(withUsername);
         UI.openModal("account-message-modal");
         setTimeout(() => document.getElementById("account-message-input")?.focus(), 50);
+        // (nova função a pedido do usuário) Pré-aquece a conexão direta
+        // (WebRTC) com essa amizade assim que abre a conversa, pra já
+        // estar pronta na primeira mensagem — sem isso, o primeiro envio
+        // pagaria o tempo de handshake (até DM_CONNECT_TIMEOUT_MS) antes
+        // de decidir se cai pro GitHub.
+        if (typeof Multiplayer !== "undefined" && Multiplayer.warmDMConnection) Multiplayer.warmDMConnection(withUsername);
         // (nova função) Busca mensagens novas do repositório assim que abre
-        // a conversa, e fica repetindo a cada 6s enquanto ela estiver
-        // aberta — assim uma mensagem mandada de outro navegador/computador
-        // aparece sem precisar recarregar a página.
+        // a conversa, e fica repetindo enquanto ela estiver aberta — assim
+        // uma mensagem mandada de outro navegador/computador (ou por quem
+        // não conseguiu abrir WebRTC) aparece sem precisar recarregar a
+        // página. (otimização a pedido do usuário) Com a conexão direta
+        // fazendo a entrega em tempo real, esse poll vira só uma rede de
+        // segurança — por isso agora ele se auto-ajusta: fica rápido (6s)
+        // enquanto a conexão WebRTC com essa pessoa ainda não abriu, e
+        // bem mais espaçado (25s, só pra pegar mensagens de outro
+        // aparelho) assim que ela conecta — menos commits gastos à toa no
+        // repositório sem perder nada em tempo real.
         if (_messagePollTimer) { clearInterval(_messagePollTimer); _messagePollTimer = null; }
         if (GithubStorage.hasConfig()) {
             await _refreshConversationFromGithub(withUsername);
-            _messagePollTimer = setInterval(() => {
-                if (_currentConversation === withUsername) _refreshConversationFromGithub(withUsername);
-            }, 6000);
+            const _scheduleMsgPoll = () => {
+                if (_messagePollTimer) clearInterval(_messagePollTimer);
+                const live = typeof Multiplayer !== "undefined" && Multiplayer.isDMConnected && Multiplayer.isDMConnected(withUsername);
+                _messagePollTimer = setInterval(() => {
+                    if (_currentConversation !== withUsername) return;
+                    _refreshConversationFromGithub(withUsername);
+                    // Reavalia o ritmo a cada rodada — se a conexão WebRTC
+                    // abriu (ou caiu) entre um poll e outro, o próximo já
+                    // usa o intervalo certo.
+                    const nowLive = typeof Multiplayer !== "undefined" && Multiplayer.isDMConnected && Multiplayer.isDMConnected(withUsername);
+                    if (nowLive !== live) _scheduleMsgPoll();
+                }, live ? 25000 : 6000);
+            };
+            _scheduleMsgPoll();
         }
     }
     function closeMessagePanel() {
@@ -17588,6 +18664,18 @@ const Account = (() => {
         const fb = document.getElementById("account-settings-avatar-fallback");
         if (_current.photo) { av.src = _current.photo; av.classList.remove("hidden"); fb.classList.add("hidden"); }
         else { av.classList.add("hidden"); fb.classList.remove("hidden"); }
+        // (nova função) Preenche os seletores de cor da Skin com o que já
+        // está salvo na conta (ou o padrão do StarterPlayer, se ainda não
+        // tiver escolhido nada).
+        const skinNow = Object.assign({}, DEFAULT_SKIN, _current.skin || {});
+        const skinBody = document.getElementById("account-settings-skin-body");
+        const skinHead = document.getElementById("account-settings-skin-head");
+        const skinArm  = document.getElementById("account-settings-skin-arm");
+        const skinLeg  = document.getElementById("account-settings-skin-leg");
+        if (skinBody) skinBody.value = skinNow.BodyColor;
+        if (skinHead) skinHead.value = skinNow.HeadColor;
+        if (skinArm)  skinArm.value  = skinNow.ArmColor;
+        if (skinLeg)  skinLeg.value  = skinNow.LegColor;
         _renderGithubFieldsInline();
         const ownerPreview = document.getElementById("account-file-owner-preview");
         if (ownerPreview) ownerPreview.textContent = _current.username;
@@ -18036,6 +19124,7 @@ const Account = (() => {
         getCurrentPhoto, getFriendsList, getIncomingRequests, getOutgoingRequests,
         getCurrentFriendCode, copyFriendCode, addFriendByCode,
         applyTheme, toggleTheme, changeUsername, changePassword, changePhoto, onPhotoFileSelected,
+        getMySkin, changeSkinColor, resetSkin, setBodySizes, setSkinTextures,
         addFriend, submitAddFriend, searchFriendCandidates, removeFriend, acceptFriendRequest, declineFriendRequest,
         sendMessage, submitMessage, getConversation,
         openMessagePanel, closeMessagePanel, openLogin, openSignup, submitLogin, submitSignup, quickConnectToken,
@@ -18501,6 +19590,131 @@ const Multiplayer = (() => {
     let _voiceProximityTimer = null;
     const VOICE_HEAR_DISTANCE = 40;   // (studs) além disso, volume zero
     const VOICE_FULL_DISTANCE = 6;    // (studs) até aqui, volume máximo
+
+    /* ── (nova função a pedido do usuário) Conexão direta (WebRTC) para
+       MENSAGENS PRIVADAS entre amizades ──────────────────────────────────
+       Antes, toda mensagem direta (Account.sendMessage) ia só pelo GitHub:
+       grava no meu arquivo + no arquivo do destinatário, e quem está com a
+       conversa aberta fica relendo a cada 6s — nunca é "na hora" de
+       verdade, e cada mensagem custa 2 commits no repositório. Agora, se
+       os dois amigos estiverem com o app aberto ao mesmo tempo, a
+       mensagem viaja DIRETO de navegador pra navegador (mesma biblioteca
+       PeerJS/WebRTC já usada pelas salas) — o GitHub passa a servir só
+       pra GUARDAR o histórico (pra quando alguém estiver offline, entrar
+       depois, ou abrir de outro aparelho), não mais pra ENTREGAR a
+       mensagem na hora.
+
+       Cada conta loga com um Peer de ID fixo e previsível, igual ao
+       P2P_HOST_ID das salas: rsev3dm-{usuário-em-minúsculo}. Diferente da
+       sala (uma "estrela" com 1 host), aqui é ponto-a-ponto direto entre
+       CADA PAR de amizades conversando — não precisa de ninguém
+       "hospedando", já que os dois lados sabem calcular o ID um do outro
+       só pelo nome de usuário. Se a conexão direta não abrir a tempo
+       (amigo offline, rede fechada, PeerJS não carregou), quem chamou já
+       sabe cair pro GitHub puro — ver Account.sendMessage. */
+    const DM_PEER_ID = (username) => `rsev3dm-${String(username || "").trim().toLowerCase()}`;
+    const DM_CONNECT_TIMEOUT_MS = 4000; // não vale a pena esperar mais que isso — cai pro GitHub puro
+    const DM_IDLE_CLOSE_MS = 120000;    // fecha conexão de amizade sem uso há 2min (economiza recursos)
+    let _dmPeer = null;                 // meu Peer pessoal (aberto durante toda a sessão logada, não só numa sala)
+    let _dmMyUsername = null;
+    let _dmHandler = null;              // callback(msg) chamado pelo Account quando chega mensagem via P2P
+    const _dmConns = new Map();         // username-em-minúsculo -> { conn, idleTimer }
+
+    function _dmTouchIdle(unameLower) {
+        const entry = _dmConns.get(unameLower);
+        if (!entry) return;
+        if (entry.idleTimer) clearTimeout(entry.idleTimer);
+        entry.idleTimer = setTimeout(() => {
+            try { entry.conn.close(); } catch (_) {}
+            _dmConns.delete(unameLower);
+        }, DM_IDLE_CLOSE_MS);
+    }
+    function _dmWireConn(conn, unameLower) {
+        const entry = { conn, idleTimer: null };
+        _dmConns.set(unameLower, entry);
+        _dmTouchIdle(unameLower);
+        conn.on("data", (data) => {
+            _dmTouchIdle(unameLower);
+            if (data && data.type === "dm" && _dmHandler) { try { _dmHandler(data.msg); } catch (_) {} }
+        });
+        conn.on("close", () => { _dmConns.delete(unameLower); });
+        conn.on("error", () => { _dmConns.delete(unameLower); });
+    }
+    /** Liga meu Peer pessoal pra mensagens diretas — chamado uma vez ao
+     *  logar na conta (ver Account._init/login), fica aberto até sair da
+     *  conta. Silencioso se falhar (PeerJS não carregou / sem internet):
+     *  o envio de mensagem simplesmente cai pro GitHub puro nesse caso. */
+    function initDMLink(username, onIncoming) {
+        _dmHandler = onIncoming || _dmHandler;
+        if (typeof Peer === "undefined") return;
+        const uname = String(username || "").trim().toLowerCase();
+        if (!uname) return;
+        if (_dmPeer && !_dmPeer.destroyed && _dmMyUsername === uname) return; // já ligado com essa conta
+        closeDMLink();
+        _dmMyUsername = uname;
+        let peer;
+        try { peer = new Peer(DM_PEER_ID(uname), { config: P2P_ICE_CONFIG }); } catch (_) { return; }
+        _dmPeer = peer;
+        peer.on("connection", (conn) => {
+            const from = String(conn.peer || "").replace(/^rsev3dm-/, "");
+            conn.on("open", () => _dmWireConn(conn, from));
+        });
+        peer.on("error", (err) => {
+            // ID já em uso (outra aba/dispositivo logado com a mesma conta) não
+            // é um erro de verdade — só significa que aquela outra aba responde
+            // pelas mensagens diretas; esta aba continua funcionando via GitHub.
+            console.warn("[DM P2P] erro:", err && err.type);
+        });
+    }
+    /** Desliga meu Peer pessoal de mensagens diretas — chamado ao sair da
+     *  conta (Account.logout), pra não ficar respondendo por um usuário
+     *  que não é mais o logado nesta aba. */
+    function closeDMLink() {
+        _dmConns.forEach(entry => { if (entry.idleTimer) clearTimeout(entry.idleTimer); try { entry.conn.close(); } catch (_) {} });
+        _dmConns.clear();
+        if (_dmPeer) { try { _dmPeer.destroy(); } catch (_) {} _dmPeer = null; }
+        _dmMyUsername = null;
+    }
+    /** Garante uma conexão aberta com `username` (reaproveita se já
+     *  existe), devolve a DataConnection pronta pra usar ou null se não
+     *  conseguiu a tempo (DM_CONNECT_TIMEOUT_MS). */
+    function _dmEnsureConn(username) {
+        return new Promise((resolve) => {
+            const unameLower = String(username || "").trim().toLowerCase();
+            if (!_dmPeer || _dmPeer.destroyed || !unameLower) return resolve(null);
+            const existing = _dmConns.get(unameLower);
+            if (existing && existing.conn.open) { _dmTouchIdle(unameLower); return resolve(existing.conn); }
+            let settled = false, conn;
+            try { conn = _dmPeer.connect(DM_PEER_ID(unameLower), { reliable: true }); } catch (_) { return resolve(null); }
+            const timer = setTimeout(() => { if (!settled) { settled = true; try { conn.close(); } catch (_) {} resolve(null); } }, DM_CONNECT_TIMEOUT_MS);
+            conn.on("open", () => {
+                if (settled) return;
+                settled = true; clearTimeout(timer);
+                _dmWireConn(conn, unameLower);
+                resolve(conn);
+            });
+            conn.on("error", () => { if (!settled) { settled = true; clearTimeout(timer); resolve(null); } });
+        });
+    }
+    /** Tenta entregar uma mensagem direta pro amigo NA HORA, via WebRTC —
+     *  devolve true se entregou (o GitHub, gravado em paralelo por quem
+     *  chamou, vira só o histórico dessa mensagem) ou false se não deu
+     *  (amigo offline, sem WebRTC, rede fechada...) — nesse caso a
+     *  entrega passa a depender só do GitHub, do jeito que já funcionava
+     *  antes desta otimização. */
+    async function sendDMDirect(username, msg) {
+        const conn = await _dmEnsureConn(username);
+        if (!conn || !conn.open) return false;
+        try { conn.send({ type: "dm", msg }); return true; } catch (_) { return false; }
+    }
+    /** Pré-aquece a conexão direta com `username`, sem mandar nada — usado
+     *  ao abrir a conversa (Account.openMessagePanel), pra já estar
+     *  pronta assim que a pessoa digitar a primeira mensagem. */
+    function warmDMConnection(username) { _dmEnsureConn(username); }
+    function isDMConnected(username) {
+        const entry = _dmConns.get(String(username || "").trim().toLowerCase());
+        return !!(entry && entry.conn.open);
+    }
 
     /* ── (nova função) SINCRONIZAÇÃO RESERVA (sem WebRTC) ─────────────────
        O WebRTC direto (acima) é rápido, mas depende da rede de cada pessoa
@@ -19333,7 +20547,7 @@ const Multiplayer = (() => {
             _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
         } else if (msg.type === "playerpos") {
             if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
-                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim); } catch (_) {}
+                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim, msg.skin); } catch (_) {}
             }
             _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
         } else if (msg.type === "chat") {
@@ -19346,6 +20560,13 @@ const Multiplayer = (() => {
         } else if (msg.type === "voice-on" || msg.type === "voice-off") {
             if (msg.type === "voice-on") _voicePeersOn.add(msg.by); else { _voicePeersOn.delete(msg.by); _onVoicePeerGone(msg.by); }
             _maybeCallVoicePeer(msg.by);
+            _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
+        } else if (msg.type === "camctrl") {
+            // (nova função a pedido do usuário — painel de Câmera) Alguém da
+            // sala pediu pra ativar/desativar uma Camera pra um jogador (ou
+            // todos) — cada cliente (inclusive eu, host) decide sozinho se o
+            // alvo bate com o MEU nome antes de mexer na própria câmera.
+            _applyCamCtrl(msg);
             _peerConns.forEach((c) => { if (c !== fromConn && c.open) { try { c.send(msg); } catch (_) {} } });
         }
     }
@@ -19366,10 +20587,12 @@ const Multiplayer = (() => {
             _applyRemotePlayState(msg.active, msg.by);
         } else if (msg.type === "playerpos") {
             if (typeof Simulation !== "undefined" && Simulation.applyRemotePlayerTransform) {
-                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim); } catch (_) {}
+                try { Simulation.applyRemotePlayerTransform(msg.by, msg.pos, msg.rotY, msg.anim, msg.skin); } catch (_) {}
             }
         } else if (msg.type === "chat") {
             _applyIncomingChat(msg.msg);
+        } else if (msg.type === "camctrl") {
+            _applyCamCtrl(msg);
         } else if (msg.type === "voice-roster") {
             _remoteVoiceRoster = msg.roster || {};
             // Se eu já tinha a voz ligada, tenta ligar com quem entrou novo.
@@ -19453,18 +20676,68 @@ const Multiplayer = (() => {
         _pushSceneFallback();
     }
 
+    // (nova função a pedido do usuário — otimização) Assinatura "leve" da
+    // ESTRUTURA da árvore (id/classe/nome/nº de filhos de cada nó, sem
+    // posição/rotação/propriedades) — usada só pra decidir se vale a pena
+    // reconstruir o Explorer/HUD/Properties (caros: recriam elementos DOM
+    // pra cada nó). Enquanto alguém só está ARRASTANDO um objeto na sala
+    // (Position mudando a cada ~120ms via WebRTC), a estrutura não muda
+    // nada — sem isso, o Explorer inteiro era refeito do zero em toda
+    // atualização recebida, mesmo sem nenhuma linha da árvore realmente
+    // mudando de lugar/nome.
+    let _lastExplorerStructSig = null;
+    function _structSig(node, parts) {
+        if (!node) return;
+        parts.push(node.id, node.className, node.name || "");
+        (node.children || []).forEach(c => _structSig(c, parts));
+    }
+    let _lastRemoteSceneToastAt = 0;
     function _applyRemoteScene(tree, sig, byUsername) {
         _applyingRemoteScene = true;
         try {
+            const structParts = [];
+            _structSig(tree, structParts);
+            const structSig = structParts.join("|");
+            const structChanged = structSig !== _lastExplorerStructSig;
+            _lastExplorerStructSig = structSig;
+
+            // (nova função a pedido do usuário) Preserva minha seleção local
+            // se o(s) objeto(s) selecionado(s) ainda existirem na árvore que
+            // chegou — antes, QUALQUER atualização remota (até um simples
+            // arrastar de outra pessoa) desmarcava tudo que eu tinha
+            // selecionado no meu Explorer/Properties, atrapalhando meu
+            // próprio trabalho no meio da edição colaborativa.
+            const prevSel = State.sel;
             State.tree = tree;
-            State.sel = [];
-            Explorer.rebuild();
+            if (prevSel.length) {
+                const stillThere = new Set(structParts.filter((_, i) => i % 3 === 0));
+                State.sel = prevSel.filter(id => stillThere.has(id));
+            }
+            // ThreeManager sempre sincroniza (posições/rotações precisam
+            // acompanhar em tempo real pra colaboração funcionar de verdade).
             ThreeManager.syncNow();
-            if (typeof rebuildHUD === "function") rebuildHUD();
-            if (typeof UI !== "undefined" && UI.buildPropertiesPanel) UI.buildPropertiesPanel();
+            // Explorer/HUD/Properties só quando algo estrutural de fato
+            // mudou (nó adicionado/removido/renomeado) — é isso que muda a
+            // LISTAGEM deles; um objeto só mudando de posição não altera o
+            // que aparece no Explorer.
+            if (structChanged) {
+                Explorer.rebuild();
+                if (typeof rebuildHUD === "function") rebuildHUD();
+            }
+            if (typeof UI !== "undefined" && UI.buildPropertiesPanel && (structChanged || prevSel.length !== State.sel.length)) {
+                UI.buildPropertiesPanel();
+            }
             _lastAppliedSceneSig = sig;
             _lastBroadcastSceneSig = sig;
-            UI.showToast(`🔄 Editor atualizado por ${byUsername || "outro membro da sala"} (direto, sem GitHub)`);
+            // (nova função a pedido do usuário) Throttle do toast — durante
+            // um arrastar contínuo isso chegava várias vezes por segundo e
+            // ficava piscando um toast novo a cada mensagem; agora avisa no
+            // máximo 1x a cada 2s por atualização recebida.
+            const now = Date.now();
+            if (now - _lastRemoteSceneToastAt > 2000) {
+                _lastRemoteSceneToastAt = now;
+                UI.showToast(`🔄 Editor atualizado por ${byUsername || "outro membro da sala"} (direto, sem GitHub)`);
+            }
         } finally {
             _applyingRemoteScene = false;
         }
@@ -19534,6 +20807,8 @@ const Multiplayer = (() => {
      *  gravar no GitHub: é posição em tempo real, não vale a pena esperar o
      *  poll de alguns segundos). Chamado pelo Simulation a cada frame do
      *  Play, já com o próprio throttle dele. */
+    let _lastSentSkinJSON = null;
+    let _skinResendAccum = 0; // força reenviar a skin de vez em quando (heartbeat), mesmo sem mudar
     function notifyPlayerTransform(pos, rotY, anim) {
         if (!_code || _amIViewOnly()) return;
         const me = _me();
@@ -19542,7 +20817,29 @@ const Multiplayer = (() => {
         // pacote continua minúsculo; quem recebe já tem os keyframes dessa
         // animação na própria cena e monta a pose sozinho, sem esperar nada
         // pesado vir pela rede.
+        // (nova função a pedido do usuário) Vai junto a skin (cor de Corpo/
+        // Cabeça/Braços/Pernas + imagens do SkinEditor) escolhida nas
+        // Configurações da conta — assim os outros da sala desenham MEU
+        // boneco com a MINHA cor/imagem, não o padrão de StarterPlayer.
+        // null se eu não escolhi nenhuma (usa o padrão normal).
+        let mySkin = null;
+        try { if (typeof Account !== "undefined" && Account.getMySkin) mySkin = Account.getMySkin(); } catch (_) {}
+        // (nova função — otimização de banda) Agora a skin pode carregar
+        // IMAGENS (SkinEditor), então pode pesar bem mais que só uma cor —
+        // não faz mais sentido mandar ela de novo a cada 120ms junto com a
+        // posição. Só entra no pacote quando muda de verdade, ou a cada
+        // ~40 envios (≈5s) como "heartbeat", pra quem entrou na sala DEPOIS
+        // de mim receber minha skin sem precisar esperar eu me mover após
+        // trocar alguma imagem.
+        const skinJSON = JSON.stringify(mySkin);
+        _skinResendAccum++;
+        const shouldSendSkin = (skinJSON !== _lastSentSkinJSON) || _skinResendAccum >= 40;
         const msg = { type: "playerpos", by: me.username, pos, rotY, anim };
+        if (shouldSendSkin) {
+            msg.skin = mySkin;
+            _lastSentSkinJSON = skinJSON;
+            _skinResendAccum = 0;
+        }
         if (_isHost) {
             _peerConns.forEach((c) => { if (c.open) { try { c.send(msg); } catch (_) {} } });
         } else if (_hostConn && _hostConn.open) {
@@ -19610,6 +20907,48 @@ const Multiplayer = (() => {
         _lastRoomChatSig = JSON.stringify(_roomChat);
         _renderRoomChat();
     }
+
+    /* ── (nova função a pedido do usuário) Painel de Câmera — ativar/
+       desativar uma Camera do Workspace pra um jogador específico da sala,
+       pra dois ou mais, ou pra todos. Não precisa de nó novo no Tree: só
+       liga/desliga Camera.Ativa (que o Simulation já usa pra "ancorar" a
+       câmera real do jogador nela, ver _findActiveCameraNode) — só que
+       agora CADA cliente decide, pelo próprio nome, se essa Camera é pra
+       ele ou não. ── */
+    function _me2Name() {
+        try { const m = _me(); if (m && m.username) return m.username; } catch (_) {}
+        try { if (typeof Account !== "undefined" && Account.isLoggedIn && Account.isLoggedIn()) return Account.getDisplayName(); } catch (_) {}
+        return "Jogador1";
+    }
+    function _applyCamCtrl(msg) {
+        if (!msg || !msg.camId) return;
+        const myName = _me2Name();
+        if (msg.target !== "Todos") {
+            // (nova função) Aceita "Fulano" (um só) ou "Fulano, Beltrano"
+            // (dois ou mais) — cada membro compara o PRÓPRIO nome contra a
+            // lista, ignorando maiúsculas/espaços extras.
+            const alvos = String(msg.target).split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+            if (!alvos.includes(myName.trim().toLowerCase())) return; // não é comigo
+        }
+        const node = Tree.find(msg.camId);
+        if (!node || node.className !== "Camera") return;
+        if (!node.properties) node.properties = {};
+        node.properties.Ativa = !!msg.active;
+        try { ThreeManager.markDirty(); } catch (_) {}
+    }
+    /** Pedido de ativar/desativar (chamado pelo Script via __HOST.camCtrlSend).
+     *  `target` pode ser um nome, "Todos", ou uma lista "Fulano, Beltrano"
+     *  (separada por vírgula) pra ativar em dois ou mais de uma vez —
+     *  cada membro da sala recebe o MESMO pedido e cada um filtra sozinho. */
+    function sendCamCtrl(camId, target, active) {
+        target = (target || "Todos").trim() || "Todos";
+        const msg = { type: "camctrl", camId, target, active: !!active };
+        _applyCamCtrl(msg); // aplica na hora aqui também (cobre "sou eu mesmo o alvo" e o caso sem sala)
+        if (_code) _p2pBroadcastAll(msg);
+    }
+    /** Nomes de quem está ativo na sala agora — usado pra preencher a barra
+     *  de nome do painel de Câmera (autocomplete/lista). */
+    function getActiveMemberNames() { return _activeMembers().map(m => m.username); }
 
     /** Chamado pelo botão/Enter do campo de chat da sala. */
     function submitRoomChat() {
@@ -20181,6 +21520,10 @@ const Multiplayer = (() => {
         toggleVoice, stopVoice,
         // (nova função) arquivo de amizade por pessoa, usado pelo Account
         readUserFile, writeUserFile,
+        // (nova função a pedido do usuário) conexão direta (WebRTC) pra mensagens privadas entre amizades
+        initDMLink, closeDMLink, sendDMDirect, warmDMConnection, isDMConnected,
+        // (nova função a pedido do usuário) painel de Câmera — ativar pra 1, 2+, ou todos
+        sendCamCtrl, getActiveMemberNames,
     };
 })();
 
@@ -20578,14 +21921,45 @@ const Simulation = (() => {
     const _CAM_MAX_DIST = 25;
 
     /** Zoom da câmera em 3ª pessoa via rodinha do mouse — função nova.
-     *  Replica o comportamento do CameraScript de StarterPlayer/PlayerScripts. */
+     *  Replica o comportamento do CameraScript de StarterPlayer/PlayerScripts.
+     *  (nova função a pedido do usuário) Agora a rodinha também troca de
+     *  modo de câmera, igual ao Roblox: rolar "pra dentro" até bater no
+     *  zoom mínimo entra em 1ª pessoa; já em 1ª pessoa, rolar "pra fora"
+     *  (deltaY > 0) volta pra 3ª pessoa a partir do zoom mínimo. */
     function _onCameraWheel(e) {
         if (!_active) return;
         const sply = Tree.find("sply");
-        if ((sply?.properties?.CameraMode || "ThirdPerson") === "FirstPerson") return; // sem zoom em 1ª pessoa
+        if (!sply?.properties) return;
+        const isFP = (sply.properties.CameraMode || "ThirdPerson") === "FirstPerson";
         e.preventDefault();
+        if (isFP) {
+            if (e.deltaY > 0) {
+                // Rolou pra fora em 1ª pessoa → volta pra 3ª pessoa, já
+                // partindo do zoom mínimo (efeito de "sair de dentro da
+                // cabeça" suave em vez de pular direto pro zoom máximo).
+                _camDistance = _CAM_MIN_DIST;
+                sply.properties.CameraMode = "ThirdPerson";
+                UI.showToast("📷 Câmera: ThirdPerson");
+                if (State.sel[0] === "sply") UI.buildPropertiesPanel();
+                _syncPointerLockToCameraMode();
+            }
+            // Rolar "pra dentro" em 1ª pessoa não faz nada — já não tem
+            // como chegar mais perto do que já está.
+            try { LuaEngine.fireEvent("__UserInputService", "InputChanged", [e.deltaY]); } catch (_) {}
+            return;
+        }
         _camDistance += (e.deltaY > 0 ? 1 : -1) * 1.2;
-        _camDistance = Math.max(_CAM_MIN_DIST, Math.min(_CAM_MAX_DIST, _camDistance));
+        if (e.deltaY < 0 && _camDistance <= _CAM_MIN_DIST) {
+            // Bateu no zoom mínimo rolando "pra dentro" → entra em 1ª
+            // pessoa, igual ao Roblox.
+            _camDistance = _CAM_MIN_DIST;
+            sply.properties.CameraMode = "FirstPerson";
+            UI.showToast("📷 Câmera: FirstPerson");
+            if (State.sel[0] === "sply") UI.buildPropertiesPanel();
+            _syncPointerLockToCameraMode();
+        } else {
+            _camDistance = Math.max(_CAM_MIN_DIST, Math.min(_CAM_MAX_DIST, _camDistance));
+        }
         // (correção) avisa scripts Lua conectados em UserInputService.InputChanged
         // (ex.: o CameraScript padrão de StarterPlayer) que a rodinha mexeu.
         try { LuaEngine.fireEvent("__UserInputService", "InputChanged", [e.deltaY]); } catch (_) {}
@@ -20609,6 +21983,11 @@ const Simulation = (() => {
     // só movendo o mouse, sem precisar segurar nada. Botão no HUD (canto
     // superior direito) ou tecla C. Esc sempre destrava de novo.
     let _freeCam3p      = false;
+    // (nova função a pedido do usuário) true logo depois que a tecla C solta
+    // o mouse DE PROPÓSITO em 1ª pessoa — nesse caso não mostramos a telinha
+    // "clique pra continuar" (pointer-lock-hint), que é só pra quando o
+    // Pointer Lock cai sozinho (ex.: apertando Esc ou trocando de aba).
+    let _manualUnlockFP = false;
 
     function _isFirstPerson() {
         const sply = Tree.find("sply");
@@ -20618,11 +21997,12 @@ const Simulation = (() => {
     function _onPointerLockChange() {
         const vp = document.getElementById("viewport-3d");
         const locked = document.pointerLockElement === vp;
+        if (locked) _manualUnlockFP = false; // lock readquirido — próxima perda de lock volta a mostrar o hint normalmente
         // (ajuste) A câmera livre em 3ª pessoa (_freeCam3p) não usa mais
         // Pointer Lock — ver toggleFreeCam() — então perder o lock aqui não
         // deve mais desligá-la. Esse evento só passa a importar mesmo pra
         // 1ª pessoa (que continua usando Pointer Lock de verdade).
-        const showHint = _active && _isFirstPerson() && !locked;
+        const showHint = _active && _isFirstPerson() && !locked && !_manualUnlockFP;
         document.getElementById("pointer-lock-hint").classList.toggle("hidden", !showHint);
         document.getElementById("pointer-lock-hint").classList.toggle("flex", showHint);
     }
@@ -20641,7 +22021,28 @@ const Simulation = (() => {
      *  virado" (só muda com WASD/Setas quando a câmera está travada). */
     function toggleFreeCam() {
         if (!_active) return;
-        if (_isFirstPerson()) { UI.showToast("🔓 Em 1ª pessoa a câmera já é livre — mova o mouse pra olhar ao redor."); return; }
+        if (_isFirstPerson()) {
+            // (nova função a pedido do usuário) Antes, apertar C em 1ª
+            // pessoa só mostrava um aviso e não fazia nada — não tinha
+            // como soltar o mouse pra clicar numa GUI sem sair do Play
+            // (Esc para o jogo inteiro). Agora C destrava/retrava o
+            // Pointer Lock manualmente, soltando o cursor pra clicar em
+            // qualquer lugar da tela sem perder a 1ª pessoa — e sem
+            // mostrar a telinha "clique pra continuar" (essa é só pra
+            // quando o lock cai sozinho, não quando o próprio jogador
+            // pediu pra soltar o mouse).
+            const vp = document.getElementById("viewport-3d");
+            if (document.pointerLockElement === vp) {
+                _manualUnlockFP = true;
+                document.exitPointerLock();
+                UI.showToast("🖱️ Mouse liberado — clique na tela (ou aperte C de novo) pra voltar a olhar ao redor.");
+            } else {
+                _manualUnlockFP = false;
+                _requestPointerLock();
+                UI.showToast("🔒 Mouse travado de novo — mova o mouse pra olhar ao redor.");
+            }
+            return;
+        }
         _freeCam3p = !_freeCam3p;
         if (_freeCam3p) {
             UI.showToast("🔓 Câmera livre — mova o mouse pra olhar ao redor (o personagem não vira junto). Cursor continua visível.");
@@ -20737,6 +22138,7 @@ const Simulation = (() => {
         // ponteiro do mouse na tela espelhada do desktop não faz sentido.
         if (typeof VRManager !== "undefined" && VRManager.isPresenting()) return;
         const vp = document.getElementById("viewport-3d");
+        _manualUnlockFP = false; // toda troca de modo começa "do zero" (lock automático, hint normal se falhar)
         if (_isFirstPerson()) {
             _freeCam3p = false; // 1ª pessoa usa seu próprio pointer lock, não o modo "câmera livre" de 3ª pessoa
             _updateFreeCamButton();
@@ -21253,11 +22655,11 @@ const Simulation = (() => {
 
     /** Monta um boneco visual simples (mesmo rig do StarterPlayer, sem
      *  física/colisão) — usado pra representar CADA OUTRO jogador da sala. */
-    function _buildAvatarGroup() {
+    function _buildAvatarGroup(skin) {
         const sply = Tree.find("sply");
         const sprops = sply?.properties || {};
         const scale = sprops.CharacterScale || 1;
-        const rig = _buildPlayerRigFromStarterPlayer();
+        const rig = _buildPlayerRigFromStarterPlayer(skin);
         const g = new THREE.Group();
         let byName = null; // (nova função) exposto pra fora — é o que deixa a
                             // gente tocar Parado/Andar/Correr/Pular no boneco
@@ -21270,16 +22672,18 @@ const Simulation = (() => {
             byName = rig.byName;
             minY = rig.minY;
         } else {
-            const mat   = new THREE.MeshStandardMaterial({ color:sprops.BodyColor || 0x00aaff, roughness:0.4 });
+            // (nova função) Boneco simples de caixas também respeita a skin
+            // do dono (quando existe), caindo pra cor de StarterPlayer se não.
+            const mat   = new THREE.MeshStandardMaterial({ color:(skin && skin.BodyColor) || sprops.BodyColor || 0x00aaff, roughness:0.4 });
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6,2,0.8), mat);
             torso.position.y = 2.1; torso.castShadow = true;
-            const head  = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), new THREE.MeshStandardMaterial({ color:sprops.HeadColor || 0xffcc99 }));
+            const head  = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), new THREE.MeshStandardMaterial({ color:(skin && skin.HeadColor) || sprops.HeadColor || 0xffcc99 }));
             head.position.y = 3.5; head.castShadow = true;
-            const armM = new THREE.MeshStandardMaterial({ color:sprops.ArmColor || sprops.HeadColor || 0xffcc99 });
+            const armM = new THREE.MeshStandardMaterial({ color:(skin && skin.ArmColor) || sprops.ArmColor || sprops.HeadColor || 0xffcc99 });
             const ag   = new THREE.BoxGeometry(0.5,1.7,0.5);
             const la   = new THREE.Mesh(ag, armM); la.position.set(-1.15,2.2,0); la.castShadow = true;
             const ra   = new THREE.Mesh(ag, armM); ra.position.set( 1.15,2.2,0); ra.castShadow = true;
-            const legM = new THREE.MeshStandardMaterial({ color:sprops.LegColor || 0x333333 });
+            const legM = new THREE.MeshStandardMaterial({ color:(skin && skin.LegColor) || sprops.LegColor || 0x333333 });
             const lg   = new THREE.BoxGeometry(0.7,2,0.7);
             const ll   = new THREE.Mesh(lg, legM); ll.position.set(-0.45,0.6,0); ll.castShadow = true;
             const rl   = new THREE.Mesh(lg, legM); rl.position.set( 0.45,0.6,0); rl.castShadow = true;
@@ -21318,11 +22722,11 @@ const Simulation = (() => {
     /** Chamado pelo módulo Multiplayer quando chega a posição de outro
      *  jogador — cria o boneco dele se ainda não existir, e atualiza o alvo
      *  pro qual ele vai suavizar (lerp) até a próxima atualização chegar. */
-    function applyRemotePlayerTransform(username, pos, rotY, anim) {
+    function applyRemotePlayerTransform(username, pos, rotY, anim, skin) {
         if (!username || !_active || !pos) return;
         let rp = _remotePlayers.get(username);
         if (!rp) {
-            const built = _buildAvatarGroup();
+            const built = _buildAvatarGroup(skin);
             ThreeManager.getScene().add(built.group);
             built.group.position.set(pos.x, pos.y, pos.z);
             built.group.rotation.y = rotY || 0;
@@ -21330,6 +22734,7 @@ const Simulation = (() => {
                 group: built.group,
                 byName: built.byName,           // nome-da-Part -> mesh (null se for o boneco simples de caixas)
                 minY: built.minY,                // offset de reancoragem do rig remoto, pra aplicar a pose animada certinho
+                skin: skin || null,              // (nova função) skin do DONO deste boneco — pra saber se mudou depois
                 targetPos: new THREE.Vector3(pos.x, pos.y, pos.z),
                 targetRotY: rotY || 0,
                 lastUpdate: Date.now(),
@@ -21345,6 +22750,28 @@ const Simulation = (() => {
         if (anim && anim !== rp.animName) {
             rp.animName = anim;
             rp.animStartedAt = Date.now(); // reinicia o "cronômetro" local da animação a cada troca de estado
+        }
+        // (nova função) A pessoa mudou a skin em pleno Play (abriu as
+        // Configurações da conta e trocou uma cor, ou usou o SkinEditor
+        // pra colocar/tirar uma imagem) — remonta o boneco dela com a
+        // skin nova, mantendo a posição/rotação onde ele já estava. Antes
+        // isso só recolorizava mesh a mesh, mas com imagem por face não
+        // dá pra fazer isso direito (uma face pode ganhar ou perder um
+        // material com textura) — remontar o grupo inteiro é mais simples
+        // e continua barato (o boneco é bem leve, poucas caixas).
+        if (skin && JSON.stringify(skin) !== JSON.stringify(rp.skin)) {
+            rp.skin = skin;
+            try {
+                const oldGroup = rp.group;
+                const built = _buildAvatarGroup(skin);
+                built.group.position.copy(oldGroup.position);
+                built.group.rotation.y = oldGroup.rotation.y;
+                ThreeManager.getScene().add(built.group);
+                ThreeManager.getScene().remove(oldGroup);
+                rp.group = built.group;
+                rp.byName = built.byName;
+                rp.minY = built.minY;
+            } catch (_) {}
         }
     }
 
@@ -21464,6 +22891,7 @@ const Simulation = (() => {
         if (typeof AnimEditor !== "undefined" && AnimEditor.active) AnimEditor.close();
         if (typeof ToolPoseEditor !== "undefined" && ToolPoseEditor.active) ToolPoseEditor.close();
         if (typeof ToolBuildEditor !== "undefined" && ToolBuildEditor.active) ToolBuildEditor.close();
+        if (typeof SkinEditor !== "undefined" && SkinEditor.active) SkinEditor.close();
         _active = true;
         _backup = JSON.parse(JSON.stringify(State.tree));
         // (OTIMIZAÇÃO — pedido do usuário: FPS caindo no Play mesmo com
@@ -21613,6 +23041,7 @@ const Simulation = (() => {
 
     function _stop() {
         _active = false;
+        closeAnimPicker();
         // (OTIMIZAÇÃO) Devolve o SSAO ao estado de antes do Play — ver
         // ThreeManager.setPlayPerformanceMode / chamada em _start().
         ThreeManager.setPlayPerformanceMode(false);
@@ -21788,7 +23217,50 @@ const Simulation = (() => {
        da própria Part. Se o usuário editar/trocar esse modelo na árvore,
        o personagem jogável muda junto — sem precisar mexer em código.
        Retorna null se não achar nenhum Model válido (fallback é usado). */
-    function _buildPlayerRigFromStarterPlayer() {
+    // (nova função a pedido do usuário) Nome-da-Part do rig -> chave da skin
+    // salva na conta (Account.getMySkin()) — usado pra recolorir o rig
+    // padrão (Torso/Head/braços/pernas) com a cor escolhida por CADA
+    // usuário, sem mexer no template compartilhado de StarterPlayer.
+    const SKIN_PART_MAP = { "Torso":"BodyColor", "Head":"HeadColor", "Left Arm":"ArmColor", "Right Arm":"ArmColor", "Left Leg":"LegColor", "Right Leg":"LegColor" };
+    // (nova função a pedido do usuário) SKIN POR IMAGEM — ordem das 6 faces
+    // de uma BoxGeometry do three.js (r128), na mesma ordem que o array de
+    // materiais espera: [+x, -x, +y, -y, +z, -z]. Usado tanto pro
+    // SkinEditor (grade de botões) quanto aqui, pra montar o array de
+    // materiais de cada Part com a imagem certa em cada lado.
+    const FACE_ORDER = ["right", "left", "top", "bottom", "front", "back"];
+    const FACE_LABELS = { right:"Direita", left:"Esquerda", top:"Cima", bottom:"Baixo", front:"Frente", back:"Trás" };
+    // Cache de texturas já carregadas (por URL/dataURL) — evita recarregar a
+    // mesma imagem toda vez que o rig é remontado (spawn, cada boneco remoto
+    // que entra na sala, prévia do SkinEditor a cada clique...).
+    const _skinTexCache = new Map(); // url -> THREE.Texture
+    let _skinTexLoader = null;
+    function _loadFaceTexture(url) {
+        if (!url) return null;
+        if (_skinTexCache.has(url)) return _skinTexCache.get(url);
+        if (!_skinTexLoader) _skinTexLoader = new THREE.TextureLoader();
+        let tex;
+        try {
+            tex = _skinTexLoader.load(url, undefined, undefined,
+                () => { UI.log?.(`⚠ Não consegui carregar a imagem da skin (link inválido, CORS, etc.): ${url}`, "warning"); });
+            tex.encoding = THREE.sRGBEncoding;
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        } catch (_) { return null; }
+        _skinTexCache.set(url, tex);
+        return tex;
+    }
+    /** Monta o "material" (ou array de 6 materiais, um por face) de uma
+     *  Part do rig — se o dono não colocou nenhuma imagem nessa parte, é só
+     *  a cor normal (comportamento de sempre); se colocou, cada face com
+     *  imagem ganha essa imagem, e as faces sem imagem continuam na cor. */
+    function _buildRigPartMaterial(color, faceUrls) {
+        if (!faceUrls) return new THREE.MeshStandardMaterial({ color, roughness:0.4 });
+        return FACE_ORDER.map(faceKey => {
+            const url = faceUrls[faceKey];
+            const tex = url ? _loadFaceTexture(url) : null;
+            return new THREE.MeshStandardMaterial({ color: tex ? 0xffffff : color, map: tex || null, roughness:0.4 });
+        });
+    }
+    function _buildPlayerRigFromStarterPlayer(skin) {
         const sply = Tree.find("sply");
         if (!sply) return null;
         // Acha o primeiro Model dentro de StarterPlayer (procurando também
@@ -21811,7 +23283,7 @@ const Simulation = (() => {
         (modelNode.children || []).forEach(part => {
             if (part.className !== "Part") return;
             const p = part.properties || {};
-            const size = p.Size || { x:1, y:1, z:1 };
+            let size = p.Size || { x:1, y:1, z:1 };
             const pos  = p.Position || { x:0, y:0, z:0 };
             const rot  = p.Rotation || { x:0, y:0, z:0 };
             // (CORREÇÃO) Antes, uma part invisível (ex.: HumanoidRootPart, que é
@@ -21835,11 +23307,26 @@ const Simulation = (() => {
             // invisíveis — que é o comportamento visual correto.
             nodeByName[part.name] = part;
             if (p.Visibilidade === false) return; // só pula o DESENHO; o node já foi registrado acima
+            // (nova função) Se este boneco tem uma skin própria (Account.getMySkin
+            // do dono dele), a cor da skin substitui a cor do template pras
+            // partes mapeadas em SKIN_PART_MAP (Torso/Head/braços/pernas) —
+            // as demais partes (ex.: HumanoidRootPart, invisível) continuam
+            // com a cor original do rig.
+            const skinKey = SKIN_PART_MAP[part.name];
+            const skinColorOverride = (skin && skinKey) ? skin[skinKey] : null;
+            // (nova função — arquivada) Tamanho customizado antigo, salvo
+            // pelo extinto "Editor de corpo 3D" — leitura mantida só por
+            // compatibilidade com contas que já tinham isso salvo.
+            if (skin && skin.PartSizes && skin.PartSizes[part.name]) size = skin.PartSizes[part.name];
             let color;
-            try { color = new THREE.Color(p.Color || "#cccccc"); } catch(_) { color = new THREE.Color(0xcccccc); }
+            try { color = new THREE.Color(skinColorOverride || p.Color || "#cccccc"); } catch(_) { color = new THREE.Color(0xcccccc); }
+            // (nova função a pedido do usuário) SKIN POR IMAGEM — imagens
+            // que o dono deste boneco colocou em cada lado desta parte
+            // (SkinEditor), guardadas em skin.Textures[nomeDaParte].
+            const faceUrls = (skin && skin.Textures && skin.Textures[part.name]) || null;
             const mesh = new THREE.Mesh(
                 new THREE.BoxGeometry(size.x || 1, size.y || 1, size.z || 1),
-                new THREE.MeshStandardMaterial({ color, roughness:0.4 })
+                _buildRigPartMaterial(color, faceUrls)
             );
             mesh.position.set(pos.x || 0, pos.y || 0, pos.z || 0);
             mesh.rotation.set(
@@ -21858,7 +23345,64 @@ const Simulation = (() => {
         // Reancora o grupo pra que y=0 fique nos "pés" do modelo, não
         // importa onde as Parts foram posicionadas na árvore.
         group.children.forEach(m => { m.position.y -= minY; });
-        return { group, byName, nodeByName, minY, totalHeight: Math.max(0.5, maxY - minY), modelId: modelNode.id };
+
+        // (nova função a pedido do usuário) Accessory — filhos do rig com
+        // essa classe (ex.: um chapéu) grudam na parte escolhida em
+        // AttachTo (padrão "Head"). Como este mesmo _buildPlayerRigFromStarterPlayer
+        // é usado tanto pro player local quanto pro boneco dos OUTROS
+        // players da sala (ver _remotePlayers), o acessório aparece pros
+        // dois automaticamente — sem código extra de rede. A mesh do
+        // acessório é anexada como FILHA da mesh da parte-alvo, então ela
+        // acompanha sozinha qualquer animação/rotação dessa parte (não
+        // precisa de sincronismo por frame).
+        const accByName = {};
+        (modelNode.children || []).forEach(acc => {
+            if (acc.className !== "Accessory") return;
+            const p = acc.properties || {};
+            if (p.Visibilidade === false) return;
+            const targetName = p.AttachTo || "Head";
+            const targetMesh = byName[targetName];
+            const targetNode = nodeByName[targetName];
+            if (!targetMesh || !targetNode) {
+                UI.log?.(`⚠ Accessory "${acc.name}" não encaixou: não achei a parte "${targetName}" no rig (campo AttachTo).`, "warning");
+                return;
+            }
+            const size = p.Size || { x:0.9, y:0.5, z:0.9 };
+            const pos  = p.Position || { x:0, y:0.55, z:0 };
+            const rot  = p.Rotation || { x:0, y:0, z:0 };
+            const targetPos = targetNode.properties?.Position || { x:0, y:0, z:0 };
+            let color;
+            try { color = new THREE.Color(p.Color || "#e63946"); } catch(_) { color = new THREE.Color(0xe63946); }
+            const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(size.x || 0.9, size.y || 0.5, size.z || 0.9),
+                new THREE.MeshStandardMaterial({ color, roughness:0.4 })
+            );
+            // Offset relativo ao CENTRO da parte-alvo — assim, o valor de
+            // Position no editor (mesmo espaço das outras Parts do rig)
+            // já bate certinho com o que aparece grudado na parte em Play.
+            mesh.position.set((pos.x||0) - (targetPos.x||0), (pos.y||0) - (targetPos.y||0), (pos.z||0) - (targetPos.z||0));
+            mesh.rotation.set(
+                THREE.MathUtils.degToRad(rot.x || 0),
+                THREE.MathUtils.degToRad(rot.y || 0),
+                THREE.MathUtils.degToRad(rot.z || 0)
+            );
+            mesh.castShadow = true;
+            mesh.userData = { nodeId: acc.id, className:"Accessory" };
+            targetMesh.add(mesh);
+            accByName[acc.name] = mesh;
+        });
+
+        return { group, byName, nodeByName, accByName, minY, totalHeight: Math.max(0.5, maxY - minY), modelId: modelNode.id };
+    }
+
+    /** (nova função a pedido do usuário) Monta um rig "solto" — não anexado
+     *  a física nem ao Workspace — a partir do StarterPlayer, aplicando a
+     *  skin passada (cor + imagens por face). Usado pelo SkinEditor pra
+     *  mostrar uma prévia ao vivo do boneco enquanto o usuário escolhe as
+     *  imagens, sem duplicar toda a lógica de montagem do rig aqui de novo.
+     *  Quem chama é responsável por adicionar/remover o .group da cena. */
+    function buildStandaloneRig(skin) {
+        return _buildPlayerRigFromStarterPlayer(skin);
     }
 
     /* ── Spawn do Player ───────────────────────────────────────── */
@@ -21873,7 +23417,12 @@ const Simulation = (() => {
            StarterPlayer (ex.: "R6"). Se ele não existir mais na árvore
            (usuário apagou), cai de volta pro boneco simples de caixas só
            pra não travar o Play. ─ */
-        const rig = _buildPlayerRigFromStarterPlayer();
+        // (nova função a pedido do usuário) Skin própria — se a conta
+        // logada (Account.getMySkin) escolheu uma cor de personagem nas
+        // Configurações, ela substitui a cor padrão de StarterPlayer aqui.
+        let mySkin = null;
+        try { if (typeof Account !== "undefined" && Account.getMySkin) mySkin = Account.getMySkin(); } catch (_) {}
+        const rig = _buildPlayerRigFromStarterPlayer(mySkin);
         _player = new THREE.Group();
         let totalHeight;
         _playerRigParts = {};
@@ -21904,16 +23453,16 @@ const Simulation = (() => {
                 UI.log(`⚠ StarterPlayer tem ${modelsInStarterPlayer.length} Models com Parts — o rig usado no Play é "${modelsInStarterPlayer[0].name}". Se o Animator estiver com TargetModel apontando pra outro Model, a animação não vai aparecer.`, "warning");
             }
         } else {
-            const mat   = new THREE.MeshStandardMaterial({ color:sprops.BodyColor || 0x00aaff, roughness:0.4 });
+            const mat   = new THREE.MeshStandardMaterial({ color:(mySkin && mySkin.BodyColor) || sprops.BodyColor || 0x00aaff, roughness:0.4 });
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6,2,0.8), mat);
             torso.position.y = 2.1; torso.castShadow = true;
-            const head  = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), new THREE.MeshStandardMaterial({ color:sprops.HeadColor || 0xffcc99 }));
+            const head  = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), new THREE.MeshStandardMaterial({ color:(mySkin && mySkin.HeadColor) || sprops.HeadColor || 0xffcc99 }));
             head.position.y = 3.5; head.castShadow = true;
-            const armM = new THREE.MeshStandardMaterial({ color:sprops.ArmColor || sprops.HeadColor || 0xffcc99 });
+            const armM = new THREE.MeshStandardMaterial({ color:(mySkin && mySkin.ArmColor) || sprops.ArmColor || sprops.HeadColor || 0xffcc99 });
             const ag   = new THREE.BoxGeometry(0.5,1.7,0.5);
             const la   = new THREE.Mesh(ag, armM); la.position.set(-1.15,2.2,0); la.castShadow = true;
             const ra   = new THREE.Mesh(ag, armM); ra.position.set( 1.15,2.2,0); ra.castShadow = true;
-            const legM = new THREE.MeshStandardMaterial({ color:sprops.LegColor || 0x333333 });
+            const legM = new THREE.MeshStandardMaterial({ color:(mySkin && mySkin.LegColor) || sprops.LegColor || 0x333333 });
             const lg   = new THREE.BoxGeometry(0.7,2,0.7);
             const ll   = new THREE.Mesh(lg, legM); ll.position.set(-0.45,0.6,0); ll.castShadow = true;
             const rl   = new THREE.Mesh(lg, legM); rl.position.set( 0.45,0.6,0); rl.castShadow = true;
@@ -22713,6 +24262,64 @@ const Simulation = (() => {
     // de verdade, em vez do jogo Lua nunca ter acesso a quem é o personagem.
     function getLocalPlayerCharacterId() { return _active ? _playerRigModelId : null; }
 
+    /* (nova função a pedido do usuário) BOTÃO "Animação" no HUD do Play —
+       força o boneco do JOGADOR LOCAL a tocar uma animação específica na
+       hora (ex.: "Pular" parado só pra brincar), mesmo sem estar andando/
+       pulando de verdade. Usa o MESMO AnimatorRuntime que os Scripts já
+       usam (:Play()/:Stop()), então continua sincronizando com os outros
+       da sala normalmente (a posição já manda o nome da animação tocando —
+       ver _broadcastPlayerTransformThrottled). Se o jogador voltar a andar,
+       o LocalScript de movimento assume de novo sozinho. */
+    function _findPlayerAnimsFolder() {
+        if (!_playerRigModelId) return null;
+        const rigModel = Tree.find(_playerRigModelId);
+        if (!rigModel) return null;
+        const parent = Tree.findParent(rigModel.id);
+        if (!parent) return null;
+        return (parent.children || []).find(c => c.className === "Folder" && c.name === "Animações") || null;
+    }
+    function _listPlayerAnimNames() {
+        const folder = _findPlayerAnimsFolder();
+        if (!folder) return [];
+        return (folder.children || []).filter(c => c.className === "Animator").map(c => c.name);
+    }
+    function forcePlayAnim(name) {
+        const folder = _findPlayerAnimsFolder();
+        if (!folder) { UI.showToast("⚠ Não achei a pasta \"Animações\" do seu personagem."); return; }
+        const target = (folder.children || []).find(c => c.className === "Animator" && c.name === name);
+        if (!target) { UI.showToast(`⚠ Não achei a animação "${name}".`); return; }
+        // Para as outras animações do boneco antes (só uma toca por vez —
+        // igual o próprio Script de movimento já faz).
+        (folder.children || []).forEach(c => { if (c.className === "Animator" && c.id !== target.id) AnimatorRuntime.stop(c.id); });
+        AnimatorRuntime.play(target.id, true);
+        closeAnimPicker();
+        UI.showToast(`🎭 Tocando "${name}" no seu boneco.`);
+    }
+    function _renderAnimPicker() {
+        const panel = document.getElementById("anim-picker-panel");
+        if (!panel) return;
+        const names = _listPlayerAnimNames();
+        panel.innerHTML = names.length
+            ? names.map(n => `<button onclick="Simulation.forcePlayAnim('${n.replace(/'/g, "\\'")}')" class="w-full text-left px-2 py-1.5 rounded hover:bg-fuchsia-900/50 text-zinc-200 text-xs">${n}</button>`).join("")
+            : `<div class="px-2 py-1.5 text-zinc-500 text-[10px]">Nenhuma animação encontrada.</div>`;
+    }
+    function closeAnimPicker() {
+        const panel = document.getElementById("anim-picker-panel");
+        if (panel) { panel.classList.add("hidden"); panel.classList.remove("flex"); }
+    }
+    function toggleAnimPicker() {
+        const panel = document.getElementById("anim-picker-panel");
+        if (!panel) return;
+        if (panel.classList.contains("hidden")) {
+            _renderAnimPicker();
+            panel.classList.remove("hidden");
+            panel.classList.add("flex");
+        } else {
+            closeAnimPicker();
+        }
+    }
+
+
     // ============================================================
     // (novas funções — pedido do usuário: "o player seja um modelo sendo
     // controlado pra os scripts poderem mexer nele") Antes, o
@@ -22758,6 +24365,8 @@ const Simulation = (() => {
     function getStreamDistances() { return { near: STREAM_NEAR, far: STREAM_FAR }; }
 
     return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, getLocalPlayerCharacterId, get active() { return _active; },
+             // (nova função a pedido do usuário) botão "Animação" do HUD do Play
+             toggleAnimPicker, forcePlayAnim, closeAnimPicker,
              getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId,
              // (novas funções) ponte de controle do player pra scripts — ver comentário acima
              getPlayerRootNodeId, teleportPlayerTo,
@@ -22774,7 +24383,10 @@ const Simulation = (() => {
              // (nova função) sincroniza ao vivo Anchored/CanCollide/Massless/
              // Weight/Density no corpo físico quando um Script muda essas
              // propriedades durante o Play — ver LuaEngine.setProp
-             syncPhysicsProperty };
+             syncPhysicsProperty,
+             // (nova função a pedido do usuário) monta um rig solto (fora da
+             // física/Workspace) pro SkinEditor mostrar uma prévia ao vivo
+             buildStandaloneRig };
 })();
 
 /* ================================================================
@@ -24185,6 +25797,8 @@ function setupKeyboard() {
             if (typeof AnimEditor !== "undefined" && AnimEditor.active) AnimEditor.close();
             if (typeof ToolPoseEditor !== "undefined" && ToolPoseEditor.active) ToolPoseEditor.close();
         if (typeof ToolBuildEditor !== "undefined" && ToolBuildEditor.active) ToolBuildEditor.close();
+            if (typeof SkinEditor !== "undefined" && SkinEditor.active) SkinEditor.close();
+            if (typeof SkinEditor !== "undefined") SkinEditor.closeFacePicker();
             if (typeof VertexEditor !== "undefined" && VertexEditor.isActive()) VertexEditor.close();
         }
         if (e.key==='Delete' && State.sel.length && !Simulation.active) {
@@ -24330,6 +25944,15 @@ window.addEventListener('DOMContentLoaded', () => {
     // o app abre, sem esperar o usuário clicar em nada — silencioso (não
     // mostra erro se estiver sem internet ou sem configuração).
     _initStep("sincronizar catálogo do Toolbox com o GitHub", () => PolyPizza.autoSyncOnBoot());
+    // (nova função — pedido do usuário) Avisa quando o preset "PC fraco"
+    // foi ligado sozinho por detecção de hardware, pra pessoa entender por
+    // que o visual saiu mais simples (e saber que dá pra mudar em
+    // 🎚️ Configurações Gráficas a qualquer momento).
+    _initStep("avisar sobre otimização automática pra PC fraco", () => {
+        if (ThreeManager.wasWeakPcAutoApplied && ThreeManager.wasWeakPcAutoApplied()) {
+            UI.log("🐢 Máquina mais limitada detectada — sombra, SSAO, AA e bloom desligados automaticamente pra rodar melhor (ajustável em 🎚️ Configurações Gráficas).", "info");
+        }
+    });
     if (App.hasAutosave()) UI.log("💾 Há um autosave salvo no navegador. Use Arquivo → Restaurar autosave para recuperá-lo.", "info");
     UI.log("Pronto. Q/W/E/R = modos de transform. Ctrl+S = salvar rápido. WASD+mouse+Espaço (pulo duplo) no Play.", "success");
 });
@@ -24337,4 +25960,3 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
-
