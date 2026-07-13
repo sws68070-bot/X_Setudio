@@ -55,14 +55,14 @@
            a pedido do usuário, não fica mais fullscreen — ver comentário
            acima sobre .play-dim/.play-fullscreen-viewport). Por isso usa
            classes próprias, que realmente têm efeito visual. */
-        .skin-editor-fullscreen-viewport {
+        .editor-fullscreen-viewport {
             position: fixed !important;
             inset: 0 !important;
             width: 100vw !important;
             height: 100vh !important;
             z-index: 200 !important;
         }
-        .skin-editor-hide-chrome { display: none !important; }
+        .editor-hide-chrome { display: none !important; }
 
         /* ── Highlight de seleção por raycast ── */
         #raycast-crosshair {
@@ -393,6 +393,10 @@
             </button>
         </div>
 
+        <!-- (movido de volta a pedido do usuário) Botão "Animações" saiu da
+             tela inicial — agora fica em Configurações da conta (perfil),
+             com "Usar animação" e "Adicionar da Toolbox". -->
+
         <!-- ═══ (nova função) Lista de amizades na tela inicial ═══ -->
         <div id="account-friends-section" class="hidden">
             <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
@@ -573,6 +577,7 @@
             </div>
             <p class="text-zinc-600 text-[10px] leading-relaxed">Sua cor aparece no seu boneco em Play e (se estiver numa sala) pros outros jogadores também.</p>
             <button onclick="Account.closeSettingsSidebar(); SkinEditor.open();" class="w-full px-3 py-1.5 bg-fuchsia-900 hover:bg-fuchsia-800 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5"><i class="fa-solid fa-shirt"></i> Editar skin (imagens no corpo)</button>
+            <!-- (removido a pedido do usuário) Botão "Emotes" / EmotesManager. -->
         </div>
 
         <!-- Mudar nome de usuário -->
@@ -688,6 +693,14 @@
         <!-- Itens publicados no Toolbox -->
         <button onclick="Account.openMyToolboxItems()" class="w-full px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-2"><i class="fa-solid fa-toolbox text-orange-400"></i> Meus itens publicados no Toolbox</button>
 
+        <!-- (nova função a pedido do usuário) Minhas Animações — separado dos
+             itens do Toolbox acima: aqui a pessoa escolhe, entre TODAS as
+             Animações publicadas no Toolbox por qualquer usuário, quais
+             quer manter na sua lista pessoal ("adicionadas"). Essa lista
+             pessoal é o que aparece depois no botão 🎬 do ambiente 3D pra
+             usar no player. Ver PlayerAnimations.openMyAnimations(). -->
+        <button onclick="PlayerAnimations.openMyAnimations()" class="w-full px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-xs flex items-center gap-2"><i class="fa-solid fa-person-running text-sky-400"></i> Minhas animações</button>
+
         <div class="border-t studio-border"></div>
 
         <button onclick="Account.logout()" class="w-full px-3 py-2 bg-red-900 hover:bg-red-800 text-red-200 rounded font-bold text-xs flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Sair desta conta</button>
@@ -710,6 +723,39 @@
         <div id="account-toolbox-items-empty" class="hidden text-zinc-500 text-xs text-center py-6">Você ainda não publicou nada no Toolbox.</div>
     </div>
 </div>
+
+<!-- ═══ (nova função a pedido do usuário) MODAL — Minhas Animações (perfil) ═══
+     Tem DUAS áreas, alternadas pelos dois botões do topo:
+       • "➕ Adicionar" → lista TODAS as animações publicadas no Toolbox
+         (de qualquer usuário) com um botão "Adicionar" em cada uma, que
+         guarda o id dela na lista pessoal (por conta).
+       • "🗑️ Remover" → lista só as animações que JÁ estão na lista
+         pessoal, com um botão "Remover" em cada uma.
+     Essa lista pessoal ("adicionadas") é o que aparece no botão 🎬 do
+     ambiente 3D pra usar direto num slot do player. Ver
+     PlayerAnimations.openMyAnimations()/renderMyAnimations(). ═══ -->
+<div id="player-my-animations-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
+    <div class="bg-studio-panel border-2 studio-border w-full max-w-lg rounded-lg shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+            <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-person-running text-sky-400"></i> Minhas animações</span>
+            <button onclick="UI.closeModal('player-my-animations-modal')" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+        </div>
+        <div class="p-3 pb-0 flex gap-2">
+            <button id="player-my-anims-tab-add" onclick="PlayerAnimations.showMyAnimationsTab('add')" class="flex-1 px-3 py-2 rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> Adicionar</button>
+            <button id="player-my-anims-tab-remove" onclick="PlayerAnimations.showMyAnimationsTab('remove')" class="flex-1 px-3 py-2 rounded font-bold text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-trash"></i> Remover</button>
+        </div>
+        <p id="player-my-anims-hint" class="text-zinc-500 text-[10px] leading-relaxed px-3 pt-2"></p>
+        <div class="p-3">
+            <input type="text" id="player-my-anims-search" oninput="PlayerAnimations.renderMyAnimations()" placeholder="Filtrar por nome..." class="w-full bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-sky-500">
+        </div>
+        <div class="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-2">
+            <div id="player-my-anims-empty" class="hidden text-zinc-500 text-xs text-center py-8"></div>
+            <div id="player-my-anims-list" class="flex flex-col gap-2"></div>
+        </div>
+    </div>
+</div>
+
+<!-- (removido a pedido do usuário) Modal "Meus emotes" / EmotesManager. -->
 
 <!-- ═══ (nova função) MODAL — Trocar de conta ═══ -->
 <div id="account-switcher-modal" class="fixed inset-0 bg-black/70 z-[220] items-center justify-center p-4" style="display:none">
@@ -1033,6 +1079,19 @@
         <div id="viewport-3d" class="w-full flex-1 relative outline-none" tabindex="0">
             <div id="raycast-crosshair"></div>
 
+            <!-- (nova função a pedido do usuário) Botão flutuante "Animações"
+                 no ambiente 3D — abre a lista das animações da conta
+                 (adicionadas em Perfil → Minhas animações) com um botão
+                 "Usar" em cada uma pra aplicar direto num slot do player
+                 (Parado/Andar/Correr/Pular). Reaproveita o mesmo modal/lista
+                 do PlayerAnimations, só que filtrado pela lista pessoal —
+                 ver PlayerAnimations.open()/render(). -->
+            <div id="viewport-player-anims-btn-wrap" class="absolute top-3 left-3 z-40">
+                <button onclick="PlayerAnimations.open()" class="px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl flex items-center gap-2 border border-white/20 transition-all text-xs" title="Ver animações adicionadas e usar no player">
+                    <i class="fa-solid fa-person-running text-sky-400"></i> Animações
+                </button>
+            </div>
+
             <!-- Barra flutuante do modo imersivo (Play), no canto — o botão de
                  Stop foi removido daqui a pedido do usuário (Esc já para o
                  Play; ver KEYBOARD → Escape). Fica só o toggle de câmera e,
@@ -1055,17 +1114,8 @@
                 <button id="mp-voice-toggle-btn" onclick="Multiplayer.toggleVoice()" class="hidden px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl items-center gap-2 border border-white/20 transition-all" title="Ativar/desativar chat de voz por proximidade da sala">
                     <i class="fa-solid fa-microphone-slash" id="mp-voice-toggle-icon"></i> <span id="mp-voice-toggle-label">Voz</span>
                 </button>
-                <!-- (nova função a pedido do usuário) Trocar animação na mão —
-                     abre uma listinha (Parado/Andar/Correr/Pular, ou qualquer
-                     outra que exista na pasta Animações) e força o boneco a
-                     tocar a escolhida na hora, mesmo parado. Ver
-                     Simulation.toggleAnimPicker/forcePlayAnim. -->
-                <div class="relative">
-                    <button id="btn-anim-picker" onclick="Simulation.toggleAnimPicker()" class="px-3 py-2 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur text-white font-bold rounded-full shadow-2xl flex items-center gap-2 border border-white/20 transition-all" title="Forçar uma animação no seu boneco">
-                        <i class="fa-solid fa-person-running"></i> <span>Animação</span>
-                    </button>
-                    <div id="anim-picker-panel" class="hidden absolute right-0 top-full mt-1.5 bg-zinc-900/95 backdrop-blur border border-white/20 rounded-lg shadow-2xl p-1.5 w-40 flex-col gap-1"></div>
-                </div>
+                <!-- (removido a pedido do usuário) Botão "Emotes" do HUD do
+                     Play — a lista de emotes/animações forçadas foi retirada. -->
             </div>
 
             <!-- (nova função a pedido do usuário) Painel flutuante da "VR por
@@ -1128,6 +1178,7 @@
                 <i class="fa-solid fa-diagram-project text-amber-400"></i>
                 <span>Editor de Vértices — modo isolado, estilo Blender. Arraste os pontinhos (branco no hover, laranja quando selecionado). Shift+clique = seleção múltipla.</span>
                 <button onclick="VertexEditor.undo()" class="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 rounded font-bold text-white ml-2"><i class="fa-solid fa-rotate-left"></i> Desfazer tudo</button>
+                <button onclick="if(confirm('Descartar as mudanças de vértices feitas nesta sessão?')) VertexEditor.closeDiscard();" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded font-bold text-white" title="Desfaz tudo e fecha — volta a malha pro estado de quando o editor foi aberto">🚫 Sair sem salvar</button>
                 <button onclick="VertexEditor.close()" class="px-3 py-1 bg-amber-700 hover:bg-amber-600 rounded font-bold text-white"><i class="fa-solid fa-check"></i> Concluir</button>
             </div>
 
@@ -1163,6 +1214,7 @@
                 <div class="flex gap-2">
                     <button onclick="UI.runScriptPreview()" class="px-3 py-1 bg-green-900 hover:bg-green-700 text-white font-bold rounded text-xs">▶ Executar</button>
                     <button onclick="UI.stopScriptPreview()" class="px-3 py-1 bg-yellow-900 hover:bg-yellow-700 text-white font-bold rounded text-xs">■ Parar</button>
+                    <button onclick="if(confirm('Descartar as mudanças feitas neste script?')) UI.closeScriptEditorDiscard();" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded text-xs" title="Fecha sem gravar o código mexido agora — volta pro que estava salvo antes">🚫 Sair sem salvar</button>
                     <button onclick="UI.closeScriptEditor()" class="px-3 py-1 bg-red-900 hover:bg-red-800 text-white font-bold rounded">✕ Fechar</button>
                 </div>
             </div>
@@ -1199,6 +1251,7 @@
                     <button onclick="AnimEditor.deleteKeyframe()" class="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded">🗑</button>
                     <button id="anim-play-btn" onclick="AnimEditor.togglePlay()" class="px-3 py-1 bg-green-800 hover:bg-green-700 text-white font-bold rounded">▶ Play</button>
                     <button onclick="AnimEditor.save()" class="px-3 py-1 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded">💾 Salvar</button>
+                    <button onclick="if(confirm('Descartar tudo que foi mexido nesta animação desde que o editor foi aberto?')) AnimEditor.closeDiscard();" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded" title="Fecha sem gravar as mudanças feitas agora — volta pro estado de quando o editor foi aberto">🚫 Sair sem salvar</button>
                     <button onclick="AnimEditor.close()" class="px-3 py-1 bg-red-900 hover:bg-red-800 text-white font-bold rounded">✕ Salvar e Fechar</button>
                 </div>
             </div>
@@ -1250,6 +1303,7 @@
                         <span id="tp-tool-scale-label" class="px-1.5 text-zinc-300 font-bold min-w-[3ch] text-center">1.00</span>
                         <button onclick="ToolPoseEditor.nudgeToolScale(0.05)" class="px-2 py-1 rounded hover:bg-zinc-700 text-white font-bold">＋</button>
                     </div>
+                    <button onclick="if(confirm('Descartar a pose e os ajustes de mão feitos nesta sessão?')) ToolPoseEditor.closeDiscard();" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded" title="Fecha sem gravar as mudanças feitas agora — volta pro estado de quando o editor foi aberto">🚫 Sair sem salvar</button>
                     <button onclick="ToolPoseEditor.close()" class="px-3 py-1 bg-fuchsia-900 hover:bg-fuchsia-800 text-white font-bold rounded">✕ Salvar e Fechar</button>
                 </div>
             </div>
@@ -1280,6 +1334,7 @@
                 <span class="text-zinc-200 font-bold flex items-center gap-2"><i class="fa-solid fa-shirt text-fuchsia-400"></i> Editor de Skin (imagens)</span>
                 <div class="flex gap-2 items-center">
                     <span class="text-zinc-500 text-[10px] hidden sm:inline">Clique num quadrado pra colocar uma imagem naquele lado da parte</span>
+                    <button onclick="if(confirm('Descartar as imagens/skin mexidas nesta sessão?')) SkinEditor.closeDiscard();" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded" title="Fecha sem gravar as mudanças feitas agora — volta pra skin de quando o editor foi aberto">🚫 Sair sem salvar</button>
                     <button onclick="SkinEditor.close()" class="px-3 py-1 bg-fuchsia-900 hover:bg-fuchsia-800 text-white font-bold rounded">✕ Salvar e Fechar</button>
                 </div>
             </div>
@@ -1293,19 +1348,71 @@
                     <span class="font-bold" id="skin-face-picker-title">Torso — Frente</span>
                     <button onclick="SkinEditor.closeFacePicker()" class="text-zinc-500 hover:text-zinc-300"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <div id="skin-face-picker-preview" class="w-full h-28 bg-zinc-950 border studio-border rounded flex items-center justify-center text-zinc-600 text-[10px] overflow-hidden bg-center bg-cover">sem imagem</div>
-                <div class="flex flex-col gap-1">
-                    <label class="text-zinc-400 text-[10px]">Link da imagem (URL)</label>
-                    <div class="flex gap-1">
-                        <input type="text" id="skin-face-picker-url" placeholder="https://..." class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-[11px]">
-                        <button onclick="SkinEditor.applyUrl()" class="px-2 bg-blue-700 hover:bg-blue-600 rounded text-white font-bold">Usar</button>
+
+                <!-- ── Vista normal: prévia + link/upload/desenhar/remover ── -->
+                <div id="skin-face-picker-preview-wrap" class="flex flex-col gap-3">
+                    <div id="skin-face-picker-preview" class="w-full h-28 bg-zinc-950 border studio-border rounded flex items-center justify-center text-zinc-600 text-[10px] overflow-hidden bg-center bg-cover">sem imagem</div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-zinc-400 text-[10px]">Link da imagem (URL)</label>
+                        <div class="flex gap-1">
+                            <input type="text" id="skin-face-picker-url" placeholder="https://..." class="flex-1 bg-studio-input border studio-border rounded px-2 py-1.5 text-white text-[11px]">
+                            <button onclick="SkinEditor.applyUrl()" class="px-2 bg-blue-700 hover:bg-blue-600 rounded text-white font-bold">Usar</button>
+                        </div>
+                    </div>
+                    <label class="w-full px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-center cursor-pointer">
+                        📁 Enviar imagem do PC
+                        <input type="file" accept="image/*" class="hidden" onchange="SkinEditor.onFileSelected(this)">
+                    </label>
+                    <!-- (nova função a pedido do usuário) Desenhar direto nessa face,
+                         com um canvas simples de pincel/borracha — sem precisar de
+                         link nem de arquivo nenhum. -->
+                    <button onclick="SkinEditor.openDrawMode()" class="w-full px-3 py-1.5 bg-fuchsia-800 hover:bg-fuchsia-700 text-white rounded font-bold"><i class="fa-solid fa-paintbrush mr-1"></i>Desenhar</button>
+                    <button onclick="SkinEditor.removeFace()" class="w-full px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded font-bold">🗑 Remover imagem desse lado</button>
+                </div>
+
+                <!-- ── Vista de desenho: canvas + pincel/borracha/tamanho/cor ── -->
+                <div id="skin-face-picker-draw-wrap" class="hidden flex-col gap-2">
+                    <canvas id="skin-draw-canvas" width="256" height="256" class="w-full aspect-square bg-white rounded border studio-border cursor-crosshair touch-none"></canvas>
+                    <div class="flex items-center gap-2">
+                        <input type="color" id="skin-draw-color" value="#000000" onchange="SkinEditor.setBrushColor(this.value)" title="Cor do pincel" class="w-8 h-8 shrink-0 bg-transparent border-0 cursor-pointer">
+                        <input type="range" id="skin-draw-size" min="1" max="30" value="6" oninput="SkinEditor.setBrushSize(this.value)" class="flex-1" title="Tamanho do pincel">
+                        <span id="skin-draw-size-label" class="text-zinc-400 w-9 text-right shrink-0">6px</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button id="skin-draw-tool-pen" onclick="SkinEditor.setEraser(false)" class="flex-1 px-2 py-1 rounded font-bold bg-fuchsia-700 text-white">✏️ Pincel</button>
+                        <button id="skin-draw-tool-eraser" onclick="SkinEditor.setEraser(true)" class="flex-1 px-2 py-1 rounded font-bold bg-zinc-700 text-zinc-300 hover:bg-zinc-600">🧽 Borracha</button>
+                        <button onclick="SkinEditor.clearCanvas()" title="Limpar tudo" class="px-2.5 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button onclick="SkinEditor.closeDrawMode()" class="flex-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-white font-bold">Voltar</button>
+                        <button onclick="SkinEditor.applyDrawing()" class="flex-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white font-bold"><i class="fa-solid fa-check mr-1"></i>Usar desenho</button>
                     </div>
                 </div>
-                <label class="w-full px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-center cursor-pointer">
-                    📁 Enviar imagem do PC
-                    <input type="file" accept="image/*" class="hidden" onchange="SkinEditor.onFileSelected(this)">
-                </label>
-                <button onclick="SkinEditor.removeFace()" class="w-full px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded font-bold">🗑 Remover imagem desse lado</button>
+            </div>
+        </div>
+
+        <!-- (nova função a pedido do usuário) Modal "Animações" — aberto
+             pelo botão 🎬 flutuante no ambiente 3D. Lista só as animações
+             que a conta logada ADICIONOU em Perfil → Minhas animações
+             (não o catálogo inteiro do Toolbox — pra isso ver o modal
+             "Minhas animações" no perfil) e cada item tem um botão "Usar"
+             que insere a animação no player EXATAMENTE como ela foi criada
+             e publicada (mesmo nome/keyframes) — sem forçar nos 4 slots
+             fixos (Parado/Andar/Correr/Pular). Ver PlayerAnimations.*. -->
+        <div id="player-animations-modal" class="fixed inset-0 bg-black/70 z-[210] items-center justify-center p-4" style="display:none">
+            <div class="bg-studio-panel border-2 studio-border w-full max-w-lg rounded-lg shadow-2xl flex flex-col max-h-[80vh]">
+                <div class="p-3 bg-studio-dark border-b studio-border flex justify-between items-center">
+                    <span class="font-bold text-zinc-200 flex items-center gap-2"><i class="fa-solid fa-person-running text-sky-400"></i> Animações adicionadas</span>
+                    <button onclick="PlayerAnimations.close()" class="text-zinc-400 hover:text-white text-lg font-bold">&times;</button>
+                </div>
+                <p class="text-zinc-500 text-[10px] leading-relaxed px-3 pt-3">Animações que você adicionou em Perfil → "Minhas animações". Clique em "Usar" pra inserir a animação no player exatamente como ela foi criada e publicada (mesmo nome e keyframes), dentro de StarterPlayer → 1_ScriptsDoPlayer → Animações.</p>
+                <div class="p-3">
+                    <input type="text" id="player-animations-search" oninput="PlayerAnimations.render()" placeholder="Filtrar por nome..." class="w-full bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-sky-500">
+                </div>
+                <div class="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-2">
+                    <div id="player-animations-empty" class="hidden text-zinc-500 text-xs text-center py-8">Você ainda não adicionou nenhuma animação. Abra <b class="text-zinc-400">Perfil → Minhas animações → Adicionar</b> e escolha entre as publicadas no Toolbox.</div>
+                    <div id="player-animations-list" class="flex flex-col gap-2"></div>
+                </div>
             </div>
         </div>
 
@@ -1327,6 +1434,7 @@
                     </div>
                     <button onclick="ToolBuildEditor.insertIntoSelected()" class="px-2 py-1 bg-cyan-900 hover:bg-cyan-800 text-white font-bold rounded">➕ Inserir</button>
                     <button onclick="ToolBuildEditor.testInHand()" class="px-2 py-1 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded">🧪 Testar</button>
+                    <button onclick="if(confirm('Descartar tudo que foi inserido/excluído/mexido neste modelo nesta sessão?')) ToolBuildEditor.closeDiscard();" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded" title="Fecha sem gravar as mudanças feitas agora — volta pro estado de quando o editor foi aberto">🚫 Sair sem salvar</button>
                     <button onclick="ToolBuildEditor.close()" class="px-3 py-1 bg-cyan-900 hover:bg-cyan-800 text-white font-bold rounded">✕ Fechar</button>
                 </div>
             </div>
@@ -1637,7 +1745,10 @@
         <div id="mesh-parts-list" class="p-2 overflow-y-auto flex-1 font-mono text-[11px]" style="min-height:120px;"></div>
         <div class="p-3 bg-studio-dark border-t studio-border flex justify-between items-center">
             <span id="mesh-parts-count" class="text-zinc-500 text-[10px]"></span>
-            <button onclick="MeshPartsEditor.close()" class="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded font-bold">Concluído</button>
+            <div class="flex gap-2">
+                <button onclick="if(confirm('Descartar as mudanças de visibilidade/colisão feitas nesta sessão?')) MeshPartsEditor.closeDiscard();" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded font-bold text-[11px]" title="Fecha sem gravar as mudanças feitas agora">🚫 Sair sem salvar</button>
+                <button onclick="MeshPartsEditor.close()" class="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded font-bold">Concluído</button>
+            </div>
         </div>
     </div>
 </div>
@@ -1717,8 +1828,17 @@
 
         <!-- (nova função) Abas de categoria do catálogo -->
         <div class="px-3 pt-2 border-b studio-border flex flex-wrap gap-1.5">
-            <button id="toolbox-tab-mesh"   onclick="PolyPizza.setCatalogMode('mesh')"   class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-cube"></i> Malha</button>
-            <button id="toolbox-tab-model"  onclick="PolyPizza.setCatalogMode('model')"  class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-shapes"></i> Modelo</button>
+            <button id="toolbox-tab-mesh"      onclick="PolyPizza.setCatalogMode('mesh')"      class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-cube"></i> Malha</button>
+            <button id="toolbox-tab-model"     onclick="PolyPizza.setCatalogMode('model')"     class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-shapes"></i> Modelo</button>
+            <!-- (nova função) Categoria "Modelo R6" — rig completo (Humanoid +
+                 Parts + pasta de Animações) pronto de 1 clique (reaproveita
+                 App.spawnNPC), e também permite publicar/reaproveitar rigs R6
+                 customizados salvos do Explorer, igual à aba "Modelo". -->
+            <button id="toolbox-tab-r6model"  onclick="PolyPizza.setCatalogMode('r6model')"  class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-person"></i> Modelo R6</button>
+            <!-- (nova função) Categoria "Animação" — salva/reaproveita um
+                 Animator (com os keyframes já gravados no Editor de Animação)
+                 pra colar em qualquer rig depois, sem precisar animar de novo. -->
+            <button id="toolbox-tab-animation" onclick="PolyPizza.setCatalogMode('animation')" class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-person-running"></i> Animação</button>
             <button id="toolbox-tab-plugin" onclick="PolyPizza.setCatalogMode('plugin')" class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-puzzle-piece"></i> Plugins</button>
             <button id="toolbox-tab-sound"  onclick="PolyPizza.setCatalogMode('sound')"  class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-volume-high"></i> Som</button>
             <button id="toolbox-tab-image"  onclick="PolyPizza.setCatalogMode('image')"  class="px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-image"></i> Imagem</button>
@@ -1795,6 +1915,18 @@
              no navegador (localStorage), alimentado pelo botão Publicar. Cada
              item é só um link (URL) + nome + autor opcional. ── -->
         <div id="toolbox-local-section" class="hidden flex-1 flex flex-col overflow-hidden">
+            <!-- (nova função) Só aparece na aba "Modelo R6" — rig padrão pronto
+                 na hora (Humanoid + Parts + pasta Animações já com TargetModel
+                 certo), sem precisar publicar nada antes. Reaproveita
+                 App.spawnNPC(), o mesmo botão do ícone de pessoa no topo. -->
+            <div id="toolbox-r6-instant-wrap" class="hidden px-3 pt-3">
+                <div class="bg-studio-input border studio-border rounded p-2.5 flex items-center justify-between gap-3">
+                    <div class="text-[11px] text-zinc-400 leading-relaxed">
+                        <i class="fa-solid fa-bolt text-lime-400 mr-1"></i><b class="text-zinc-200">Rig R6 padrão</b> — Humanoid + Parts + pasta "Animações" (Parado/Andar/Correr/Pular) já prontos.
+                    </div>
+                    <button onclick="App.spawnNPC()" class="px-3 py-1.5 bg-lime-800 hover:bg-lime-700 text-white rounded font-bold text-[10px] whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>Adicionar</button>
+                </div>
+            </div>
             <div class="p-3 border-b studio-border flex gap-2">
                 <input type="text" id="toolbox-local-search" oninput="PolyPizza.renderLocalCatalog()" placeholder="Filtrar por nome..." class="flex-1 bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-orange-500">
             </div>
@@ -1895,6 +2027,8 @@
                 <select id="toolbox-publish-type" onchange="PolyPizza.onPublishTypeChange()" class="bg-studio-input border studio-border rounded px-3 py-2 text-white text-xs">
                     <option value="mesh">🧱 Malha</option>
                     <option value="model">📦 Modelo</option>
+                    <option value="r6model">🧍 Modelo R6</option>
+                    <option value="animation">🎬 Animação</option>
                     <option value="plugin">🧩 Plugin</option>
                     <option value="sound">🔊 Som</option>
                     <option value="image">🖼️ Imagem</option>
@@ -2422,7 +2556,13 @@ const DEFAULT_TREE = {
                         { id:"sply_p1_torso", name:"Torso", className:"Part", expanded:false, children:[],
                           properties:{ Color:"#00aaff", Size:{x:2,y:2,z:1}, Position:{x:0,y:3,z:0}, Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"SmoothPlastic" }},
                         { id:"sply_p1_head",  name:"Head", className:"Part", expanded:false, children:[],
-                          properties:{ Color:"#ffcc99", Size:{x:2,y:1,z:1}, Position:{x:0,y:4.5,z:0}, Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"SmoothPlastic" }},
+                          properties:{ Color:"#ffcc99", Size:{x:0.6,y:1,z:0.6}, Position:{x:0,y:4.75,z:0}, Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"SmoothPlastic",
+                            // (nova função a pedido do usuário) Proporção e arredondamento
+                            // ajustados pra ficar igual à cabeça clássica do Roblox: mais
+                            // compacta (0.6 x 1 x 0.6) e com o arredondamento mais suave no
+                            // eixo Y (Altura) — em vez de girar a Part, escolhemos direto
+                            // qual eixo fica com a curva mais bonita via CornerAxis.
+                            CornerRadius:0.2, CornerAxis:"Y" }},
                         { id:"sply_p1_larm",  name:"Left Arm", className:"Part", expanded:false, children:[],
                           properties:{ Color:"#ffcc99", Size:{x:1,y:2,z:1}, Position:{x:-1.5,y:3,z:0}, Rotation:{x:0,y:0,z:0}, Visibilidade:true, CanCollide:true, Anchored:true, Material:"SmoothPlastic" }},
                         { id:"sply_p1_rarm",  name:"Right Arm", className:"Part", expanded:false, children:[],
@@ -2524,6 +2664,11 @@ function getDefaultProps(cls) {
                    // (0 = quinas retas, quanto maior mais arredondado, até o limite
                    // de metade da menor dimensão do Size).
                    CornerRadius:0,
+                   // (nova função a pedido do usuário) CornerAxis — qual eixo LOCAL
+                   // (X/Y/Z) sai com o arredondamento mais suave, sem precisar girar a
+                   // Rotation da Part inteira pra escolher o lado. "Z" (padrão) é o
+                   // comportamento de sempre.
+                   CornerAxis:"Z",
                    // (nova função) EdgeHighlight — desenha um contorno destacado nas
                    // arestas da Part (útil pra realçar peças no editor/gameplay),
                    // com cor customizável em EdgeHighlightColor.
@@ -4339,29 +4484,133 @@ const ThreeManager = (() => {
     // Como a geometria já nasce no tamanho final, a Part que a usa fica
     // com scale (1,1,1) — diferente do cubo padrão, que é 1x1x1 e cresce
     // via scale.
-    function _roundedBoxGeo(w, h, d, radius) {
-        const r = Math.max(0.02, Math.min(radius, w / 2, h / 2, d / 2));
-        const x = -w / 2, y = -h / 2;
+    //
+    // (nova função a pedido do usuário) `axis` escolhe qual eixo LOCAL da
+    // Part (X, Y ou Z) vira o "eixo de extrusão" — as 4 arestas paralelas a
+    // esse eixo saem com o arredondamento mais suave (curveSegments:6,
+    // vindo do contorno 2D), enquanto as outras 8 arestas (nas duas pontas
+    // do eixo de extrusão) saem com o bevel da ExtrudeGeometry
+    // (bevelSegments:4 — um pouco mais "facetado"). Antes, pra escolher
+    // qual lado da Part ficava com o arredondamento mais bonito, era
+    // preciso girar a Rotation da Part inteira (o que também trocava
+    // Largura/Altura/Profundidade no painel); agora dá pra escolher isso
+    // direto, sem mexer na Rotation.
+    function _roundedBoxGeo(w, h, d, radius, axis) {
+        // Monta sempre com (w=eixo A, h=eixo B, d=eixo de extrusão) e só no
+        // final gira a geometria pra encaixar de volta nos eixos reais.
+        let dimW = w, dimH = h, dimD = d, rotate = null;
+        if (axis === "Y") { dimW = w; dimH = d; dimD = h; rotate = g => g.rotateX(Math.PI / 2); }
+        else if (axis === "X") { dimW = d; dimH = h; dimD = w; rotate = g => g.rotateY(Math.PI / 2); }
+        // axis === "Z" (padrão) não precisa girar nada — já é o eixo nativo.
+
+        const r = Math.max(0.02, Math.min(radius, dimW / 2, dimH / 2, dimD / 2));
+        const x = -dimW / 2, y = -dimH / 2;
         const shape = new THREE.Shape();
         shape.moveTo(x, y + r);
-        shape.lineTo(x, y + h - r);
-        shape.quadraticCurveTo(x, y + h, x + r, y + h);
-        shape.lineTo(x + w - r, y + h);
-        shape.quadraticCurveTo(x + w, y + h, x + w, y + h - r);
-        shape.lineTo(x + w, y + r);
-        shape.quadraticCurveTo(x + w, y, x + w - r, y);
+        shape.lineTo(x, y + dimH - r);
+        shape.quadraticCurveTo(x, y + dimH, x + r, y + dimH);
+        shape.lineTo(x + dimW - r, y + dimH);
+        shape.quadraticCurveTo(x + dimW, y + dimH, x + dimW, y + dimH - r);
+        shape.lineTo(x + dimW, y + r);
+        shape.quadraticCurveTo(x + dimW, y, x + dimW - r, y);
         shape.lineTo(x + r, y);
         shape.quadraticCurveTo(x, y, x, y + r);
 
         const geo = new THREE.ExtrudeGeometry(shape, {
-            depth: Math.max(0.02, d - r * 2),
+            depth: Math.max(0.02, dimD - r * 2),
             bevelEnabled: true,
             bevelThickness: r,
             bevelSize: r,
             bevelSegments: 4,
             curveSegments: 6
         });
-        geo.translate(0, 0, -(d / 2 - r));
+        geo.translate(0, 0, -(dimD / 2 - r));
+        if (rotate) rotate(geo);
+        return _assignBoxFaceGroups(geo, w, h, d);
+    }
+
+    /** (nova função a pedido do usuário — corrige "a imagem não funciona na
+     *  cabeça" depois do CornerRadius) ExtrudeGeometry NÃO nasce com os
+     *  mesmos 6 grupos de material que um THREE.BoxGeometry tem (um por
+     *  face) — ela só separa "tampas" de "paredes", 2 grupos no total. Como
+     *  a skin por imagem/rostinho da Head (ver _buildRigPartMaterial em
+     *  Simulation, e FACE_ORDER) depende de um Array de 6 materiais no
+     *  MESMO ORDEM/ÍNDICE que o THREE.BoxGeometry usa (+X,-X,+Y,-Y,+Z,-Z),
+     *  essa imagem simplesmente não aparecia direito numa Part arredondada.
+     *  Esta função reclassifica cada TRIÂNGULO da geometria, pelo lado pra
+     *  onde a normal dele mais aponta, num desses mesmos 6 grupos — assim
+     *  qualquer geometria (mesmo com bordas curvas) aceita o mesmo Array de
+     *  6 materiais que uma caixa reta aceitaria. */
+    function _assignBoxFaceGroups(geo, w, h, d) {
+        // (CORREÇÃO — "imagem da cabeça fica borrada e cortada") Antes esta
+        // função só reclassificava os TRIÂNGULOS em 6 grupos (pra cada um
+        // usar o material/imagem certo), mas deixava as UVs originais do
+        // ExtrudeGeometry — que mapeiam a textura inteira esticada ao redor
+        // do PERÍMETRO da forma extrudada (contorno + profundidade), não
+        // como um quadrado 0-1 por face. Resultado: cada face via só um
+        // pedacinho da imagem (cortada) esticado pra preencher o espaço
+        // (borrada). Agora, além de agrupar, recalculamos a UV de cada
+        // vértice com base na face pra onde ele foi classificado — mesma
+        // ideia de um THREE.BoxGeometry normal (projeção nos 2 eixos da
+        // face, normalizada 0-1 pelo tamanho real w/h/d).
+        //
+        // Precisa virar non-indexed ANTES: como a mesma aresta/vértice é
+        // compartilhado entre triângulos de faces DIFERENTES (ex.: quina
+        // entre a face de cima e a da frente), um vértice indexado só pode
+        // ter 1 UV — se ele pertence a 2 faces com UVs diferentes, uma delas
+        // sai errada. Sem índice, cada triângulo tem vértices só dele.
+        if (geo.index) geo = geo.toNonIndexed();
+        geo.computeVertexNormals();
+        const pos = geo.attributes.position;
+        const norm = geo.attributes.normal;
+        const triCount = Math.floor(pos.count / 3);
+        if (!triCount) return geo;
+        const groupOf = new Array(triCount);
+        for (let t = 0; t < triCount; t++) {
+            const a = t*3, b = t*3+1, c = t*3+2;
+            const nx = (norm.getX(a) + norm.getX(b) + norm.getX(c)) / 3;
+            const ny = (norm.getY(a) + norm.getY(b) + norm.getY(c)) / 3;
+            const nz = (norm.getZ(a) + norm.getZ(b) + norm.getZ(c)) / 3;
+            const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+            // Mesma ordem/índice do THREE.BoxGeometry: 0=+X(direita) 1=-X(esquerda)
+            // 2=+Y(cima) 3=-Y(baixo) 4=+Z(frente) 5=-Z(trás).
+            if (ax >= ay && ax >= az)      groupOf[t] = nx >= 0 ? 0 : 1;
+            else if (ay >= ax && ay >= az) groupOf[t] = ny >= 0 ? 2 : 3;
+            else                           groupOf[t] = nz >= 0 ? 4 : 5;
+        }
+
+        // Recalcula UV — pra cada face, projeta a posição do vértice nos 2
+        // eixos que formam aquela face, normalizado 0..1 pelo tamanho real.
+        const hw = Math.max(0.0001, w) / 2, hh = Math.max(0.0001, h) / 2, hd = Math.max(0.0001, d) / 2;
+        if (!geo.attributes.uv) geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(pos.count * 2), 2));
+        const uv = geo.attributes.uv;
+        for (let t = 0; t < triCount; t++) {
+            const g = groupOf[t];
+            for (let k = 0; k < 3; k++) {
+                const i = t*3 + k;
+                const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+                let u, v;
+                switch (g) {
+                    case 0: u = (-pz + hd) / (hd*2); v = (py + hh) / (hh*2); break; // +X
+                    case 1: u = ( pz + hd) / (hd*2); v = (py + hh) / (hh*2); break; // -X
+                    case 2: u = ( px + hw) / (hw*2); v = (-pz + hd) / (hd*2); break; // +Y
+                    case 3: u = ( px + hw) / (hw*2); v = ( pz + hd) / (hd*2); break; // -Y
+                    case 4: u = ( px + hw) / (hw*2); v = (py + hh) / (hh*2); break; // +Z
+                    default: u = (-px + hw) / (hw*2); v = (py + hh) / (hh*2); break; // -Z
+                }
+                uv.setXY(i, u, v);
+            }
+        }
+        uv.needsUpdate = true;
+
+        geo.clearGroups();
+        let runStart = 0, runGroup = groupOf[0];
+        for (let t = 1; t <= triCount; t++) {
+            if (t === triCount || groupOf[t] !== runGroup) {
+                geo.addGroup(runStart * 3, (t - runStart) * 3, runGroup);
+                if (t < triCount) { runStart = t; runGroup = groupOf[t]; }
+            }
+        }
         return geo;
     }
 
@@ -4611,9 +4860,10 @@ const ThreeManager = (() => {
                 // reconstruída só quando Size/CornerRadius mudam de verdade.
                 if (p.CornerRadius > 0 && _isBoxLikePart(node, p)) {
                     const sz = p.Size || { x:1, y:1, z:1 };
-                    const key = `${sz.x},${sz.y},${sz.z},${p.CornerRadius}`;
+                    const axis = p.CornerAxis || "Z";
+                    const key = `${sz.x},${sz.y},${sz.z},${p.CornerRadius},${axis}`;
                     if (obj.userData._roundedKey !== key) {
-                        obj.geometry = _roundedBoxGeo(sz.x||1, sz.y||1, sz.z||1, p.CornerRadius);
+                        obj.geometry = _roundedBoxGeo(sz.x||1, sz.y||1, sz.z||1, p.CornerRadius, axis);
                         obj.userData._roundedKey = key;
                         obj.userData._isRounded = true;
                     }
@@ -5551,6 +5801,14 @@ const ThreeManager = (() => {
         // dropdown "Material" nas Properties — vem direto do MATERIAL_PRESETS.
         MATERIAL_NAMES,
         beginAccessoryFit,
+        // (nova função a pedido do usuário) Exposto pra quem monta malhas de
+        // Part FORA do fluxo normal de sync (ex.: Simulation.
+        // _buildPlayerRigFromStarterPlayer, que cria o rig do player/NPCs
+        // direto com THREE.BoxGeometry) também respeitar CornerRadius/
+        // CornerAxis — sem isso, a cabeça arredondada só aparecia nas Parts
+        // soltas no Workspace, nunca no boneco do player.
+        roundedBoxGeo: _roundedBoxGeo,
+        isBoxLikePart: _isBoxLikePart,
     };
 })();
 
@@ -6218,13 +6476,15 @@ const PolyPizza = (() => {
         UI.showToast("🔌 Desconectado do GitHub — itens publicados voltam a ficar só neste navegador.");
     }
 
-    const TYPE_LABEL = { mesh: "🧱 Malha", model: "📦 Modelo", plugin: "🧩 Plugin", sound: "🔊 Som", image: "🖼️ Imagem" };
+    const TYPE_LABEL = { mesh: "🧱 Malha", model: "📦 Modelo", r6model: "🧍 Modelo R6", animation: "🎬 Animação", plugin: "🧩 Plugin", sound: "🔊 Som", image: "🖼️ Imagem" };
     const TAB_ACTIVE_CLASSES = {
-        mesh:   "bg-orange-700 text-white",
-        model:  "bg-purple-700 text-white",
-        plugin: "bg-fuchsia-700 text-white",
-        sound:  "bg-teal-700 text-white",
-        image:  "bg-emerald-700 text-white",
+        mesh:      "bg-orange-700 text-white",
+        model:     "bg-purple-700 text-white",
+        r6model:   "bg-lime-700 text-white",
+        animation: "bg-sky-700 text-white",
+        plugin:    "bg-fuchsia-700 text-white",
+        sound:     "bg-teal-700 text-white",
+        image:     "bg-emerald-700 text-white",
     };
 
     /** (nova função) Alterna entre as 5 abas do Toolbox. A aba "mesh" reusa
@@ -6232,7 +6492,7 @@ const PolyPizza = (() => {
      *  Imagem) mostram o catálogo local, que fica salvo no navegador. */
     function setCatalogMode(mode) {
         _catalogMode = mode;
-        ["mesh", "model", "plugin", "sound", "image"].forEach(m => {
+        ["mesh", "model", "r6model", "animation", "plugin", "sound", "image"].forEach(m => {
             const tab = document.getElementById(`toolbox-tab-${m}`);
             if (!tab) return;
             tab.className = "px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5 " +
@@ -6240,6 +6500,9 @@ const PolyPizza = (() => {
         });
         const meshSection  = document.getElementById("toolbox-mesh-section");
         const localSection = document.getElementById("toolbox-local-section");
+        // (nova função) O botão "Rig R6 padrão pronto" só faz sentido na aba
+        // "Modelo R6" — nas outras abas fica escondido.
+        document.getElementById("toolbox-r6-instant-wrap")?.classList.toggle("hidden", mode !== "r6model");
         if (mode === "mesh") {
             meshSection.classList.remove("hidden");
             meshSection.classList.add("flex-1", "flex", "flex-col", "overflow-hidden");
@@ -6263,7 +6526,7 @@ const PolyPizza = (() => {
         // (novo) Linha de "origem" do item: link, código colado, ou nó do
         // Explorer — depende do tipo e de como foi publicado.
         let originHtml;
-        if (item.type === "model") {
+        if (item.type === "model" || item.type === "r6model" || item.type === "animation") {
             originHtml = `<div class="text-zinc-500 text-[10px] truncate"><i class="fa-solid fa-shapes mr-1"></i>${item.sourceClassName || "Modelo"} salvo do Explorer</div>`;
         } else if (item.type === "plugin" && item.code && !item.link) {
             originHtml = `<div class="text-zinc-500 text-[10px] truncate"><i class="fa-solid fa-code mr-1"></i>Código colado (${item.code.length} caracteres)</div>`;
@@ -6329,16 +6592,26 @@ const PolyPizza = (() => {
             // GltfManager já registra o histórico ao terminar de importar.
             return;
         }
-        if (item.type === "model") {
-            // (nova função) Modelo publicado a partir do Explorer — não tem
-            // link nenhum, é uma cópia serializada do próprio objeto.
+        if (item.type === "model" || item.type === "r6model" || item.type === "animation") {
+            // (nova função) Modelo/Modelo R6/Animação publicados a partir do
+            // Explorer — não têm link nenhum, são uma cópia serializada do
+            // próprio objeto (Model do rig, ou Animator com seus keyframes).
             let parsed;
             try { parsed = JSON.parse(item.nodeData); }
-            catch (e) { UI.log(`Não consegui ler o modelo "${item.title}" salvo: ${e.message}`, "error"); return; }
+            catch (e) { UI.log(`Não consegui ler "${item.title}" salvo: ${e.message}`, "error"); return; }
             const ws = State.tree.children?.find(c => c.className === "Workspace");
             if (!ws) { UI.log("Workspace não encontrado.", "error"); return; }
             History.snapshot();
             const clone = Tree.reassignIds(JSON.parse(JSON.stringify(parsed)));
+            // (nova função) Animator sozinho guarda o alvo em TargetModel — ao
+            // clonar fora do rig original, aponta pro próprio clone (senão
+            // ficaria "órfão", apontando pra um Model que não existe mais
+            // nesta cena). Se for um rig (Model) com Animators dentro, cada
+            // Animator filho já é remapeado por Tree.reassignIds.
+            if (item.type === "animation" && clone.className === "Animator") {
+                clone.properties = clone.properties || {};
+                clone.properties.TargetModel = "";
+            }
             if (!ws.children) ws.children = [];
             ws.children.push(clone);
             ws.expanded = true;
@@ -6346,8 +6619,11 @@ const PolyPizza = (() => {
             ThreeManager.markDirty();
             Explorer.rebuild();
             rebuildHUD();
-            logHistory("adicionado", "model", item.title);
-            UI.showToast(`✅ Modelo "${item.title}" adicionado ao Workspace`);
+            logHistory("adicionado", item.type, item.title);
+            const msg = item.type === "animation"
+                ? `✅ Animação "${item.title}" adicionada ao Workspace — defina "TargetModel" nas Propriedades pro rig certo.`
+                : `✅ "${item.title}" adicionado ao Workspace`;
+            UI.showToast(msg);
             return;
         }
         if (item.type === "plugin") {
@@ -6459,37 +6735,54 @@ const PolyPizza = (() => {
     /** (nova função) Percorre a árvore inteira (a partir do Workspace) e
      *  monta as <option> do seletor "Escolher no Explorador", com
      *  indentação por profundidade pra dar noção de hierarquia. */
-    function _populateModelSelect() {
+    function _populateModelSelect(classNameFilter) {
         const sel = document.getElementById("toolbox-publish-model-select");
         if (!sel) return;
         sel.innerHTML = "";
-        const ws = State.tree.children?.find(c => c.className === "Workspace");
-        if (!ws || !ws.children?.length) {
-            sel.innerHTML = '<option value="">(Workspace vazio — crie algo antes de publicar)</option>';
+        // (nova função) Pra Animator (categoria "Animação"), procura na
+        // árvore INTEIRA — a maioria dos Animators fica dentro de
+        // StarterPlayer/.../Animações, não no Workspace. Pra Model/Modelo R6
+        // continua olhando só o Workspace, como sempre foi.
+        const roots = classNameFilter ? (State.tree.children || []) : (State.tree.children?.find(c => c.className === "Workspace")?.children || []);
+        if (!roots.length) {
+            sel.innerHTML = '<option value="">(Nada encontrado — crie algo antes de publicar)</option>';
             return;
         }
+        const opts = [];
         const walk = (node, depth) => {
-            const opt = document.createElement("option");
-            opt.value = node.id;
-            opt.textContent = "—".repeat(depth) + " " + node.name + " (" + node.className + ")";
-            sel.appendChild(opt);
+            if (!classNameFilter || node.className === classNameFilter) {
+                opts.push({ id: node.id, label: "—".repeat(depth) + " " + node.name + " (" + node.className + ")" });
+            }
             (node.children || []).forEach(c => walk(c, depth + 1));
         };
-        ws.children.forEach(n => walk(n, 0));
+        roots.forEach(n => walk(n, 0));
+        if (!opts.length) {
+            sel.innerHTML = classNameFilter
+                ? `<option value="">(Nenhum ${classNameFilter} encontrado)</option>`
+                : '<option value="">(Nada encontrado no Workspace)</option>';
+            return;
+        }
+        opts.forEach(o => {
+            const opt = document.createElement("option");
+            opt.value = o.id;
+            opt.textContent = o.label;
+            sel.appendChild(opt);
+        });
     }
 
     /** (nova função) Mostra/esconde os campos certos do formulário de
      *  Publicar de acordo com o Tipo escolhido (link vs. Explorer vs. código). */
     function onPublishTypeChange() {
         const type = document.getElementById("toolbox-publish-type").value;
-        document.getElementById("toolbox-publish-link-wrap").classList.toggle("hidden", type === "model");
+        const isNodeType = (type === "model" || type === "r6model" || type === "animation");
+        document.getElementById("toolbox-publish-link-wrap").classList.toggle("hidden", isNodeType);
         const modelWrap = document.getElementById("toolbox-publish-model-wrap");
-        modelWrap.classList.toggle("hidden", type !== "model");
-        modelWrap.classList.toggle("flex", type === "model");
+        modelWrap.classList.toggle("hidden", !isNodeType);
+        modelWrap.classList.toggle("flex", isNodeType);
         const codeWrap = document.getElementById("toolbox-publish-code-wrap");
         codeWrap.classList.toggle("hidden", type !== "plugin");
         codeWrap.classList.toggle("flex", type === "plugin");
-        if (type === "model") _populateModelSelect();
+        if (isNodeType) _populateModelSelect(type === "animation" ? "Animator" : null);
     }
 
     function openPublish() {
@@ -6520,8 +6813,9 @@ const PolyPizza = (() => {
 
         const entry = { id: _uid(), type, title, author, ownerId, thumbnail, addedAt: Date.now() };
 
-        if (type === "model") {
-            // (nova função) Modelo escolhido no Explorador, em vez de link.
+        if (type === "model" || type === "r6model" || type === "animation") {
+            // (nova função) Modelo/Modelo R6/Animação escolhidos no Explorador,
+            // em vez de link.
             const nodeId = document.getElementById("toolbox-publish-model-select").value;
             if (!nodeId) { UI.showToast("Escolha um objeto do Explorador pra publicar."); return; }
             const node = Tree.find(nodeId);
@@ -6914,11 +7208,56 @@ const PolyPizza = (() => {
     function nextPage() { if (_keyword || _categoryFilter !== null) _fetchPage(_page + 1); }
     function prevPage() { if ((_keyword || _categoryFilter !== null) && _page > 1) _fetchPage(_page - 1); }
 
+    // (nova função a pedido do usuário) Exposto pra outros módulos lerem o
+    // catálogo publicado sem precisar duplicar a leitura do localStorage aqui.
+    function getCatalogByType(type) {
+        return _loadCatalog().filter(i => i.type === type);
+    }
+    function syncCatalogFromGithubSilently() { return _githubPullMerge(true); }
+
+    // (nova função a pedido do usuário) Publica uma Animação direto (sem
+    // passar pelo modal "Publicar no Toolbox") — usada pelo "+" dentro do
+    // modal "Usar animação da Toolbox" no perfil. Mesma lógica de
+    // submitPublish (entry + salvar local + sincronizar com o GitHub),
+    // só que já recebendo o nó/título prontos em vez de ler dos campos.
+    function publishAnimationFromNode(nodeId, title) {
+        const node = Tree.find(nodeId);
+        if (!node) return { ok: false, error: "Objeto não encontrado no Explorer — tente de novo." };
+        if (!title) return { ok: false, error: "Preencha o nome." };
+        const author  = (window.Account && Account.getDisplayName()) || "Anônimo";
+        const ownerId = window.Account ? Account.getCurrentUserId() : null;
+        const entry = {
+            id: _uid(), type: "animation", title, author, ownerId, thumbnail: "", addedAt: Date.now(),
+            nodeData: JSON.stringify(node), sourceClassName: node.className,
+        };
+        const cat = _loadCatalog();
+        cat.unshift(entry);
+        _saveCatalog(cat);
+        logHistory("publicado", "animation", title, "");
+        if (_catalogMode === "animation") renderLocalCatalog();
+
+        if (GithubStorage.hasConfig()) {
+            (async () => {
+                const res = await GithubStorage.pull();
+                if (res.ok) _githubSha = res.sha;
+                const merged = _mergeCatalogs(cat, res.ok ? res.data : []);
+                _saveCatalog(merged);
+                const pushRes = await _githubPush(merged, `Publica "${title}" no Toolbox`);
+                if (pushRes.ok) UI.showToast("☁️ Também enviado pro GitHub.");
+                else UI.showToast("⚠️ Salvo neste navegador, mas falhou ao enviar pro GitHub: " + pushRes.error);
+                renderLocalCatalog();
+                _renderMeshPublished();
+            })();
+        }
+        return { ok: true, entry };
+    }
+
     return {
         open, search, searchTerm, nextPage, prevPage, saveApiKey, hasApiKey,
         setCatalogMode, renderLocalCatalog, addFromCatalog, deleteFromCatalog,
         openHistory, clearHistory, logHistory, openPublish, submitPublish, onPublishTypeChange,
         openGithubSettings, saveGithubConfig, clearGithubConfig, syncWithGithub, autoSyncOnBoot,
+        getCatalogByType, syncCatalogFromGithubSilently, publishAnimationFromNode,
     };
 })();
 
@@ -7287,6 +7626,13 @@ const Explorer = (() => {
 
     return { rebuild, deleteNode, duplicateSelected, cutSelected, copySelected, pasteIntoSelected, groupSelected, filterInsertItems, registerInsertCategory, openInsertFor: _openInsert, insertWithProps };
 })();
+
+/* (removido a pedido do usuário) createEmote / _findPlayerRigAndAnimsFolder /
+   EmotesManager — todo o fluxo de "emote" (botão nas Configurações, modal
+   "Meus emotes" e botão "Emotes" no HUD do Play) foi retirado. O Editor de
+   Animação (AnimEditor) continua existindo normalmente pra Parado/Andar/
+   Correr/Pular e qualquer outro Animator dentro do rig (duplo clique nele
+   no Explorer). */
 
 /* ================================================================
    MÓDULO 9B · HISTORY  (Undo / Redo — função nova)
@@ -7878,6 +8224,103 @@ const InventorySystem = (() => {
      entre eles em tempo real, movendo/girando/escalando as partes de
      verdade na cena 3D.
    ================================================================ */
+/* ================================================================
+   MÓDULO 10A-1X · EDITOR ISOLATION  (nova função a pedido do usuário)
+   ─ Até agora só o Editor de Vértices isolava de verdade a área 3D — os
+     outros editores dedicados (Animação, Pose de Segurar, Modelo da Tool)
+     abriam em "tela cheia" só na parte da INTERFACE (escondiam Explorer/
+     Properties/header), mas o viewport 3D continuava mostrando o preview
+     misturado com o resto do mapa/mundo do jogo por trás.
+   ─ Este módulo generaliza a mesma técnica que o Editor de Vértices já
+     usava: esconde tudo que não faz parte do objeto sendo editado, troca
+     o fundo por um cinza neutro e enquadra a câmera nele — assim a área 3D
+     vira de fato um "editor 3D" isolado, igual Blender, em vez de só um
+     preview jogado dentro do mundo inteiro. */
+const EditorIsolation = (() => {
+    let _hiddenEntries = []; // objetos escondidos, pra reexibir ao sair
+    let _gridObj = null;     // GridHelper da cena, escondido durante o isolamento
+    let _prevBackground = undefined;
+    let _prevCamState = null; // { position, target } — devolve a câmera de onde estava
+    let _root = null;        // objeto THREE que fica visível (raiz do que está sendo editado)
+
+    function _isInsideRoot(obj, root) {
+        let cur = obj;
+        while (cur) { if (cur === root) return true; cur = cur.parent; }
+        return false;
+    }
+
+    /** Esconde todo o resto da cena 3D, deixando visível só rootObj (e seus
+     *  filhos), escurece o fundo e enquadra a câmera nele. Chamar de novo
+     *  sem sair antes é seguro — sai do isolamento anterior primeiro, pra
+     *  nunca "empilhar" dois isolamentos. */
+    function enter(rootObj) {
+        if (_root) exit();
+        if (!rootObj) return;
+        _root = rootObj;
+        _hiddenEntries = [];
+        ThreeManager.getObjectMap().forEach((obj) => {
+            if (_isInsideRoot(obj, rootObj) || !obj.visible) return;
+            _hiddenEntries.push(obj);
+            obj.visible = false;
+        });
+        const scene = ThreeManager.getScene();
+        _gridObj = scene.children.find(c => c.isGridHelper || c.type === "GridHelper") || null;
+        if (_gridObj) _gridObj.visible = false;
+        _prevBackground = scene.background;
+        scene.background = new THREE.Color(0x1b1d22);
+        // Tira o gizmo de mover/girar de cima de qualquer seleção anterior —
+        // senão ele fica flutuando sozinho, sem nada visível por trás.
+        ThreeManager.getTransform()?.detach();
+
+        const camera = ThreeManager.getCamera();
+        const orbit = ThreeManager.getOrbit();
+        if (camera && orbit) {
+            _prevCamState = { position: camera.position.clone(), target: orbit.target.clone() };
+            const box = new THREE.Box3().setFromObject(rootObj);
+            if (!box.isEmpty()) {
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z, 0.05);
+                const fov = THREE.MathUtils.degToRad(camera.fov || 50);
+                let dist = (maxDim / 2) / Math.tan(fov / 2);
+                dist *= 2.4; // folga ao redor da peça, pra não ficar colada nas bordas
+                let dir = new THREE.Vector3().subVectors(camera.position, orbit.target);
+                if (dir.lengthSq() < 1e-6) dir.set(0.6, 0.5, 0.6);
+                dir.normalize();
+                orbit.target.copy(center);
+                camera.position.copy(center).addScaledVector(dir, dist);
+                orbit.update();
+            }
+        }
+    }
+
+    /** Desfaz o isolamento: devolve a visibilidade de tudo que foi escondido,
+     *  o fundo original e a câmera exatamente de onde ela estava antes. */
+    function exit() {
+        if (!_root) return;
+        _hiddenEntries.forEach(obj => { obj.visible = true; });
+        _hiddenEntries = [];
+        const scene = ThreeManager.getScene();
+        if (_gridObj) _gridObj.visible = true;
+        _gridObj = null;
+        scene.background = _prevBackground;
+        _prevBackground = undefined;
+        const camera = ThreeManager.getCamera();
+        const orbit = ThreeManager.getOrbit();
+        if (_prevCamState && camera && orbit) {
+            camera.position.copy(_prevCamState.position);
+            orbit.target.copy(_prevCamState.target);
+            orbit.update();
+        }
+        _prevCamState = null;
+        _root = null;
+    }
+
+    function isActive() { return !!_root; }
+
+    return { enter, exit, isActive };
+})();
+
 const AnimEditor = (() => {
     let _node = null;       // nó Animator sendo editado
     let _preview = null;    // Model clonado no Workspace (prévia editável)
@@ -7889,6 +8332,7 @@ const AnimEditor = (() => {
     let _firedSounds = new Set();
     let _cameraTrackSelected = false; // true quando a trilha "📷 Câmera" está selecionada na árvore
     let _toolCloneId = null; // (nova função) id, dentro do preview, do clone da Tool anexada pra também animar
+    let _origProps = null;   // (novo) snapshot das properties do Animator ao abrir, pro "Sair sem salvar"
 
     function _cloneRig(model) {
         const ws = Tree.find("ws");
@@ -7998,6 +8442,12 @@ const AnimEditor = (() => {
         if (!_node.properties.cameraKeyframes) _node.properties.cameraKeyframes = [];
         if (!_node.properties.soundEvents)     _node.properties.soundEvents = [];
         if (!_node.properties.markers)         _node.properties.markers = [];
+        // (novo — botão "🚫 Sair sem salvar") Guarda uma cópia das
+        // propriedades do Animator como estavam ANTES desta sessão de
+        // edição — keyframes/eventos/marcadores são gravados direto em
+        // _node.properties conforme o usuário mexe (não numa cópia de
+        // trabalho à parte), então descartar = devolver essa cópia.
+        _origProps = JSON.parse(JSON.stringify(_node.properties));
         _cameraTrackSelected = false;
         _preview = _cloneRig(model);
         _buildNameMap();
@@ -8019,20 +8469,24 @@ const AnimEditor = (() => {
         ThreeManager.markDirty();
         ThreeManager.syncNow();
 
+        // (a pedido do usuário) Isola a área 3D de verdade — some o resto do
+        // mapa/mundo por trás, deixando só o rig 🎬_Preview visível.
+        EditorIsolation.enter(ThreeManager.getObjectMap().get(_preview.id));
+
         document.getElementById("anim-editor-title").textContent = "Animator — " + node.name + " (" + model.name + ")";
         document.getElementById("anim-duration").value = node.properties.Duration || 2;
         document.getElementById("anim-time").value = 0;
         document.getElementById("anim-editor-overlay").classList.add("visible");
 
-        // (nova função) Modo tela cheia — ao abrir o editor de animação, o
-        // viewport 3D expande pra ocupar a tela toda (mesmo mecanismo do
-        // modo Play), com os painéis laterais/header esmaecidos e o console
-        // escondido, dando bem mais espaço/imersão pra posar o rig.
-        document.getElementById("panel-left").classList.add("play-dim");
-        document.getElementById("panel-right").classList.add("play-dim");
-        document.getElementById("app-header").classList.add("play-dim");
-        // (atualizado a pedido do usuário) Console não é mais escondido ao entrar em modo Play/Teste.
-        document.getElementById("viewport-section").classList.add("play-fullscreen-viewport");
+        // (atualizado a pedido do usuário) O Editor de Animação agora abre em
+        // tela cheia de verdade, igual ao Editor de Skin: Explorer, Properties
+        // e o header somem por completo (display:none) e o viewport 3D cobre
+        // a tela toda (position:fixed). Usa as mesmas classes reais do Editor
+        // de Skin (editor-hide-chrome / editor-fullscreen-viewport).
+        document.getElementById("panel-left").classList.add("editor-hide-chrome");
+        document.getElementById("panel-right").classList.add("editor-hide-chrome");
+        document.getElementById("app-header").classList.add("editor-hide-chrome");
+        document.getElementById("viewport-section").classList.add("editor-fullscreen-viewport");
 
         _renderTimeline();
         UI.showToast(`🎬 Editando "${node.name}" (rig: ${model.name}) — selecione uma parte do rig 🎬_Preview e pose com W/E/R. Esc fecha e salva.`);
@@ -8144,6 +8598,7 @@ const AnimEditor = (() => {
             if (existing) Object.assign(existing, frame); else kfs.push(frame);
             kfs.sort((a, b) => a.t - b.t);
             _renderTimeline();
+            if (typeof App !== "undefined") App.notifyChanged();
             UI.showToast(`✅ Keyframe de câmera gravado em t=${t}s.`);
             return;
         }
@@ -8162,6 +8617,7 @@ const AnimEditor = (() => {
         if (existing) Object.assign(existing, frame); else kfs.push(frame);
         kfs.sort((a, b) => a.t - b.t);
         _renderTimeline();
+        if (typeof App !== "undefined") App.notifyChanged();
         UI.showToast(`✅ Keyframe gravado em t=${t}s para "${name}".`);
     }
 
@@ -8172,7 +8628,7 @@ const AnimEditor = (() => {
             const kfs = _node.properties.cameraKeyframes;
             if (!kfs) return;
             const idx = kfs.findIndex(k => Math.abs(k.t - t) < 0.05);
-            if (idx >= 0) { kfs.splice(idx, 1); _renderTimeline(); UI.showToast("🗑 Keyframe de câmera removido."); }
+            if (idx >= 0) { kfs.splice(idx, 1); _renderTimeline(); if (typeof App !== "undefined") App.notifyChanged(); UI.showToast("🗑 Keyframe de câmera removido."); }
             return;
         }
 
@@ -8181,7 +8637,7 @@ const AnimEditor = (() => {
         const kfs = _node.properties.keyframes[name];
         if (!kfs) return;
         const idx = kfs.findIndex(k => Math.abs(k.t - t) < 0.05);
-        if (idx >= 0) { kfs.splice(idx, 1); _renderTimeline(); UI.showToast("🗑 Keyframe removido."); }
+        if (idx >= 0) { kfs.splice(idx, 1); _renderTimeline(); if (typeof App !== "undefined") App.notifyChanged(); UI.showToast("🗑 Keyframe removido."); }
     }
 
     /** (nova função · categoria Animações) Grava um evento de som no tempo
@@ -8483,22 +8939,64 @@ const AnimEditor = (() => {
 
     function close() {
         stopPlay();
+        EditorIsolation.exit();
         if (_node) _node.properties.Duration = parseFloat(document.getElementById("anim-duration")?.value) || 2;
         if (_preview) { Tree.remove(_preview.id); _preview = null; } // já remove o clone da Tool, que fica dentro do preview
-        _node = null; _nameMap = {}; _toolCloneId = null;
+        _node = null; _nameMap = {}; _toolCloneId = null; _origProps = null;
         const ov = document.getElementById("anim-editor-overlay");
         if (ov) ov.classList.remove("visible");
 
         // Sai do modo tela cheia e restaura a interface normal do editor.
         ["panel-left", "panel-right", "app-header"].forEach(id => {
-            document.getElementById(id)?.classList.remove("play-dim");
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
         });
         document.getElementById("app-console")?.classList.remove("hidden");
-        document.getElementById("viewport-section")?.classList.remove("play-fullscreen-viewport");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
 
         Explorer.rebuild();
         ThreeManager.markDirty();
+        // (correção) "💾 Animação salva." antes só queria dizer "gravado na
+        // memória do projeto" — o autosave de verdade no navegador só rodava
+        // até 20s depois. Agora força um quickSave imediato aqui, então o
+        // emote sobrevive mesmo que a aba seja fechada/recarregada logo em
+        // seguida.
+        if (typeof App !== "undefined" && App.quickSave) App.quickSave(true);
         UI.showToast("💾 Animação salva.");
+    }
+
+    /** (novo — botão "🚫 Sair sem salvar") Devolve o Animator exatamente
+     *  como estava antes desta sessão de edição (keyframes, eventos de som,
+     *  marcadores, Tool anexada, Duração — tudo) e fecha, sem persistir
+     *  nada do que foi mexido agora. Como keyframes/eventos são gravados
+     *  direto em _node.properties durante a edição (não numa cópia de
+     *  trabalho), "descartar" aqui significa restaurar o snapshot tirado
+     *  no open() por cima de qualquer coisa que tenha sido escrita desde
+     *  então. */
+    function closeDiscard() {
+        stopPlay();
+        EditorIsolation.exit();
+        if (_node && _origProps) {
+            _node.properties = JSON.parse(JSON.stringify(_origProps));
+        }
+        if (_preview) { Tree.remove(_preview.id); _preview = null; }
+        _node = null; _nameMap = {}; _toolCloneId = null; _origProps = null;
+        const ov = document.getElementById("anim-editor-overlay");
+        if (ov) ov.classList.remove("visible");
+
+        ["panel-left", "panel-right", "app-header"].forEach(id => {
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
+        });
+        document.getElementById("app-console")?.classList.remove("hidden");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
+
+        Explorer.rebuild();
+        ThreeManager.markDirty();
+        // Ainda força um quickSave — não pra gravar as mudanças descartadas
+        // (elas já foram revertidas na linha acima), mas pra garantir que o
+        // estado ORIGINAL sobrescreva qualquer autosave intermediário que
+        // possa ter rodado durante a edição.
+        if (typeof App !== "undefined" && App.quickSave) App.quickSave(true);
+        UI.showToast("🚫 Saiu sem salvar — alterações descartadas.");
     }
 
     /** (nova função · categoria Animações) "💾 Salvar" — grava a Duração
@@ -8510,6 +9008,7 @@ const AnimEditor = (() => {
         if (!_node) return;
         _node.properties.Duration = parseFloat(document.getElementById("anim-duration")?.value) || 2;
         Explorer.rebuild();
+        if (typeof App !== "undefined" && App.quickSave) App.quickSave(true);
         UI.showToast("💾 Animação salva.");
     }
 
@@ -8529,7 +9028,7 @@ const AnimEditor = (() => {
     }
 
     return {
-        open, close, save, addKeyframe, deleteKeyframe, togglePlay, notifySelectionChanged, _refresh,
+        open, close, closeDiscard, save, addKeyframe, deleteKeyframe, togglePlay, notifySelectionChanged, _refresh,
         addSoundEvent, addMarker, attachTool, detachTool, selectCameraTrack, selectPartTrack,
         get active() { return !!_node; },
     };
@@ -8551,6 +9050,8 @@ const ToolPoseEditor = (() => {
     let _nameMap = {};      // partName -> id no clone
     let _restPose = {};     // partName -> {pos, rot} originais do rig-modelo (postura de descanso)
     let _gripMarkerId = null; // (nova função) id do marcador "posição da Tool na mão", dentro de _preview
+    let _origPoseParts = null; // (novo) snapshot de Tool.properties.PoseParts ao abrir, pro "Sair sem salvar"
+    let _origGrip = null;      // (novo) snapshot de GripPos/GripRot/GripScale ao abrir
     const GRIP_MARKER_BASE_SIZE = 0.35;
 
     /** (nova função) Acha, no clone (prévia), a Part que representa o membro
@@ -8708,6 +9209,15 @@ const ToolPoseEditor = (() => {
         }
         _tool = toolNode;
         if (!_tool.properties.PoseParts) _tool.properties.PoseParts = {};
+        // (novo — botão "🚫 Sair sem salvar") Guarda como estavam a pose e
+        // os dados de "grip" (posição/rotação/escala na mão) ANTES desta
+        // sessão, pra poder devolver tudo se o usuário desistir.
+        _origPoseParts = JSON.parse(JSON.stringify(_tool.properties.PoseParts));
+        _origGrip = {
+            GripPos:   _tool.properties.GripPos   ? { ..._tool.properties.GripPos }   : null,
+            GripRot:   _tool.properties.GripRot   ? { ..._tool.properties.GripRot }   : null,
+            GripScale: _tool.properties.GripScale ?? null,
+        };
 
         // Postura de descanso — lida do modelo ORIGINAL (antes de clonar),
         // pra sempre comparar contra o valor "neutro" de verdade do rig.
@@ -8740,15 +9250,21 @@ const ToolPoseEditor = (() => {
         ThreeManager.markDirty();
         ThreeManager.syncNow();
 
+        // (a pedido do usuário) Isola a área 3D de verdade — some o resto do
+        // mapa/mundo por trás, deixando só o rig 🖐️_PosePreview visível.
+        EditorIsolation.enter(ThreeManager.getObjectMap().get(_preview.id));
+
         document.getElementById("tool-pose-editor-title").textContent = "Pose de Segurar — " + toolNode.name;
         document.getElementById("tool-pose-editor-overlay").classList.add("visible");
 
-        // Modo tela cheia, igual ao Editor de Animação — mais espaço pra posar.
-        document.getElementById("panel-left").classList.add("play-dim");
-        document.getElementById("panel-right").classList.add("play-dim");
-        document.getElementById("app-header").classList.add("play-dim");
-        // (atualizado a pedido do usuário) Console não é mais escondido ao entrar em modo Play/Teste.
-        document.getElementById("viewport-section").classList.add("play-fullscreen-viewport");
+        // Modo tela cheia, igual ao Editor de Animação/Skin — área separada de
+        // verdade (as classes play-dim/play-fullscreen-viewport viraram no-op
+        // depois que o modo Play parou de ficar fullscreen, então usamos as
+        // mesmas classes reais dos outros editores dedicados).
+        document.getElementById("panel-left").classList.add("editor-hide-chrome");
+        document.getElementById("panel-right").classList.add("editor-hide-chrome");
+        document.getElementById("app-header").classList.add("editor-hide-chrome");
+        document.getElementById("viewport-section").classList.add("editor-fullscreen-viewport");
 
         State.sel = [];
         ThreeManager.attachToSelected();
@@ -8832,6 +9348,7 @@ const ToolPoseEditor = (() => {
     }
 
     function close() {
+        EditorIsolation.exit();
         if (_tool && _preview) {
             // Salva só as Parts marcadas (diferentes da postura de descanso);
             // as demais ficam de fora — livres/normais durante o jogo. O
@@ -8850,16 +9367,16 @@ const ToolPoseEditor = (() => {
         }
         if (_preview) { Tree.remove(_preview.id); _preview = null; }
         const savedCount = _tool ? Object.keys(_tool.properties.PoseParts || {}).length : 0;
-        _tool = null; _nameMap = {}; _restPose = {}; _gripMarkerId = null;
+        _tool = null; _nameMap = {}; _restPose = {}; _gripMarkerId = null; _origPoseParts = null; _origGrip = null;
 
         const ov = document.getElementById("tool-pose-editor-overlay");
         if (ov) ov.classList.remove("visible");
 
         ["panel-left", "panel-right", "app-header"].forEach(id => {
-            document.getElementById(id)?.classList.remove("play-dim");
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
         });
         document.getElementById("app-console")?.classList.remove("hidden");
-        document.getElementById("viewport-section")?.classList.remove("play-fullscreen-viewport");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
 
         Explorer.rebuild();
         ThreeManager.markDirty();
@@ -8868,13 +9385,46 @@ const ToolPoseEditor = (() => {
         UI.showToast(`💾 Pose salva — ${savedCount} parte${savedCount === 1 ? "" : "s"} marcada${savedCount === 1 ? "" : "s"}.`);
     }
 
+    /** (novo — botão "🚫 Sair sem salvar") Fecha sem recalcular/gravar a
+     *  pose atual — devolve PoseParts e os dados de Grip pra como estavam
+     *  quando o editor foi aberto, descartando qualquer coisa que o
+     *  usuário tenha posado/arrastado nesta sessão. */
+    function closeDiscard() {
+        EditorIsolation.exit();
+        if (_tool) {
+            _tool.properties.PoseParts = _origPoseParts ? JSON.parse(JSON.stringify(_origPoseParts)) : {};
+            if (_origGrip) {
+                if (_origGrip.GripPos)   _tool.properties.GripPos = { ..._origGrip.GripPos };
+                if (_origGrip.GripRot)   _tool.properties.GripRot = { ..._origGrip.GripRot };
+                if (_origGrip.GripScale != null) _tool.properties.GripScale = _origGrip.GripScale;
+            }
+        }
+        if (_preview) { Tree.remove(_preview.id); _preview = null; }
+        _tool = null; _nameMap = {}; _restPose = {}; _gripMarkerId = null; _origPoseParts = null; _origGrip = null;
+
+        const ov = document.getElementById("tool-pose-editor-overlay");
+        if (ov) ov.classList.remove("visible");
+
+        ["panel-left", "panel-right", "app-header"].forEach(id => {
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
+        });
+        document.getElementById("app-console")?.classList.remove("hidden");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
+
+        Explorer.rebuild();
+        ThreeManager.markDirty();
+        UI.buildPropertiesPanel();
+        Simulation.refreshEquippedTool?.();
+        UI.showToast("🚫 Saiu sem salvar — pose descartada.");
+    }
+
     /** Chamado pelo State.sel quando a seleção muda por qualquer via (clique
      *  na cena 3D, no Explorer, etc.) — mantém a lista/label sincronizados. */
     function notifySelectionChanged() {
         _renderPartsTree();
     }
 
-    return { open, close, resetSelectedPart, openGripPositioner, onDragEnd, nudgeToolScale, notifySelectionChanged, get active() { return !!_tool; } };
+    return { open, close, closeDiscard, resetSelectedPart, openGripPositioner, onDragEnd, nudgeToolScale, notifySelectionChanged, get active() { return !!_tool; } };
 })();
 
 /* ================================================================
@@ -8905,6 +9455,16 @@ const SkinEditor = (() => {
     let _baseSkin = null;          // skin da conta no momento em que abriu (cor etc.), sem mexer
     let _textures = {};            // cópia de trabalho: { "Torso": { front:url, ... }, ... }
     let _editing = null;           // { part, face } — face que está aberta no popup agora
+
+    // (nova função a pedido do usuário) Modo "Desenhar" — pinta livre num
+    // <canvas> em vez de precisar de link/upload. O resultado vira um
+    // dataURL PNG aplicado na face igual a qualquer outra imagem.
+    let _drawCtx = null;           // contexto 2D do canvas de desenho
+    let _drawing = false;          // true enquanto o botão do mouse/dedo está pressionado
+    let _canvasBound = false;      // evita registrar os listeners de mouse/touch mais de uma vez
+    let _brushColor = "#000000";
+    let _brushSize = 6;
+    let _eraser = false;
 
     function _findWs() { return Tree.find("ws"); }
 
@@ -8938,15 +9498,21 @@ const SkinEditor = (() => {
 
         _rebuildPreview();
 
+        // (a pedido do usuário) Isola a área 3D de verdade — some o resto do
+        // mapa/mundo por trás, deixando só o boneco de prévia visível. Feito
+        // só aqui no open() (não dentro de _rebuildPreview, que roda de novo
+        // a cada imagem trocada) pra não resetar a câmera toda hora.
+        EditorIsolation.enter(_previewGroup);
+
         document.getElementById("skin-texture-editor-overlay").classList.add("visible");
         // (nova função a pedido do usuário) Diferente do Play (que não fica
         // mais fullscreen), o Editor de Skin abre numa área SEPARADA que
         // cobre a tela toda — header e painéis somem de vez (display:none),
         // não só ficam "meio apagados" atrás.
-        document.getElementById("panel-left").classList.add("skin-editor-hide-chrome");
-        document.getElementById("panel-right").classList.add("skin-editor-hide-chrome");
-        document.getElementById("app-header").classList.add("skin-editor-hide-chrome");
-        document.getElementById("viewport-section").classList.add("skin-editor-fullscreen-viewport");
+        document.getElementById("panel-left").classList.add("editor-hide-chrome");
+        document.getElementById("panel-right").classList.add("editor-hide-chrome");
+        document.getElementById("app-header").classList.add("editor-hide-chrome");
+        document.getElementById("viewport-section").classList.add("editor-fullscreen-viewport");
 
         _render();
         UI.showToast("👕 Editando a skin — clique num quadrado pra colocar uma imagem naquele lado da parte. Gire a câmera (botão direito) pra ver o boneco de todos os ângulos. Esc salva e fecha.");
@@ -8988,6 +9554,7 @@ const SkinEditor = (() => {
 
     function closeFacePicker() {
         _editing = null;
+        closeDrawMode();
         document.getElementById("skin-face-picker-modal")?.classList.remove("visible");
     }
 
@@ -9047,8 +9614,156 @@ const SkinEditor = (() => {
         closeFacePicker();
     }
 
+    /* ── (nova função a pedido do usuário) Modo "Desenhar" ─────────────
+       Canvas simples de pincel/borracha dentro do próprio seletor de face —
+       carrega a imagem já colocada ali (se houver) como ponto de partida,
+       deixa desenhar por cima com o mouse (ou dedo, no celular), e ao
+       clicar em "Usar desenho" vira um dataURL PNG aplicado na face, do
+       mesmo jeito que um upload ou link normal (_setFace). ── */
+
+    /** Carrega uma URL/dataURL como <img> pronta pra desenhar no canvas.
+     *  Links externos pedem crossOrigin="anonymous" (senão o canvas fica
+     *  "tainted" e não dá pra exportar depois); se falhar (CORS bloqueado,
+     *  link quebrado etc.) resolve(null) em vez de travar o fluxo. */
+    function _loadImageForDrawing(url) {
+        return new Promise(resolve => {
+            if (!url) { resolve(null); return; }
+            const img = new Image();
+            if (!url.startsWith("data:")) img.crossOrigin = "anonymous";
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = url;
+        });
+    }
+
+    async function openDrawMode() {
+        if (!_editing) return;
+        const canvas = document.getElementById("skin-draw-canvas");
+        if (!canvas) return;
+        _drawCtx = canvas.getContext("2d");
+        _drawCtx.fillStyle = "#ffffff";
+        _drawCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Se essa face já tem imagem, carrega ela no canvas primeiro, pra
+        // dar pra desenhar POR CIMA em vez de começar do zero.
+        const url = (_textures[_editing.part] || {})[_editing.face] || "";
+        if (url) {
+            const img = await _loadImageForDrawing(url);
+            if (img) {
+                try {
+                    _drawCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toDataURL(); // só pra testar se "tainted" (link sem CORS liberado)
+                } catch (_) {
+                    _drawCtx.fillStyle = "#ffffff";
+                    _drawCtx.fillRect(0, 0, canvas.width, canvas.height);
+                    UI.showToast("⚠ Não consegui carregar a imagem atual pra editar (bloqueio de CORS do link) — comece o desenho do zero.");
+                }
+            }
+        }
+
+        setEraser(false);
+        _bindCanvasEvents(canvas);
+        document.getElementById("skin-face-picker-preview-wrap")?.classList.add("hidden");
+        const drawWrap = document.getElementById("skin-face-picker-draw-wrap");
+        drawWrap?.classList.remove("hidden");
+        drawWrap?.classList.add("flex");
+    }
+
+    function closeDrawMode() {
+        const drawWrap = document.getElementById("skin-face-picker-draw-wrap");
+        drawWrap?.classList.add("hidden");
+        drawWrap?.classList.remove("flex");
+        document.getElementById("skin-face-picker-preview-wrap")?.classList.remove("hidden");
+    }
+
+    /** Converte a posição do mouse/dedo (em pixels de tela) pra coordenada
+     *  do canvas (que pode estar exibido num tamanho diferente do
+     *  width/height reais dele, por causa do "w-full aspect-square"). */
+    function _canvasPos(canvas, e) {
+        const rect = canvas.getBoundingClientRect();
+        const t = e.touches && e.touches[0];
+        const clientX = t ? t.clientX : e.clientX;
+        const clientY = t ? t.clientY : e.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height),
+        };
+    }
+
+    function _drawDot(p) {
+        if (!_drawCtx) return;
+        _drawCtx.fillStyle = _eraser ? "#ffffff" : _brushColor;
+        _drawCtx.beginPath();
+        _drawCtx.arc(p.x, p.y, _brushSize / 2, 0, Math.PI * 2);
+        _drawCtx.fill();
+    }
+    function _drawLine(a, b) {
+        if (!_drawCtx) return;
+        _drawCtx.strokeStyle = _eraser ? "#ffffff" : _brushColor;
+        _drawCtx.lineWidth = _brushSize;
+        _drawCtx.lineCap = "round";
+        _drawCtx.lineJoin = "round";
+        _drawCtx.beginPath();
+        _drawCtx.moveTo(a.x, a.y);
+        _drawCtx.lineTo(b.x, b.y);
+        _drawCtx.stroke();
+    }
+
+    function _bindCanvasEvents(canvas) {
+        if (_canvasBound) return;
+        _canvasBound = true;
+        let last = null;
+        const start = e => { e.preventDefault(); _drawing = true; last = _canvasPos(canvas, e); _drawDot(last); };
+        const move  = e => {
+            if (!_drawing) return;
+            e.preventDefault();
+            const p = _canvasPos(canvas, e);
+            _drawLine(last, p);
+            last = p;
+        };
+        const end = () => { _drawing = false; last = null; };
+        canvas.addEventListener("mousedown", start);
+        canvas.addEventListener("mousemove", move);
+        window.addEventListener("mouseup", end);
+        canvas.addEventListener("touchstart", start, { passive: false });
+        canvas.addEventListener("touchmove", move, { passive: false });
+        canvas.addEventListener("touchend", end);
+        canvas.addEventListener("touchcancel", end);
+    }
+
+    function setBrushColor(v) { _brushColor = v || "#000000"; }
+    function setBrushSize(v) {
+        _brushSize = parseInt(v, 10) || 6;
+        const lbl = document.getElementById("skin-draw-size-label");
+        if (lbl) lbl.textContent = _brushSize + "px";
+    }
+    function setEraser(v) {
+        _eraser = !!v;
+        const pen = document.getElementById("skin-draw-tool-pen");
+        const era = document.getElementById("skin-draw-tool-eraser");
+        if (pen) pen.className = "flex-1 px-2 py-1 rounded font-bold " + (!_eraser ? "bg-fuchsia-700 text-white" : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600");
+        if (era) era.className = "flex-1 px-2 py-1 rounded font-bold " + ( _eraser ? "bg-fuchsia-700 text-white" : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600");
+    }
+    function clearCanvas() {
+        const canvas = document.getElementById("skin-draw-canvas");
+        if (!canvas || !_drawCtx) return;
+        _drawCtx.fillStyle = "#ffffff";
+        _drawCtx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    function applyDrawing() {
+        if (!_editing || !_drawCtx) return;
+        const canvas = document.getElementById("skin-draw-canvas");
+        let dataUrl;
+        try { dataUrl = canvas.toDataURL("image/png"); }
+        catch (e) { UI.showToast("⚠ Não consegui salvar o desenho: " + e.message); return; }
+        _setFace(_editing.part, _editing.face, dataUrl);
+        closeDrawMode();
+        closeFacePicker();
+    }
+
     function close() {
         if (!_active) return;
+        EditorIsolation.exit();
         try { if (typeof Account !== "undefined" && Account.setSkinTextures) Account.setSkinTextures(_textures); } catch (_) {}
         if (_previewGroup) { try { ThreeManager.getScene().remove(_previewGroup); } catch (_) {} _previewGroup = null; }
         _active = false;
@@ -9057,16 +9772,300 @@ const SkinEditor = (() => {
         const ov = document.getElementById("skin-texture-editor-overlay");
         if (ov) ov.classList.remove("visible");
         ["panel-left", "panel-right", "app-header"].forEach(id => {
-            document.getElementById(id)?.classList.remove("skin-editor-hide-chrome");
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
         });
-        document.getElementById("viewport-section")?.classList.remove("skin-editor-fullscreen-viewport");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
 
         const partCount = Object.keys(_textures).length;
         UI.showToast(partCount ? `💾 Skin salva — imagens em ${partCount} parte${partCount === 1 ? "" : "s"} do corpo.` : "💾 Skin salva (sem nenhuma imagem).");
     }
 
-    return { open, close, openFacePicker, closeFacePicker, applyUrl, onFileSelected, removeFace, get active() { return _active; } };
+    /** (novo — botão "🚫 Sair sem salvar") Fecha sem gravar `_textures` na
+     *  conta — como o SkinEditor já trabalha numa cópia (`_textures`) desde
+     *  o open(), sem nunca tocar na skin de verdade até o close() chamar
+     *  Account.setSkinTextures, descartar aqui é simplesmente NÃO chamar
+     *  isso e jogar a cópia fora. */
+    function closeDiscard() {
+        if (!_active) return;
+        EditorIsolation.exit();
+        if (_previewGroup) { try { ThreeManager.getScene().remove(_previewGroup); } catch (_) {} _previewGroup = null; }
+        _active = false;
+        _textures = {};
+        closeFacePicker();
+
+        const ov = document.getElementById("skin-texture-editor-overlay");
+        if (ov) ov.classList.remove("visible");
+        ["panel-left", "panel-right", "app-header"].forEach(id => {
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
+        });
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
+
+        UI.showToast("🚫 Saiu sem salvar — alterações na skin descartadas.");
+    }
+
+    return {
+        open, close, closeDiscard, openFacePicker, closeFacePicker, applyUrl, onFileSelected, removeFace,
+        openDrawMode, closeDrawMode, setBrushColor, setBrushSize, setEraser, clearCanvas, applyDrawing,
+        get active() { return _active; }
+    };
 })();
+
+
+
+
+/* ================================================================
+   MÓDULO 10A-2D · PLAYER ANIMATIONS  (nova função a pedido do usuário)
+   ─ Botão 🎬 "Animações" flutuante no ambiente 3D: lista as animações que
+     a conta logada ADICIONOU (ver Perfil → "Minhas animações") e deixa
+     usar cada uma direto no player — a pedido do usuário, NÃO fica mais
+     restrito aos 4 slots fixos (Parado/Andar/Correr/Pular): clicar em
+     "Usar" insere a animação exatamente como ela foi criada/publicada
+     (mesmo nome, mesmos keyframes/Duration/Looped/events/markers) como
+     um novo Animator dentro de StarterPlayer/1_ScriptsDoPlayer/Animações,
+     sem sobrescrever nem depender dos 4 Animators padrão do rig.
+   ─ Botão "Minhas animações" no perfil (Configurações da conta): abre um
+     modal com duas abas —
+       • "➕ Adicionar": lista TODAS as Animações publicadas na aba
+         "Animação" do Toolbox (ver PolyPizza.getCatalogByType), de
+         qualquer usuário, com um botão pra adicionar cada uma na lista
+         pessoal da conta logada.
+       • "🗑️ Remover": lista só as animações que já estão na lista
+         pessoal, com um botão pra remover cada uma de lá.
+     A lista pessoal ("adicionadas") fica salva por conta (localStorage,
+     chave abaixo) e é ela que aparece no botão 🎬 do ambiente 3D.
+   ================================================================ */
+const PlayerAnimations = (() => {
+    // Pasta padrão de animações do player (StarterPlayer/1_ScriptsDoPlayer/
+    // Animações) — é onde a animação "usada" é inserida como um Animator
+    // novo, com o nome/keyframes exatamente como foi criada e publicada.
+    const ANIMS_FOLDER_ID = "sply_p1_anims";
+
+    // (nova função) Lista pessoal de animações "adicionadas" por conta —
+    // guarda só os IDs do catálogo do Toolbox, um array por usuário:
+    // { "<userId>": ["catId1","catId2",...] }.
+    const ADDED_KEY = "engine_player_added_anims_v1";
+    let _myAnimsTab = "add"; // aba ativa no modal do perfil: "add" | "remove"
+
+    function _loadAddedMap() {
+        try { return JSON.parse(localStorage.getItem(ADDED_KEY) || "{}") || {}; }
+        catch (_) { return {}; }
+    }
+    function _saveAddedMap(map) {
+        try { localStorage.setItem(ADDED_KEY, JSON.stringify(map)); } catch (_) {}
+    }
+    function _currentUserId() {
+        return (typeof Account !== "undefined" && Account.getCurrentUserId) ? Account.getCurrentUserId() : null;
+    }
+    /** IDs (catálogo) das animações adicionadas pela conta logada. */
+    function getAddedIds() {
+        const uid = _currentUserId();
+        if (!uid) return [];
+        const map = _loadAddedMap();
+        return Array.isArray(map[uid]) ? map[uid] : [];
+    }
+    function isAdded(catalogId) { return getAddedIds().includes(catalogId); }
+
+    /** Adiciona uma animação publicada do Toolbox à lista pessoal da conta
+     *  logada (chamado pelo botão "Adicionar" na aba de Adicionar). */
+    function addAnimation(catalogId) {
+        const uid = _currentUserId();
+        if (!uid) { UI.showToast("Entre numa conta pra adicionar animações."); return; }
+        const map = _loadAddedMap();
+        const list = Array.isArray(map[uid]) ? map[uid] : [];
+        if (!list.includes(catalogId)) list.push(catalogId);
+        map[uid] = list;
+        _saveAddedMap(map);
+        const item = (typeof PolyPizza !== "undefined") ? PolyPizza.getCatalogByType("animation").find(i => i.id === catalogId) : null;
+        UI.showToast(`✅ "${item ? item.title : "Animação"}" adicionada à sua lista.`);
+        renderMyAnimations();
+    }
+
+    /** Remove uma animação da lista pessoal da conta logada (chamado pelo
+     *  botão "Remover" na aba de Remover). Não mexe no catálogo publicado
+     *  do Toolbox — só tira da lista pessoal desta conta. */
+    function removeAnimation(catalogId) {
+        const uid = _currentUserId();
+        if (!uid) return;
+        const map = _loadAddedMap();
+        const list = Array.isArray(map[uid]) ? map[uid] : [];
+        map[uid] = list.filter(id => id !== catalogId);
+        _saveAddedMap(map);
+        UI.showToast("🗑️ Animação removida da sua lista.");
+        renderMyAnimations();
+    }
+
+    /* ── Botão 🎬 do ambiente 3D — lista as animações ADICIONADAS ── */
+    function open() {
+        UI.openModal("player-animations-modal");
+        const search = document.getElementById("player-animations-search");
+        if (search) search.value = "";
+        render();
+        // (nova função) Busca em segundo plano o que tiver publicado no
+        // GitHub (se configurado), igual o Toolbox faz ao abrir — assim
+        // animações publicadas em outro navegador/computador aparecem aqui
+        // sem precisar abrir o Toolbox primeiro. Silencioso de propósito.
+        if (typeof PolyPizza !== "undefined" && PolyPizza.syncCatalogFromGithubSilently) {
+            PolyPizza.syncCatalogFromGithubSilently().then(() => render()).catch(() => {});
+        }
+    }
+
+    function close() { UI.closeModal("player-animations-modal"); }
+
+    function _findAnimatorInNode(node) {
+        if (!node) return null;
+        if (node.className === "Animator") return node;
+        for (const c of (node.children || [])) {
+            const found = _findAnimatorInNode(c);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    function render() {
+        const list  = document.getElementById("player-animations-list");
+        const empty = document.getElementById("player-animations-empty");
+        if (!list || typeof PolyPizza === "undefined") return;
+        const q = (document.getElementById("player-animations-search")?.value || "").trim().toLowerCase();
+        const addedIds = getAddedIds();
+        const items = PolyPizza.getCatalogByType("animation")
+            .filter(i => addedIds.includes(i.id))
+            .filter(i => !q || (i.title || "").toLowerCase().includes(q));
+        list.innerHTML = "";
+        empty.classList.toggle("hidden", items.length > 0);
+
+        // (nova função) descobre qual animação (se alguma) está tocando
+        // agora no rig do player, só pra destacar o botão dela na lista.
+        const modelId = (typeof Simulation !== "undefined" && Simulation.active && Simulation.getLocalPlayerCharacterId)
+            ? Simulation.getLocalPlayerCharacterId() : null;
+        const playingId = modelId ? AnimatorRuntime.getActiveEmoteKeyForModel(modelId) : null;
+
+        items.forEach(item => {
+            const card = document.createElement("div");
+            card.className = "bg-studio-input border studio-border rounded p-2.5 flex items-center justify-between gap-2";
+            const useBtn = (playingId === item.id)
+                ? `<button onclick="PlayerAnimations.useInPlayer('${item.id}')" class="shrink-0 px-3 py-1 bg-lime-700 hover:bg-lime-600 text-white rounded text-[10px] font-bold" title="Tocando agora no player"><i class="fa-solid fa-play mr-1"></i>Tocando</button>`
+                : `<button onclick="PlayerAnimations.useInPlayer('${item.id}')" class="shrink-0 px-3 py-1 bg-sky-700 hover:bg-sky-600 text-white rounded text-[10px] font-bold">Usar</button>`;
+            card.innerHTML = `
+                <div class="min-w-0">
+                    <div class="text-zinc-200 text-[11px] font-bold truncate" title="${item.title}">${item.title}</div>
+                    <div class="text-zinc-600 text-[9px] truncate">${item.sourceClassName || "Animator"}${item.author ? " · por " + item.author : ""}</div>
+                </div>
+                ${useBtn}`;
+            list.appendChild(card);
+        });
+    }
+
+    /** (nova função a pedido do usuário) "Usar" toca a animação DIRETO no
+     *  boneco do player — sem inserir nenhum Animator na árvore/Explorer
+     *  (StarterPlayer continua limpo, do jeito que era antes). Funciona só
+     *  enquanto o ▶ Play estiver ativo, já que é o momento em que o rig do
+     *  player existe de verdade na cena. Toca em loop, por cima de
+     *  qualquer outra animação (inclusive a de movimento controlada por
+     *  script), até o jogador andar/correr/pular — af então cancela sozinho. */
+    function useInPlayer(catalogId) {
+        const item = PolyPizza.getCatalogByType("animation").find(i => i.id === catalogId);
+        if (!item) { UI.showToast("Não achei essa animação no catálogo — tente atualizar."); return; }
+
+        if (typeof Simulation === "undefined" || !Simulation.active) {
+            UI.showToast(`Aperte ▶ Play primeiro — "${item.title}" toca direto no boneco do player, sem mexer na árvore.`);
+            return;
+        }
+        const modelId = Simulation.getLocalPlayerCharacterId ? Simulation.getLocalPlayerCharacterId() : null;
+        if (!modelId) { UI.showToast("⚠ Rig do player não encontrado — o Play está mesmo ativo?"); return; }
+
+        let parsed;
+        try { parsed = JSON.parse(item.nodeData); }
+        catch (e) { UI.log(`Não consegui ler a animação "${item.title}": ${e.message}`, "error"); return; }
+        const sourceAnimator = _findAnimatorInNode(parsed);
+        if (!sourceAnimator) { UI.showToast(`"${item.title}" não tem nenhum Animator dentro — publique um Animator (com keyframes) pra usar aqui.`); return; }
+        const src = sourceAnimator.properties || {};
+
+        AnimatorRuntime.playEmoteData(catalogId, item.title, {
+            keyframes:   src.keyframes   || {},
+            duration:    src.Duration    ?? 1,
+            markers:     src.markers     || [],
+            soundEvents: src.soundEvents || [],
+        }, modelId);
+
+        UI.showToast(`🎭 "${item.title}" tocando no player agora — repete em loop até você andar/correr/pular.`);
+        render();
+    }
+
+    /* ── Botão "Minhas animações" no perfil — modal com abas Adicionar/Remover ── */
+    function openMyAnimations() {
+        UI.openModal("player-my-animations-modal");
+        const search = document.getElementById("player-my-anims-search");
+        if (search) search.value = "";
+        showMyAnimationsTab("add");
+        if (typeof PolyPizza !== "undefined" && PolyPizza.syncCatalogFromGithubSilently) {
+            PolyPizza.syncCatalogFromGithubSilently().then(() => renderMyAnimations()).catch(() => {});
+        }
+    }
+
+    function closeMyAnimations() { UI.closeModal("player-my-animations-modal"); }
+
+    /** Troca entre a aba "➕ Adicionar" (lista tudo que tá publicado no
+     *  Toolbox) e a aba "🗑️ Remover" (lista só o que já foi adicionado). */
+    function showMyAnimationsTab(tab) {
+        _myAnimsTab = (tab === "remove") ? "remove" : "add";
+        const btnAdd    = document.getElementById("player-my-anims-tab-add");
+        const btnRemove = document.getElementById("player-my-anims-tab-remove");
+        const hint       = document.getElementById("player-my-anims-hint");
+        if (btnAdd)    btnAdd.className    = "flex-1 px-3 py-2 rounded font-bold text-xs flex items-center justify-center gap-2 " + (_myAnimsTab === "add"    ? "bg-sky-700 text-white" : "bg-zinc-700 hover:bg-zinc-600 text-zinc-300");
+        if (btnRemove) btnRemove.className = "flex-1 px-3 py-2 rounded font-bold text-xs flex items-center justify-center gap-2 " + (_myAnimsTab === "remove" ? "bg-red-800 text-white"  : "bg-zinc-700 hover:bg-zinc-600 text-zinc-300");
+        if (hint) hint.textContent = (_myAnimsTab === "add")
+            ? "Todas as animações publicadas no Toolbox (por qualquer usuário). Clique em \"Adicionar\" pra guardar na sua lista pessoal."
+            : "Animações que já estão na sua lista pessoal. Clique em \"Remover\" pra tirar — isso não apaga a animação do Toolbox, só da sua lista.";
+        renderMyAnimations();
+    }
+
+    function renderMyAnimations() {
+        const list  = document.getElementById("player-my-anims-list");
+        const empty = document.getElementById("player-my-anims-empty");
+        if (!list || typeof PolyPizza === "undefined") return;
+        const q = (document.getElementById("player-my-anims-search")?.value || "").trim().toLowerCase();
+        const addedIds = getAddedIds();
+        const all = PolyPizza.getCatalogByType("animation");
+        const items = (_myAnimsTab === "add" ? all : all.filter(i => addedIds.includes(i.id)))
+            .filter(i => !q || (i.title || "").toLowerCase().includes(q));
+
+        list.innerHTML = "";
+        if (items.length === 0) {
+            empty.textContent = (_myAnimsTab === "add")
+                ? "Nenhuma animação publicada ainda. Abra o Toolbox → aba \"Animação\", grave um Animator no Editor de Animação e publique-o de lá."
+                : "Você ainda não adicionou nenhuma animação — vá na aba \"➕ Adicionar\".";
+            empty.classList.remove("hidden");
+        } else {
+            empty.classList.add("hidden");
+        }
+
+        items.forEach(item => {
+            const already = addedIds.includes(item.id);
+            const row = document.createElement("div");
+            row.className = "bg-studio-input border studio-border rounded p-2.5 flex items-center justify-between gap-2";
+            const actionBtn = (_myAnimsTab === "add")
+                ? (already
+                    ? `<button disabled class="shrink-0 px-3 py-1 bg-zinc-800 text-zinc-500 rounded text-[10px] font-bold cursor-default"><i class="fa-solid fa-check mr-1"></i>Adicionada</button>`
+                    : `<button onclick="PlayerAnimations.addAnimation('${item.id}')" class="shrink-0 px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-[10px] font-bold"><i class="fa-solid fa-plus mr-1"></i>Adicionar</button>`)
+                : `<button onclick="PlayerAnimations.removeAnimation('${item.id}')" class="shrink-0 px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-[10px] font-bold"><i class="fa-solid fa-trash mr-1"></i>Remover</button>`;
+            row.innerHTML = `
+                <div class="min-w-0">
+                    <div class="text-zinc-200 text-[11px] font-bold truncate" title="${item.title}">${item.title}</div>
+                    <div class="text-zinc-600 text-[9px] truncate">${item.sourceClassName || "Animator"}${item.author ? " · por " + item.author : ""}</div>
+                </div>
+                ${actionBtn}`;
+            list.appendChild(row);
+        });
+    }
+
+    return {
+        open, close, render, useInPlayer,
+        openMyAnimations, closeMyAnimations, showMyAnimationsTab, renderMyAnimations,
+        addAnimation, removeAnimation, getAddedIds, isAdded,
+    };
+})();
+
+
 
 
 /* ================================================================
@@ -9093,11 +10092,22 @@ const SkinEditor = (() => {
 const ToolBuildEditor = (() => {
     let _tool    = null; // nó Tool sendo editado (o de verdade)
     let _preview = null; // Model temporário no Workspace — MESMO array de children da Tool
+    let _origChildren = null;  // (novo) snapshot dos children da Tool ao abrir, pro "Sair sem salvar"
+    let _origProps    = null;  // (novo) snapshot das properties da Tool ao abrir
 
     function open(toolNode) {
         if (_tool) close();
         _tool = toolNode;
         if (!_tool.children) _tool.children = [];
+        // (novo — botão "🚫 Sair sem salvar") Diferente dos outros editores,
+        // aqui cada Inserir/Excluir já mexe DIRETO na árvore de verdade (o
+        // _preview só é uma "casca" que COMPARTILHA o mesmo array de
+        // children da Tool — ver comentário abaixo). Por isso guardamos uma
+        // cópia profunda de como a Tool estava ANTES de abrir, pra poder
+        // devolver tudo (inserções/exclusões/transformações) se o usuário
+        // desistir.
+        _origChildren = JSON.parse(JSON.stringify(_tool.children));
+        _origProps = JSON.parse(JSON.stringify(_tool.properties || {}));
 
         const ws = State.tree.children?.find(c => c.className === "Workspace");
         if (!ws) { UI.log("Workspace não encontrado — não foi possível abrir o editor.", "error"); _tool = null; return; }
@@ -9116,15 +10126,24 @@ const ToolBuildEditor = (() => {
         document.getElementById("tool-build-editor-title").textContent = "Editor de Modelo — " + toolNode.name;
         document.getElementById("tool-build-editor-overlay").classList.add("visible");
 
-        // Modo tela cheia, igual aos outros editores dedicados.
-        document.getElementById("panel-left").classList.add("play-dim");
-        document.getElementById("app-header").classList.add("play-dim");
-        // (atualizado a pedido do usuário) Console não é mais escondido ao entrar em modo Play/Teste.
-        document.getElementById("viewport-section").classList.add("play-fullscreen-viewport");
+        // Modo tela cheia, igual aos outros editores dedicados (mesmas classes
+        // reais usadas pelo Editor de Animação/Skin/Pose — play-dim e
+        // play-fullscreen-viewport viraram no-op depois que o Play parou de
+        // ser fullscreen). Também esconde o painel direito, que antes ficava
+        // visível por engano enquanto o resto da tela ia pra área separada.
+        document.getElementById("panel-left").classList.add("editor-hide-chrome");
+        document.getElementById("panel-right").classList.add("editor-hide-chrome");
+        document.getElementById("app-header").classList.add("editor-hide-chrome");
+        document.getElementById("viewport-section").classList.add("editor-fullscreen-viewport");
 
         ThreeManager.markDirty();
         ThreeManager.syncNow();
         ThreeManager.setTransformMode("select");
+
+        // (a pedido do usuário) Isola a área 3D de verdade — some o resto do
+        // mapa/mundo por trás, deixando só o modelo 🛠 sendo montado visível.
+        EditorIsolation.enter(ThreeManager.getObjectMap().get(_preview.id));
+
         Explorer.rebuild();
         State.sel = [_preview.id];
         ThreeManager.attachToSelected();
@@ -9220,11 +10239,12 @@ const ToolBuildEditor = (() => {
     }
 
     function close() {
+        EditorIsolation.exit();
         const ov = document.getElementById("tool-build-editor-overlay");
         if (ov) ov.classList.remove("visible");
-        [ "panel-left", "app-header" ].forEach(id => document.getElementById(id)?.classList.remove("play-dim"));
+        [ "panel-left", "panel-right", "app-header" ].forEach(id => document.getElementById(id)?.classList.remove("editor-hide-chrome"));
         document.getElementById("app-console")?.classList.remove("hidden");
-        document.getElementById("viewport-section")?.classList.remove("play-fullscreen-viewport");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
 
         if (_preview) {
             const ws = State.tree.children?.find(c => c.className === "Workspace");
@@ -9232,17 +10252,47 @@ const ToolBuildEditor = (() => {
             // Não remove os children de verdade — só a "casca" Model do preview;
             // eles continuam intactos dentro da Tool (mesma referência de array).
         }
-        _tool = null; _preview = null;
+        _tool = null; _preview = null; _origChildren = null; _origProps = null;
         ThreeManager.markDirty();
         Explorer.rebuild();
         UI.buildPropertiesPanel();
+    }
+
+    /** (novo — botão "🚫 Sair sem salvar") Como Inserir/Excluir/mover já
+     *  mexem direto na Tool de verdade (não numa cópia), descartar aqui
+     *  significa substituir os children e as properties da Tool pela cópia
+     *  tirada no open() — apaga tudo que foi inserido, traz de volta tudo
+     *  que foi excluído, e desfaz qualquer Position/Rotation/Size mexidos
+     *  nesta sessão. */
+    function closeDiscard() {
+        EditorIsolation.exit();
+        const ov = document.getElementById("tool-build-editor-overlay");
+        if (ov) ov.classList.remove("visible");
+        [ "panel-left", "panel-right", "app-header" ].forEach(id => document.getElementById(id)?.classList.remove("editor-hide-chrome"));
+        document.getElementById("app-console")?.classList.remove("hidden");
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
+
+        if (_preview) {
+            const ws = State.tree.children?.find(c => c.className === "Workspace");
+            if (ws) ws.children = ws.children.filter(c => c.id !== _preview.id);
+        }
+        if (_tool) {
+            _tool.children = _origChildren ? JSON.parse(JSON.stringify(_origChildren)) : [];
+            _tool.properties = _origProps ? JSON.parse(JSON.stringify(_origProps)) : (_tool.properties || {});
+        }
+        _tool = null; _preview = null; _origChildren = null; _origProps = null;
+        Tree.markIndexDirty();
+        ThreeManager.markDirty();
+        Explorer.rebuild();
+        UI.buildPropertiesPanel();
+        UI.showToast("🚫 Saiu sem salvar — alterações no modelo descartadas.");
     }
 
     /** Chamado pelo State.sel quando a seleção muda por qualquer via
      *  (clique na cena 3D, no Explorer, etc.) — mantém a árvore sincronizada. */
     function notifySelectionChanged() { refresh(); }
 
-    return { open, close, insertIntoSelected, testInHand, refresh, notifySelectionChanged, get active() { return !!_tool; } };
+    return { open, close, closeDiscard, insertIntoSelected, testInHand, refresh, notifySelectionChanged, get active() { return !!_tool; } };
 })();
 
 /* ================================================================
@@ -9262,6 +10312,7 @@ const ToolBuildEditor = (() => {
 const MeshPartsEditor = (() => {
     let _node = null;
     let _parts = [];       // [{ key, mesh, label, checked }]
+    let _origPartsConfig = null; // (novo) snapshot de PartsConfig ao abrir, pro "Sair sem salvar"
 
     /** Percorre o THREE.Object3D do MeshPart e monta a lista de sub-partes,
      *  atribuindo uma chave estável (nome + índice se repetido) a cada mesh. */
@@ -9294,6 +10345,11 @@ const MeshPartsEditor = (() => {
     function open(node) {
         _node = node;
         node.properties.PartsConfig = node.properties.PartsConfig || {};
+        // (novo — botão "🚫 Sair sem salvar") Cada clique aqui já grava
+        // direto em node.properties.PartsConfig (_persistAndApply), sem
+        // cópia de trabalho — guarda como estava ANTES de abrir pra poder
+        // devolver se o usuário desistir.
+        _origPartsConfig = JSON.parse(JSON.stringify(node.properties.PartsConfig));
         _parts = _collectParts(node);
         if (!_parts.length) {
             UI.showToast("⚠️ Este modelo ainda não foi carregado na cena 3D ou não tem sub-partes.");
@@ -9306,7 +10362,26 @@ const MeshPartsEditor = (() => {
     function close() {
         UI.closeModal("mesh-parts-modal");
         UI.buildPropertiesPanel();
-        _node = null; _parts = [];
+        _node = null; _parts = []; _origPartsConfig = null;
+    }
+
+    /** (novo — botão "🚫 Sair sem salvar") Devolve PartsConfig pro estado de
+     *  quando o painel foi aberto (visibilidade/colisão de cada sub-parte)
+     *  e reaplica a visibilidade real nas meshes, descartando qualquer
+     *  clique feito nesta sessão. */
+    function closeDiscard() {
+        if (_node && _origPartsConfig) {
+            _node.properties.PartsConfig = JSON.parse(JSON.stringify(_origPartsConfig));
+            _parts.forEach(part => {
+                const cfg = _node.properties.PartsConfig[part.key];
+                if (cfg) part.mesh.visible = !!cfg.visible;
+            });
+            ThreeManager.markDirty();
+        }
+        UI.closeModal("mesh-parts-modal");
+        UI.buildPropertiesPanel();
+        _node = null; _parts = []; _origPartsConfig = null;
+        UI.showToast("🚫 Saiu sem salvar — alterações descartadas.");
     }
 
     /** Grava o estado atual de todas as partes em node.properties.PartsConfig
@@ -9397,7 +10472,7 @@ const MeshPartsEditor = (() => {
         UI.showToast(`${prop === "visible" ? "👁️ Visibilidade" : "🛡️ Colisão"} atualizada em ${targets.length} parte${targets.length>1?'s':''}.`);
     }
 
-    return { open, close, selectAll, bulkSet };
+    return { open, close, closeDiscard, selectAll, bulkSet };
 })();
 
 /* ================================================================
@@ -9834,7 +10909,19 @@ const VertexEditor = (() => {
         window.addEventListener("pointerup", _onPointerUp);
     }
 
-    return { open, close, undo, isActive, setup, updateHandleScale };
+    /** (novo — botão "🚫 Sair sem salvar") A malha editada aqui é a mesh de
+     *  verdade (não uma cópia de trabalho) — cada arrasto já escreve direto
+     *  em _mesh.geometry.attributes.position. Não existe um "salvar"
+     *  separado: fechar (Concluir) já mantém o que foi mexido. Então
+     *  "sair sem salvar" = desfazer tudo (volta pros vértices de quando
+     *  abriu, usando _origPositions) e SÓ DEPOIS fechar.
+     */
+    function closeDiscard() {
+        if (_active && _origPositions) undo();
+        close();
+    }
+
+    return { open, close, closeDiscard, undo, isActive, setup, updateHandleScale };
 })();
 
 /* ================================================================
@@ -9851,7 +10938,15 @@ const VertexEditor = (() => {
          (ex.: tocar efeito no frame de impacto de um golpe).
    ================================================================ */
 const AnimatorRuntime = (() => {
-    const _playing = new Map(); // animatorId -> estado da reprodução
+    const _playing = new Map(); // animatorId -> estado da reprodução (Animators de verdade, dentro da árvore)
+
+    // (nova função a pedido do usuário) "emote" tocado DIRETO no rig do
+    // player, sem criar nenhum Animator na árvore/Explorer — só um por rig
+    // (Model) de cada vez, sempre em loop, por cima de qualquer outra
+    // animação (inclusive a de movimento controlada por script) até o
+    // jogador se mexer (W/A/S/D/Shift/Espaço), quando cancela sozinho.
+    // modelId -> estado (ver playEmoteData).
+    const _emotes = new Map();
 
     function _buildNameMapFor(model) {
         const map = {};
@@ -9915,8 +11010,67 @@ const AnimatorRuntime = (() => {
     }
 
     function stop(animatorId) { _playing.delete(animatorId); }
-    function stopAll() { _playing.clear(); }
+    function stopAll() { _playing.clear(); _emotes.clear(); }
     function isPlaying(animatorId) { return _playing.has(animatorId); }
+
+    /** (nova função a pedido do usuário) Toca `data` (keyframes/markers/
+     *  soundEvents/duration já resolvidos, ex.: extraídos de uma animação
+     *  do catálogo do Toolbox) DIRETO no rig `modelId` — sem criar nenhum
+     *  Animator na árvore/Explorer. Sempre em loop, por cima de qualquer
+     *  outra animação tocando nesse mesmo rig (inclusive a de movimento
+     *  controlada por script), até o jogador andar/correr/pular (ver
+     *  tick(), que cancela sozinho nessa hora). `key` é só um identificador
+     *  livre (ex.: o id do catálogo) pra quem chamou reconhecer depois, via
+     *  getActiveEmoteKeyForModel, se essa animação específica é a que está
+     *  tocando agora. */
+    function playEmoteData(key, title, data, modelId) {
+        const model = Tree.find(modelId);
+        if (!model) { UI.showToast("⚠ Rig do player não encontrado — o Play está mesmo ativo?"); return; }
+        const nameMap = _buildNameMapFor(model);
+        const kfMap = data.keyframes || {};
+        const kfNames = Object.keys(kfMap);
+        const matched = kfNames.filter(n => nameMap[n]).length;
+        UI.log(`▶ Emote → "${title}" no modelo "${model.name}" (${matched}/${kfNames.length} Parts dos keyframes encontradas no rig).`, matched > 0 ? "success" : "error");
+        if (kfNames.length && matched === 0) {
+            UI.showToast(`⚠ "${title}": nenhuma Part dos keyframes bate com o rig — animação tocando mas sem efeito visual.`);
+        }
+
+        // Para qualquer Animator "de verdade" (Parado/Andar/Correr/Pular ou
+        // outro) que já estivesse tocando nesse MESMO rig — o emote assume
+        // sozinho na hora.
+        for (const id of Array.from(_playing.keys())) {
+            const n = Tree.find(id);
+            if (n && _findTargetModel(n)?.id === modelId) stop(id);
+        }
+
+        _emotes.set(modelId, {
+            key, title, nameMap,
+            keyframes: kfMap,
+            markers: data.markers || [],
+            soundEvents: data.soundEvents || [],
+            duration: data.duration || 1,
+            startedAt: performance.now(),
+            lastT: 0,
+            markerFired: new Set(),
+            soundFired: new Set(),
+        });
+    }
+
+    /** Cancela na hora o emote ativo do rig `modelId`, se houver. */
+    function stopEmoteForModel(modelId) { _emotes.delete(modelId); }
+    function isEmotePlaying(modelId) { return _emotes.has(modelId); }
+    /** `key` passado em playEmoteData pra essa emote — usado pela UI pra
+     *  saber se É ESTA a animação tocando agora (destacar o botão). */
+    function getActiveEmoteKeyForModel(modelId) { return _emotes.get(modelId)?.key ?? null; }
+
+    // Teclas que cancelam um emote na hora (mesmo mapa usado pelo
+    // ControladorDeAnimacao do R6: WASD anda, Shift corre, Espaço pula).
+    const _EMOTE_CANCEL_KEYS = ["w", "a", "s", "d", "shift", " "];
+    function _anyMovementKeyDown() {
+        return typeof Simulation !== "undefined" && Simulation.isKeyDown
+            ? _EMOTE_CANCEL_KEYS.some(k => Simulation.isKeyDown(k))
+            : false;
+    }
 
     /** (nova função a pedido do usuário · sincronização multiplayer) Dado o
      *  id do Model do rig do player local, devolve o NOME do Animator que
@@ -9936,15 +11090,13 @@ const AnimatorRuntime = (() => {
 
     function _lerp(a, b, f) { return a + (b - a) * f; }
 
-    function _applyKeyframes(node, state, t) {
-        const kfMap = node.properties.keyframes || {};
-        // (nova função) Se esta animação tem uma Tool anexada (ver
-        // AnimEditor.attachTool) e essa MESMA Tool está de verdade equipada
-        // na mão do player agora, os nomes de trilha que não baterem com
-        // nenhuma Part do rig são tentados na Tool equipada em vez de
-        // ignorados — é o que faz a arma "balançar" junto com o golpe.
-        const toolId       = node.properties.AnimatedToolId;
-        const toolEquipped = !!(toolId && Simulation.getEquippedToolId?.() === toolId);
+    /** Aplica um mapa de keyframes { nomeDaPart: [{t,pos,rot,size}, ...] }
+     *  no instante `t`, direto nas Parts do rig (via `nameMap`) — ou, se a
+     *  Part não existe no rig mas uma Tool equipada tem esse nome de
+     *  trilha, na Tool equipada (pra ela "balançar" junto do golpe). Corpo
+     *  comum reaproveitado tanto pelos Animators de verdade (na árvore)
+     *  quanto pelos emotes ephemeral (playEmoteData). */
+    function _applyKeyframeMap(kfMap, nameMap, t, toolEquipped) {
         Object.entries(kfMap).forEach(([name, kfs]) => {
             if (!kfs.length) return;
             let a = kfs[0], b = kfs[kfs.length - 1];
@@ -9957,7 +11109,7 @@ const AnimatorRuntime = (() => {
             const rot  = { x:_lerp(a.rot.x,b.rot.x,f), y:_lerp(a.rot.y,b.rot.y,f), z:_lerp(a.rot.z,b.rot.z,f) };
             const size = (a.size && b.size) ? { x:_lerp(a.size.x,b.size.x,f), y:_lerp(a.size.y,b.size.y,f), z:_lerp(a.size.z,b.size.z,f) } : null;
 
-            const partNode = Tree.find(state.nameMap[name]);
+            const partNode = Tree.find(nameMap[name]);
             if (partNode) {
                 partNode.properties.Position = pos;
                 partNode.properties.Rotation = rot;
@@ -9980,8 +11132,52 @@ const AnimatorRuntime = (() => {
         });
     }
 
+    function _applyKeyframes(node, state, t) {
+        // (nova função) Se esta animação tem uma Tool anexada (ver
+        // AnimEditor.attachTool) e essa MESMA Tool está de verdade equipada
+        // na mão do player agora, os nomes de trilha que não baterem com
+        // nenhuma Part do rig são tentados na Tool equipada em vez de
+        // ignorados — é o que faz a arma "balançar" junto com o golpe.
+        const toolId       = node.properties.AnimatedToolId;
+        const toolEquipped = !!(toolId && Simulation.getEquippedToolId?.() === toolId);
+        _applyKeyframeMap(node.properties.keyframes || {}, state.nameMap, t, toolEquipped);
+    }
+
     function tick(dt) {
-        if (!_playing.size) return;
+        // (nova função a pedido do usuário) cancela na hora qualquer emote
+        // ativo assim que o jogador andar/correr/pular — antes de aplicar
+        // qualquer keyframe deste frame, pra não "piscar" 1 frame do emote
+        // por cima do movimento.
+        if (_emotes.size && _anyMovementKeyDown()) {
+            Array.from(_emotes.keys()).forEach(stopEmoteForModel);
+        }
+
+        // Emotes ephemeral (sem Animator na árvore) — sempre em loop.
+        if (_emotes.size) {
+            _emotes.forEach(state => {
+                const raw = (performance.now() - state.startedAt) / 1000;
+                const dur = state.duration || 1;
+                let t = raw % dur;
+                if (t < state.lastT) { state.markerFired.clear(); state.soundFired.clear(); }
+                state.lastT = t;
+
+                _applyKeyframeMap(state.keyframes, state.nameMap, t, false);
+
+                (state.markers || []).forEach(m => {
+                    const key = m.t + "|" + m.name;
+                    if (t >= m.t && !state.markerFired.has(key)) state.markerFired.add(key);
+                });
+                (state.soundEvents || []).forEach(se => {
+                    const key = se.t + "|" + se.soundId;
+                    if (t >= se.t && !state.soundFired.has(key)) {
+                        state.soundFired.add(key);
+                        ThreeManager.playSound(se.soundId);
+                    }
+                });
+            });
+        }
+
+        if (!_playing.size) { if (_emotes.size) ThreeManager.markDirty(); return; }
         _playing.forEach((state, animatorId) => {
             const node = Tree.find(animatorId);
             if (!node) { _playing.delete(animatorId); return; }
@@ -10018,8 +11214,12 @@ const AnimatorRuntime = (() => {
         ThreeManager.markDirty();
     }
 
-    return { play, stop, stopAll, isPlaying, tick, getPlayingAnimatorNameForModel };
+    return { play, stop, stopAll, isPlaying, tick, getPlayingAnimatorNameForModel,
+             // (novas funções a pedido do usuário) emote tocado direto no
+             // rig do player, sem criar nada na árvore/Explorer
+             playEmoteData, stopEmoteForModel, isEmotePlaying, getActiveEmoteKeyForModel };
 })();
+
 
 /* ================================================================
    MÓDULO 10B · LUA ENGINE  (Fengari — VM de Lua 5.3 real, não simulação em JS)
@@ -16024,12 +17224,24 @@ const UI = (() => {
         document.getElementById("script-editor-textarea").value = code || "";
     }
 
+    let _scriptOrigSource = null; // (novo) código como estava ao abrir, pro "Sair sem salvar"
+
     function openScriptEditor(node) {
         State.editingScript = node;
         document.getElementById("script-editor-title").innerHTML =
             `<i class="fa-solid fa-file-code text-yellow-500"></i> ${node.name}`;
-        _scriptEditorSetValue(node.properties?.Source || "");
+        _scriptOrigSource = node.properties?.Source || "";
+        _scriptEditorSetValue(_scriptOrigSource);
         document.getElementById("script-editor-overlay").classList.add("visible");
+
+        // (a pedido do usuário) Igual aos outros editores dedicados (Animação/
+        // Pose/Modelo/Skin) — abre numa área separada de verdade: Explorer,
+        // Properties e o header somem e o Script Editor ocupa a tela toda.
+        document.getElementById("panel-left").classList.add("editor-hide-chrome");
+        document.getElementById("panel-right").classList.add("editor-hide-chrome");
+        document.getElementById("app-header").classList.add("editor-hide-chrome");
+        document.getElementById("viewport-section").classList.add("editor-fullscreen-viewport");
+
         // O CodeMirror mede alturas/larguras de linha durante a criação; se o
         // container ainda estava com display:none nesse momento (overlay
         // fechado), o texto aparece cortado/desalinhado até o próximo resize.
@@ -16038,10 +17250,35 @@ const UI = (() => {
         if (cm) requestAnimationFrame(() => { cm.refresh(); cm.focus(); });
     }
 
+    /** Sai do modo tela cheia do Script Editor e devolve Explorer, Properties
+     *  e o header — chamado tanto pelo fechar normal quanto pelo descartar. */
+    function _exitScriptEditorFullscreen() {
+        ["panel-left", "panel-right", "app-header"].forEach(id => {
+            document.getElementById(id)?.classList.remove("editor-hide-chrome");
+        });
+        document.getElementById("viewport-section")?.classList.remove("editor-fullscreen-viewport");
+    }
+
     function closeScriptEditor() {
         _saveScriptSource({ log: true, toast: false });
         document.getElementById("script-editor-overlay").classList.remove("visible");
+        _exitScriptEditorFullscreen();
         State.editingScript = null;
+        _scriptOrigSource = null;
+    }
+
+    /** (novo — botão "🚫 Sair sem salvar") Devolve o Source do Script pro
+     *  que era ao abrir (mesmo que Ctrl+S tenha rodado no meio da edição) e
+     *  fecha sem gravar o que está no editor agora. */
+    function closeScriptEditorDiscard() {
+        if (State.editingScript && State.editingScript.properties && _scriptOrigSource !== null) {
+            State.editingScript.properties.Source = _scriptOrigSource;
+        }
+        document.getElementById("script-editor-overlay").classList.remove("visible");
+        _exitScriptEditorFullscreen();
+        State.editingScript = null;
+        _scriptOrigSource = null;
+        UI.showToast("🚫 Saiu sem salvar — alterações no script descartadas.");
     }
 
     function runScriptPreview() {
@@ -16255,6 +17492,13 @@ const UI = (() => {
 
         // Propriedades
         if (node.properties) {
+            // (nova função a pedido do usuário) Backfill: Parts criadas antes
+            // de existir CornerAxis (mas que já têm CornerRadius) ganham o
+            // valor padrão "Z" na hora — assim o seletor de eixo aparece
+            // pra elas também, sem precisar recriar a Part do zero.
+            if (META.PHYSICAL.has(node.className) && node.properties.CornerRadius !== undefined && node.properties.CornerAxis === undefined) {
+                node.properties.CornerAxis = "Z";
+            }
             Object.entries(node.properties).forEach(([k, v]) => {
                 if (k === "Source" || k === "_gltfImported" || k === "keyframes" || k === "PoseParts" || k === "PartsConfig") return;
                 if (k === "FillDirection" && node.className === "UIListLayout") {
@@ -16317,6 +17561,13 @@ const UI = (() => {
                     const sz = node.properties.Size || {x:2,y:2,z:2};
                     const maxR = Math.max(0.05, Math.min(sz.x, sz.y, sz.z) / 2);
                     c.appendChild(_sliderRow(k, v, 0, maxR, 0.02, nv => { node.properties[k]=parseFloat(nv); ThreeManager.markDirty(); }));
+                } else if (k === "CornerAxis" && META.PHYSICAL.has(node.className)) {
+                    // (nova função a pedido do usuário) Escolhe qual eixo local
+                    // (Largura=X / Altura=Y / Profundidade=Z) sai com o
+                    // arredondamento mais suave — sem precisar girar a Rotation
+                    // da Part inteira só pra trocar qual lado fica mais bonito.
+                    c.appendChild(_selectRow(k, v, ["X","Y","Z"], nv => { node.properties[k]=nv; ThreeManager.markDirty(); },
+                        { "X":"Largura (X)", "Y":"Altura (Y)", "Z":"Profundidade (Z)" }));
                 } else if (k === "Friction") {
                     c.appendChild(_sliderRow(k, v, 0, 2, 0.05, nv => { node.properties[k]=parseFloat(nv); ThreeManager.markDirty(); }));
                 } else if (k === "Weight") {
@@ -16510,7 +17761,7 @@ const UI = (() => {
         return d;
     }
 
-    function _selectRow(label, value, options, cb) {
+    function _selectRow(label, value, options, cb, labels) {
         const d = document.createElement("div");
         d.className = "flex flex-col gap-1 bg-studio-panel p-1.5 rounded border border-zinc-800/60 font-mono";
         const l = document.createElement("label"); l.className = "text-zinc-400 text-[10px] font-bold"; l.textContent = label;
@@ -16519,7 +17770,7 @@ const UI = (() => {
         sel.className = "w-full bg-studio-input border border-zinc-700 rounded px-2 py-1 text-white text-[11px] focus:outline-none focus:border-blue-500";
         options.forEach(opt => {
             const o = document.createElement("option");
-            o.value = opt; o.textContent = opt; o.selected = opt === value;
+            o.value = opt; o.textContent = (labels && labels[opt]) || opt; o.selected = opt === value;
             sel.appendChild(o);
         });
         sel.onchange = e => cb(e.target.value);
@@ -16606,7 +17857,7 @@ const UI = (() => {
         d.appendChild(g); return d;
     }
 
-    return { log, clearConsole, getLogHistory, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
+    return { log, clearConsole, getLogHistory, showToast, openModal, closeModal, openScriptEditor, closeScriptEditor, closeScriptEditorDiscard, runScriptPreview, stopScriptPreview, filterInsertItems, buildPropertiesPanel,
               openDropdown, closeDropdown, closeAllDropdowns, scheduleCloseDropdown, toggleDropdown, togglePanel, toggleGui3D,
               openGraphicsSettings, setGfxQualityFromSlider, setGfxToggle, setGfxAIOptimizer, setGfxFpsCap, setGfxFpsCapCustom, setGfxRenderDistance, setGfxShadowQuality, applyBalancedGfxPreset, applyWeakPcPreset, resetGraphicsSettings };
 })();
@@ -16653,7 +17904,16 @@ const App = (() => {
             _dirtySinceAutosave = false;
             if (!silent) { UI.log("💾 Projeto salvo no navegador.", "success"); UI.showToast("Salvo!"); }
         } catch (e) {
+            // (correção) Antes esse erro só ia pro console interno — se o
+            // localStorage estivesse cheio (bem comum aqui, já que skins/
+            // texturas viram imagens em base64 dentro do projeto), o
+            // autosave falhava por completo e NADA avisava o usuário: ele
+            // gravava keyframes/emotes, via o toast "salvo" do editor, mas
+            // ao recarregar a página tudo tinha sumido. Agora sempre mostra
+            // um toast visível também, e sugere baixar o projeto como
+            // backup, já que o autosave automático não está funcionando.
             UI.log("Erro ao salvar no navegador: " + e.message, "error");
+            UI.showToast("⚠ Não consegui salvar automaticamente no navegador (provável causa: armazenamento cheio). Use \"Baixar projeto\" ou \"Publicar\" pra não perder o que você fez!");
         }
     }
 
@@ -17291,23 +18551,26 @@ const App = (() => {
         const legColor  = opts.legColor  || "#333333";
         const name      = opts.name || `NPC_${Math.floor(Math.random() * 1000)}`;
 
-        // Proporções clássicas de um rig R6 (torso 2x2x1, cabeça 2x1x1,
-        // membros 1x2x1), com os pés apoiados em base.y.
+        // Proporções clássicas de um rig R6 (torso 2x2x1, membros 1x2x1),
+        // com os pés apoiados em base.y. A cabeça usa proporção/arredondamento
+        // ajustados pra ficar igual à cabeça clássica do Roblox (0.6x1x0.6,
+        // CornerRadius 0.2 no eixo Y — sem precisar girar a Part).
         const partsSpec = [
-            { name:"HumanoidRootPart", size:{x:2,y:2,z:1}, pos:{x:gx,      y:gy+3,   z:gz}, color:"#ffffff", visible:false, collide:false },
-            { name:"Torso",            size:{x:2,y:2,z:1}, pos:{x:gx,      y:gy+3,   z:gz}, color:bodyColor, visible:true,  collide:true  },
-            { name:"Head",             size:{x:2,y:1,z:1}, pos:{x:gx,      y:gy+4.5, z:gz}, color:headColor, visible:true,  collide:true  },
-            { name:"Left Arm",         size:{x:1,y:2,z:1}, pos:{x:gx-1.5,  y:gy+3,   z:gz}, color:headColor, visible:true,  collide:true  },
-            { name:"Right Arm",        size:{x:1,y:2,z:1}, pos:{x:gx+1.5,  y:gy+3,   z:gz}, color:headColor, visible:true,  collide:true  },
-            { name:"Left Leg",         size:{x:1,y:2,z:1}, pos:{x:gx-0.5,  y:gy+1,   z:gz}, color:legColor,  visible:true,  collide:true  },
-            { name:"Right Leg",        size:{x:1,y:2,z:1}, pos:{x:gx+0.5,  y:gy+1,   z:gz}, color:legColor,  visible:true,  collide:true  },
+            { name:"HumanoidRootPart", size:{x:2,y:2,z:1},     pos:{x:gx,      y:gy+3,   z:gz}, color:"#ffffff", visible:false, collide:false },
+            { name:"Torso",            size:{x:2,y:2,z:1},     pos:{x:gx,      y:gy+3,   z:gz}, color:bodyColor, visible:true,  collide:true  },
+            { name:"Head",             size:{x:0.6,y:1,z:0.6}, pos:{x:gx,      y:gy+4.75,z:gz}, color:headColor, visible:true,  collide:true, corner:0.2, cornerAxis:"Y" },
+            { name:"Left Arm",         size:{x:1,y:2,z:1},     pos:{x:gx-1.5,  y:gy+3,   z:gz}, color:headColor, visible:true,  collide:true  },
+            { name:"Right Arm",        size:{x:1,y:2,z:1},     pos:{x:gx+1.5,  y:gy+3,   z:gz}, color:headColor, visible:true,  collide:true  },
+            { name:"Left Leg",         size:{x:1,y:2,z:1},     pos:{x:gx-0.5,  y:gy+1,   z:gz}, color:legColor,  visible:true,  collide:true  },
+            { name:"Right Leg",        size:{x:1,y:2,z:1},     pos:{x:gx+0.5,  y:gy+1,   z:gz}, color:legColor,  visible:true,  collide:true  },
         ];
 
         const children = partsSpec.map(s => ({
             id: Tree.uuid(), name: s.name, className: "Part", expanded: false, children: [],
             properties: { ...getDefaultProps("Part"),
                 Color: s.color, Size: s.size, Position: s.pos, Rotation: { x:0, y:0, z:0 },
-                Visibilidade: s.visible, CanCollide: s.collide, Anchored: true }
+                Visibilidade: s.visible, CanCollide: s.collide, Anchored: true,
+                ...(s.corner ? { CornerRadius: s.corner, CornerAxis: s.cornerAxis || "Z" } : {}) }
         }));
 
         // Nó "Humanoid" (não-visual) — guarda Health/WalkSpeed/RigType do NPC,
@@ -19172,6 +20435,7 @@ const LocalBackup = (() => {
         "camvr_settings_v1",              // configurações de VR por câmera
         "rse_ai_optimizer_memory_v1",     // memória do otimizador de IA
         "engine_plugins_v1",              // plugins instalados
+        "engine_player_added_anims_v1",   // (nova função) animações adicionadas por conta (Perfil → Minhas animações)
     ];
     const DYNAMIC_PREFIX = "oii_ds::"; // dados avulsos gravados sob esse prefixo
 
@@ -20709,6 +21973,13 @@ const Multiplayer = (() => {
             // próprio trabalho no meio da edição colaborativa.
             const prevSel = State.sel;
             State.tree = tree;
+            // (correção — pedido do usuário: animação do próprio jogador
+            // travando no multiplayer) State.tree virou um objeto novo —
+            // sem isso, o rig do jogador local ficava lendo pose de nós
+            // órfãos da árvore antiga. Ver Simulation.refreshRigNodeRefs.
+            if (typeof Simulation !== "undefined" && Simulation.active && Simulation.refreshRigNodeRefs) {
+                try { Simulation.refreshRigNodeRefs(); } catch (_) {}
+            }
             if (prevSel.length) {
                 const stillThere = new Set(structParts.filter((_, i) => i % 3 === 0));
                 State.sel = prevSel.filter(id => stillThere.has(id));
@@ -23041,7 +24312,7 @@ const Simulation = (() => {
 
     function _stop() {
         _active = false;
-        closeAnimPicker();
+        // (removido a pedido do usuário) closeAnimPicker() — botão/painel de Emotes retirado do HUD.
         // (OTIMIZAÇÃO) Devolve o SSAO ao estado de antes do Play — ver
         // ThreeManager.setPlayPerformanceMode / chamada em _start().
         ThreeManager.setPlayPerformanceMode(false);
@@ -23260,6 +24531,41 @@ const Simulation = (() => {
             return new THREE.MeshStandardMaterial({ color: tex ? 0xffffff : color, map: tex || null, roughness:0.4 });
         });
     }
+    /** (nova função a pedido do usuário — "melhora o modelo R6 pra ficar
+     *  igual ao do Roblox") Gera (e cacheia por cor) uma textura de rosto
+     *  clássico — dois olhos ovais pretos + sorriso em arco — desenhada
+     *  num <canvas>, com o fundo já na MESMA cor da Head (pra não precisar
+     *  de nenhuma imagem/arquivo externo). Aplicada só na face da FRENTE
+     *  da Head (índice 4 de FACE_ORDER — "front"), e só quando o dono do
+     *  boneco não colocou a própria imagem ali pelo SkinEditor. */
+    const _robloxFaceTexCache = new Map(); // corHex -> THREE.CanvasTexture
+    function _buildRobloxFaceMaterial(color) {
+        const hex = "#" + color.getHexString();
+        let tex = _robloxFaceTexCache.get(hex);
+        if (!tex) {
+            const c = document.createElement("canvas");
+            c.width = c.height = 128;
+            const ctx = c.getContext("2d");
+            ctx.fillStyle = hex;
+            ctx.fillRect(0, 0, 128, 128);
+            ctx.fillStyle = "#000000";
+            // Olhos — dois ovais pretos, um pouco inclinados pra dentro
+            // (mesmo visual do "boneco padrão" clássico do Roblox).
+            ctx.beginPath(); ctx.ellipse(42, 50, 7, 10, -0.12, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(86, 50, 7, 10,  0.12, 0, Math.PI * 2); ctx.fill();
+            // Sorriso — arco simples
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = 5;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.arc(64, 66, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+            ctx.stroke();
+            tex = new THREE.CanvasTexture(c);
+            tex.encoding = THREE.sRGBEncoding;
+            _robloxFaceTexCache.set(hex, tex);
+        }
+        return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 });
+    }
     function _buildPlayerRigFromStarterPlayer(skin) {
         const sply = Tree.find("sply");
         if (!sply) return null;
@@ -23324,9 +24630,30 @@ const Simulation = (() => {
             // que o dono deste boneco colocou em cada lado desta parte
             // (SkinEditor), guardadas em skin.Textures[nomeDaParte].
             const faceUrls = (skin && skin.Textures && skin.Textures[part.name]) || null;
+            let material = _buildRigPartMaterial(color, faceUrls);
+            // (nova função a pedido do usuário — "melhora o modelo R6 pra
+            // ficar igual ao do Roblox") Cabeça sem imagem própria na
+            // frente ganha o rostinho clássico (olhos + sorriso) — índice
+            // 4 de FACE_ORDER é "front". Se o dono já colocou uma imagem
+            // ali no SkinEditor, essa imagem continua mandando, sem mexer.
+            if (part.name === "Head" && !(faceUrls && faceUrls.front)) {
+                const matArr = Array.isArray(material) ? material.slice() : Array(6).fill(material);
+                matArr[4] = _buildRobloxFaceMaterial(color);
+                material = matArr;
+            }
             const mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(size.x || 1, size.y || 1, size.z || 1),
-                _buildRigPartMaterial(color, faceUrls)
+                // (nova função a pedido do usuário) Antes esta função SEMPRE
+                // usava um cubo reto — CornerRadius/CornerAxis (configurados
+                // nas Propriedades da Part, ex.: a Head) nunca apareciam no
+                // boneco do player/NPCs, só em Parts soltas no Workspace
+                // (que passam pelo fluxo normal de sync). Agora, se a Part
+                // tem CornerRadius > 0, usamos a mesma geometria arredondada
+                // já no tamanho real — por isso a malha nasce sem escala
+                // (a Size já está embutida na geometria).
+                (p.CornerRadius > 0 && ThreeManager.isBoxLikePart(part, p))
+                    ? ThreeManager.roundedBoxGeo(size.x || 1, size.y || 1, size.z || 1, p.CornerRadius, p.CornerAxis || "Z")
+                    : new THREE.BoxGeometry(size.x || 1, size.y || 1, size.z || 1),
+                material
             );
             mesh.position.set(pos.x || 0, pos.y || 0, pos.z || 0);
             mesh.rotation.set(
@@ -23552,6 +24879,30 @@ const Simulation = (() => {
                 THREE.MathUtils.degToRad(rot.y || 0),
                 THREE.MathUtils.degToRad(rot.z || 0)
             );
+        }
+    }
+
+    /** (correção — pedido do usuário: "as animações do personagem não
+     *  tocam normal no multiplayer") Toda vez que chega uma atualização
+     *  de cena de outro membro da sala, State.tree é TROCADO por um
+     *  objeto novo inteiro (ver Multiplayer._applyRemoteScene) — isso
+     *  deixa os nós guardados em _playerRigNodes (referências capturadas
+     *  lá no spawn, uma vez só) "órfãos": o AnimatorRuntime.tick() passa
+     *  a escrever a pose animada no nó NOVO (acha de novo pelo id a cada
+     *  frame), mas _syncPlayerRigPose() continuava lendo do nó VELHO,
+     *  que nunca mais mudava — resultado: o boneco do PRÓPRIO jogador
+     *  travava numa pose sempre que alguém mais mexesse em algo na sala,
+     *  mesmo a animação estando "tocando" por baixo dos panos. Os
+     *  bonecos dos OUTROS jogadores nunca tiveram esse problema porque
+     *  eles já buscam o Animator de novo (Tree.find) a cada frame, sem
+     *  guardar nó nenhum. Chamada pelo Multiplayer logo depois de trocar
+     *  State.tree, só enquanto o Play estiver ativo. */
+    function refreshRigNodeRefs() {
+        for (const name in _playerRigNodes) {
+            const old = _playerRigNodes[name];
+            if (!old) continue;
+            const fresh = Tree.find(old.id);
+            if (fresh) _playerRigNodes[name] = fresh;
         }
     }
 
@@ -24270,54 +25621,9 @@ const Simulation = (() => {
        da sala normalmente (a posição já manda o nome da animação tocando —
        ver _broadcastPlayerTransformThrottled). Se o jogador voltar a andar,
        o LocalScript de movimento assume de novo sozinho. */
-    function _findPlayerAnimsFolder() {
-        if (!_playerRigModelId) return null;
-        const rigModel = Tree.find(_playerRigModelId);
-        if (!rigModel) return null;
-        const parent = Tree.findParent(rigModel.id);
-        if (!parent) return null;
-        return (parent.children || []).find(c => c.className === "Folder" && c.name === "Animações") || null;
-    }
-    function _listPlayerAnimNames() {
-        const folder = _findPlayerAnimsFolder();
-        if (!folder) return [];
-        return (folder.children || []).filter(c => c.className === "Animator").map(c => c.name);
-    }
-    function forcePlayAnim(name) {
-        const folder = _findPlayerAnimsFolder();
-        if (!folder) { UI.showToast("⚠ Não achei a pasta \"Animações\" do seu personagem."); return; }
-        const target = (folder.children || []).find(c => c.className === "Animator" && c.name === name);
-        if (!target) { UI.showToast(`⚠ Não achei a animação "${name}".`); return; }
-        // Para as outras animações do boneco antes (só uma toca por vez —
-        // igual o próprio Script de movimento já faz).
-        (folder.children || []).forEach(c => { if (c.className === "Animator" && c.id !== target.id) AnimatorRuntime.stop(c.id); });
-        AnimatorRuntime.play(target.id, true);
-        closeAnimPicker();
-        UI.showToast(`🎭 Tocando "${name}" no seu boneco.`);
-    }
-    function _renderAnimPicker() {
-        const panel = document.getElementById("anim-picker-panel");
-        if (!panel) return;
-        const names = _listPlayerAnimNames();
-        panel.innerHTML = names.length
-            ? names.map(n => `<button onclick="Simulation.forcePlayAnim('${n.replace(/'/g, "\\'")}')" class="w-full text-left px-2 py-1.5 rounded hover:bg-fuchsia-900/50 text-zinc-200 text-xs">${n}</button>`).join("")
-            : `<div class="px-2 py-1.5 text-zinc-500 text-[10px]">Nenhuma animação encontrada.</div>`;
-    }
-    function closeAnimPicker() {
-        const panel = document.getElementById("anim-picker-panel");
-        if (panel) { panel.classList.add("hidden"); panel.classList.remove("flex"); }
-    }
-    function toggleAnimPicker() {
-        const panel = document.getElementById("anim-picker-panel");
-        if (!panel) return;
-        if (panel.classList.contains("hidden")) {
-            _renderAnimPicker();
-            panel.classList.remove("hidden");
-            panel.classList.add("flex");
-        } else {
-            closeAnimPicker();
-        }
-    }
+    // (removido a pedido do usuário) _findPlayerAnimsFolder, _listPlayerAnimNames,
+    // forcePlayAnim, _renderAnimPicker, closeAnimPicker, toggleAnimPicker —
+    // eram só o suporte do botão "Emotes" do HUD do Play, que foi retirado.
 
 
     // ============================================================
@@ -24365,8 +25671,6 @@ const Simulation = (() => {
     function getStreamDistances() { return { near: STREAM_NEAR, far: STREAM_FAR }; }
 
     return { toggle, update, keyDown, keyUp, isKeyDown, toggleCameraMode, toggleFreeCam, requestPointerLock: _requestPointerLock, getLocalPlayerCharacterId, get active() { return _active; },
-             // (nova função a pedido do usuário) botão "Animação" do HUD do Play
-             toggleAnimPicker, forcePlayAnim, closeAnimPicker,
              getVelocity, setVelocity, applyImpulse, refreshEquippedTool, getEquippedToolPartMesh, getEquippedToolId,
              // (novas funções) ponte de controle do player pra scripts — ver comentário acima
              getPlayerRootNodeId, teleportPlayerTo,
@@ -24386,7 +25690,10 @@ const Simulation = (() => {
              syncPhysicsProperty,
              // (nova função a pedido do usuário) monta um rig solto (fora da
              // física/Workspace) pro SkinEditor mostrar uma prévia ao vivo
-             buildStandaloneRig };
+             buildStandaloneRig,
+             // (correção — pedido do usuário) "recola" as referências do rig
+             // do player local depois que o Multiplayer troca State.tree
+             refreshRigNodeRefs };
 })();
 
 /* ================================================================
